@@ -1,0 +1,60 @@
+export type ViewType = 'month' | 'week' | 'day';
+export type PageType = 'dashboard' | 'agenda' | 'patients' | 'professionals' | 'settings';
+
+export interface Specialist {
+  id: string;
+  name: string;
+  specialty: string; // Especialidade principal (título)
+  color: string; // Tailwind color class or hex
+  avatarUrl?: string; // Mantido opcional caso queira reverter futuramente
+  email?: string;
+  phone?: string;
+  treatments?: string[]; // Lista de tratamentos habilitados
+}
+
+export interface Patient {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  status: 'Ativo' | 'Inativo';
+  lastVisit?: string;
+}
+
+// Raw Supabase Table Interface
+export interface SupabaseCustomer {
+  id: number;
+  created_at: string;
+  nome?: string;
+  nome_completo?: string;
+  telefoneWhatsapp?: string;
+  botAtivo?: string; // TBD: check actual values
+  status_lead_no_crm?: string;
+  email?: string; // Not in schema list but good to have if added later
+}
+
+export interface Appointment {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  specialistId: string;
+  patientName: string;
+  patientPhone: string; // E.164 format preferably
+  description?: string;
+  status: 'confirmed' | 'pending' | 'cancelled';
+  googleEventId?: string; // For sync reference
+}
+
+export interface CalendarState {
+  currentDate: Date;
+  view: ViewType;
+  selectedSpecialistIds: string[];
+}
+
+export interface DashboardStats {
+  totalPatients: number;
+  todayAppointments: number;
+  tomorrowAppointments: number;
+  recentPatients: number;
+}
