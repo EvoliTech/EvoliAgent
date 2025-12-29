@@ -129,8 +129,6 @@ export const Login: React.FC = () => {
                             </>
                         )}
                     </button>
-
-
                 </form>
 
                 {/* Footer */}
@@ -150,7 +148,7 @@ export const Login: React.FC = () => {
             </div>
 
             <div className="absolute bottom-4 text-xs text-gray-400">
-                © 2024 ClínicaSync • Gestão Médica Inteligente
+                © 2024 ClínicaSync — Gestão Médica Inteligente
             </div>
 
         </div>
