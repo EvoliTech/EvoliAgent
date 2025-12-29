@@ -38,6 +38,22 @@ export const Login: React.FC = () => {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setLoading(true);
+        setMessage(null);
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin }
+            });
+            if (error) throw error;
+            // Redireciona para o Google; a sessÃ£o Ã© capturada no retorno pelo App.tsx
+        } catch (error: any) {
+            setMessage({ type: 'error', text: error.message || 'Erro ao autenticar com Google' });
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 relative overflow-hidden">
 
@@ -128,6 +144,30 @@ export const Login: React.FC = () => {
                                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                             </>
                         )}
+                    </button>
+
+                    <div className="relative my-4">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-gray-200" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-white px-2 text-gray-400">ou</span>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        disabled={loading}
+                        onClick={handleGoogleSignIn}
+                        className="w-full border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium py-2.5 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-5 w-5" aria-hidden>
+                            <path fill="#fbc02d" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.5 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.9 6.1 29.8 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.3-.1-2.7-.4-3.5z" />
+                            <path fill="#e53935" d="M6.3 14.7l6.6 4.8C14.6 15.3 18.9 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.9 6.1 29.8 4 24 4 15.5 4 8.4 8.8 6.3 14.7z" />
+                            <path fill="#4caf50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35.8 26.7 37 24 37c-5.2 0-9.6-3.4-11.2-8.1l-6.6 5.1C8.3 39.2 15.6 44 24 44z" />
+                            <path fill="#1565c0" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.1-3.4 5.6-6.3 7.2l6.3 5.3C37.1 38.8 40 32.5 40 25c0-1.3-.1-2.7-.4-3.5z" />
+                        </svg>
+                        Entrar com Google
                     </button>
                 </form>
 
