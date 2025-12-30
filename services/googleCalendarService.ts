@@ -1,171 +1,194 @@
-import { supabase } from '../lib/supabase';
 import { Appointment } from '../types';
 import { SPECIALISTS } from '../constants';
 
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const CALENDAR_ID = import.meta.env.VITE_GOOGLE_CALENDAR_ID || 'primary';
+const SCOPE = 'https://www.googleapis.com/auth/calendar';
+
+// Light helper to load the Google Identity Services script once
+const loadScript = (src: string) =>
+  new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) return resolve();
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+
 class GoogleCalendarService {
+  private accessToken: string | null = null;
+  private expiresAt: number | null = null;
+  private loadingPromise: Promise<void> | null = null;
 
-  async getProviderToken(): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-
-    // First try: Check if provider_token is in session (client-side flow)
-    if (session?.provider_token) {
-      return session.provider_token;
+  private async ensureToken(): Promise<string> {
+    if (!CLIENT_ID) {
+      throw new Error('VITE_GOOGLE_CLIENT_ID nÇœo configurada.');
     }
 
-    // Second try: Call Edge Function to retrieve token from DB/Auth store
-    const { data, error } = await supabase.functions.invoke('get_google_token');
-
-    if (error || !data?.provider_token) {
-      // It is possible that the user is logged in but the token is not available 
-      // (e.g. email login or expired/missing consent).
-      return null;
+    // If token is valid, reuse it
+    const now = Date.now();
+    if (this.accessToken && this.expiresAt && now < this.expiresAt - 60_000) {
+      return this.accessToken;
     }
 
-    return data.provider_token;
+    // Load GIS script if needed
+    await this.loadGis();
+
+    return new Promise((resolve, reject) => {
+      const google = (window as any).google;
+      if (!google?.accounts?.oauth2) {
+        reject(new Error('Google Identity Services nÇœo carregou.'));
+        return;
+      }
+
+      const tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPE,
+        prompt: this.accessToken ? '' : 'consent',
+        callback: (response: any) => {
+          if (response.error) {
+            reject(new Error(response.error));
+            return;
+          }
+          this.accessToken = response.access_token;
+          const expiresIn = (response.expires_in || 3600) * 1000;
+          this.expiresAt = Date.now() + expiresIn;
+          resolve(this.accessToken);
+        },
+      });
+
+      tokenClient.requestAccessToken();
+    });
+  }
+
+  private async loadGis() {
+    if ((window as any).google?.accounts?.oauth2) return;
+    if (this.loadingPromise) return this.loadingPromise;
+    this.loadingPromise = loadScript('https://accounts.google.com/gsi/client');
+    await this.loadingPromise;
+  }
+
+  private async authFetch(url: string, options: RequestInit = {}) {
+    const token = await this.ensureToken();
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${token}`);
+    if (options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    return fetch(url, { ...options, headers });
+  }
+
+  private mapEventToAppointment(event: any): Appointment {
+    const startDate = event.start?.dateTime || event.start?.date;
+    const endDate = event.end?.dateTime || event.end?.date;
+    const privateData = event.extendedProperties?.private || {};
+
+    const patientName = privateData.patientName || event.summary || 'Paciente';
+    const patientPhone = privateData.patientPhone || '';
+    const specialistId =
+      privateData.specialistId ||
+      SPECIALISTS[0]?.id ||
+      '';
+
+    const description =
+      privateData.description ||
+      event.description ||
+      '';
+
+    const status: Appointment['status'] =
+      event.status === 'cancelled' ? 'cancelled' : 'confirmed';
+
+    return {
+      id: event.id,
+      title: event.summary || patientName,
+      start: new Date(startDate),
+      end: new Date(endDate),
+      specialistId,
+      patientName,
+      patientPhone,
+      description,
+      status,
+      googleEventId: event.id,
+    };
+  }
+
+  private buildEventBody(appointment: Omit<Appointment, 'id'>) {
+    return {
+      summary: appointment.title,
+      description: appointment.description,
+      start: { dateTime: appointment.start.toISOString() },
+      end: { dateTime: appointment.end.toISOString() },
+      extendedProperties: {
+        private: {
+          patientName: appointment.patientName,
+          patientPhone: appointment.patientPhone,
+          specialistId: appointment.specialistId,
+          status: appointment.status,
+          description: appointment.description || '',
+        },
+      },
+    };
   }
 
   async fetchEvents(start: Date, end: Date): Promise<Appointment[]> {
-    const token = await this.getProviderToken();
+    const params = new URLSearchParams({
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+    });
 
-    // Always fetch local events as backup or base
-    const localEvents = await this.fetchLocalEvents(start, end);
+    const res = await this.authFetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?${params.toString()}`
+    );
 
-    if (!token) {
-      console.warn("No Google Token found. Returning local events.");
-      return localEvents;
+    if (!res.ok) {
+      throw new Error('Falha ao sincronizar com Google Calendar');
     }
 
-    try {
-      const timeMin = start.toISOString();
-      const timeMax = end.toISOString();
-
-      const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Prompt requirement: "garanta que o tratamento de erro exiba um alerta caso o token do Google expire"
-          alert("Sessão do Google expirada. Por favor, faça login novamente.");
-        }
-        console.error("Google API Error", response.statusText);
-        return localEvents;
-      }
-
-      const data = await response.json();
-      const googleEvents = data.items || [];
-
-      // Map Google events to Appointment interface
-      const mappedEvents: Appointment[] = googleEvents.map((ev: any) => ({
-        id: ev.id, // Using Google ID
-        title: ev.summary || '(Sem título)',
-        start: new Date(ev.start.dateTime || ev.start.date),
-        end: new Date(ev.end.dateTime || ev.end.date),
-        specialistId: SPECIALISTS[0].id, // Default assignment
-        patientName: 'Agenda Google',
-        patientPhone: '',
-        description: ev.description,
-        status: 'confirmed',
-        googleEventId: ev.id
-      }));
-
-      // Persistence: Save to Supabase
-      await this.saveEventsToSupabase(mappedEvents);
-
-      return mappedEvents;
-
-    } catch (error) {
-      console.error("Fetch Events Error", error);
-      // Alert already handled for 401 if caught above, but for network errors:
-      if (error instanceof Error && error.message.includes("expirada")) {
-        alert(error.message);
-      }
-      return localEvents;
-    }
+    const data = await res.json();
+    return (data.items || []).map((item: any) => this.mapEventToAppointment(item));
   }
-
-  async fetchLocalEvents(start: Date, end: Date): Promise<Appointment[]> {
-    const { data, error } = await supabase
-      .from('agendamentos')
-      .select('*')
-      .gte('start_time', start.toISOString())
-      .lte('end_time', end.toISOString());
-
-    if (error) {
-      console.error("DB Fetch Error", error);
-      return [];
-    }
-
-    return data.map((row: any) => ({
-      id: row.id,
-      title: row.summary,
-      start: new Date(row.start_time),
-      end: new Date(row.end_time),
-      specialistId: SPECIALISTS[0].id,
-      patientName: 'Agenda Google',
-      patientPhone: '',
-      status: 'confirmed',
-      googleEventId: row.google_event_id
-    }));
-  }
-
-  async saveEventsToSupabase(events: Appointment[]) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const updates = events.map((evt) => ({
-      summary: evt.title,
-      start_time: evt.start.toISOString(),
-      end_time: evt.end.toISOString(),
-      google_event_id: evt.googleEventId,
-      user_id: user.id
-    }));
-
-    if (updates.length > 0) {
-      const { error } = await supabase
-        .from('agendamentos')
-        .upsert(updates, { onConflict: 'google_event_id' });
-
-      if (error) console.error("Save Error", error);
-    }
-  }
-
-  // --- CRUD Stubs for basic compatibility with UI ---
 
   async createEvent(appointment: Omit<Appointment, 'id'>): Promise<Appointment> {
-    // Basic local only implementation to prevent UI crash
-    const newId = crypto.randomUUID();
-    const newEvent = { ...appointment, id: newId };
+    const res = await this.authFetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,
+      {
+        method: 'POST',
+        body: JSON.stringify(this.buildEventBody(appointment)),
+      }
+    );
 
-    // Save to local DB 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from('agendamentos').insert({
-        id: newId,
-        summary: appointment.title,
-        start_time: appointment.start.toISOString(),
-        end_time: appointment.end.toISOString(),
-        user_id: user.id,
-        google_event_id: `local_${newId}`
-      });
-    }
-    return newEvent as Appointment;
+    if (!res.ok) throw new Error('Falha ao criar evento no Google Calendar');
+    const event = await res.json();
+    return this.mapEventToAppointment(event);
   }
 
   async updateEvent(appointment: Appointment): Promise<Appointment> {
-    // Update local DB
-    await supabase.from('agendamentos').update({
-      summary: appointment.title,
-      start_time: appointment.start.toISOString(),
-      end_time: appointment.end.toISOString()
-    }).eq('id', appointment.id);
+    const eventId = appointment.googleEventId || appointment.id;
+    const res = await this.authFetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events/${encodeURIComponent(eventId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(this.buildEventBody(appointment)),
+      }
+    );
 
-    return appointment;
+    if (!res.ok) throw new Error('Falha ao atualizar evento no Google Calendar');
+    const event = await res.json();
+    return this.mapEventToAppointment(event);
   }
 
   async deleteEvent(id: string): Promise<void> {
-    await supabase.from('agendamentos').delete().eq('id', id);
+    const res = await this.authFetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    );
+
+    if (!res.ok) throw new Error('Falha ao excluir evento no Google Calendar');
   }
 }
 
