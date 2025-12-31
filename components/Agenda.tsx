@@ -1,140 +1,265 @@
-import React, { useState } from 'react';
-import { SPECIALISTS } from '../constants';
-import { Calendar, Check, Users } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, RefreshCw, Users, Check, LayoutGrid, List } from 'lucide-react';
+import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
+import { NewAppointmentModal } from './NewAppointmentModal';
 
 export const Agenda: React.FC = () => {
-  // Default to the specific email requested, or empty if not found
-  const DEFAULT_EMAIL = 'open.evertonai@gmail.com';
+  const DEFAULT_EMAIL = 'open.evertonai@gmail.com'; // In production, get from auth context
 
-  // State to track selected specialist emails
-  const [selectedEmails, setSelectedEmails] = useState<string[]>(() => {
-    // Check if the default email exists in our specialists list
-    const defaultExists = SPECIALISTS.some(s => s.email === DEFAULT_EMAIL);
-    return defaultExists ? [DEFAULT_EMAIL] : [];
-  });
+  // State
+  const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [events, setEvents] = useState<GoogleEvent[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<'month' | 'week'>('month');
+  const [loading, setLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const toggleSpecialist = (email: string) => {
-    setSelectedEmails(prev => {
-      if (prev.includes(email)) {
-        return prev.filter(e => e !== email);
+  // Initial Load
+  useEffect(() => {
+    loadCalendars();
+  }, []);
+
+  // Fetch Events when dependencies change
+  useEffect(() => {
+    if (selectedCalendarIds.length > 0) {
+      loadEvents();
+    } else {
+      setEvents([]);
+    }
+  }, [currentDate, view, selectedCalendarIds]);
+
+  const loadCalendars = async () => {
+    try {
+      setLoading(true);
+      const calendarList = await googleCalendarService.listCalendars(DEFAULT_EMAIL);
+      setCalendars(calendarList);
+
+      const primary = calendarList.find(c => c.primary);
+      if (primary) setSelectedCalendarIds([primary.id]);
+      else if (calendarList.length > 0) setSelectedCalendarIds([calendarList[0].id]);
+    } catch (error) {
+      console.error('Error loading calendars:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEvents = async () => {
+    try {
+      setLoading(true);
+
+      // Calculate start/end of view
+      const start = new Date(currentDate);
+      const end = new Date(currentDate);
+
+      if (view === 'month') {
+        start.setDate(1); // 1st of month
+        end.setMonth(end.getMonth() + 1);
+        end.setDate(0); // last of month
       } else {
-        return [...prev, email];
+        // Week
+        const day = start.getDay();
+        const diff = start.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        start.setDate(diff); // Monday
+        end.setDate(start.getDate() + 6); // Sunday
       }
-    });
+
+      // Fetch for each selected calendar
+      const promises = selectedCalendarIds.map(calId =>
+        googleCalendarService.listEvents(DEFAULT_EMAIL, start, end, calId)
+      );
+
+      const results = await Promise.all(promises);
+      const allEvents = results.flat();
+      setEvents(allEvents);
+
+    } catch (error) {
+      console.error('Error loading events:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Construct the aggregated Google Calendar URL
-  const getCalendarUrl = () => {
-    const baseUrl = "https://calendar.google.com/calendar/embed";
-    const params = new URLSearchParams();
-
-    // Core parameters
-    params.append('ctz', 'America/Sao_Paulo');
-    params.append('showTitle', '0');
-    params.append('showNav', '1');
-    params.append('showDate', '1');
-    params.append('showPrint', '0');
-    params.append('showTabs', '1');
-    params.append('showCalendars', '0');
-    params.append('showTz', '0');
-    params.append('height', '600');
-    params.append('wkst', '2'); // Start week on Monday
-    params.append('bgcolor', '#FFFFFF');
-
-    // Add each selected source
-    // Note: We construct the src parameters manually because URLSearchParams might encode them differently than GCal expects for multiple keys
-    let url = `${baseUrl}?${params.toString()}`;
-
-    selectedEmails.forEach((email, index) => {
-      // Find the specialist to get their color if possible (optional enhancement)
-      const specialist = SPECIALISTS.find(s => s.email === email);
-      // Map tailwind colors to hex roughly if needed, or let Google assign default
-      // Ideally we would pass &color=%23HEXCODE
-
-      url += `&src=${encodeURIComponent(email)}`;
-
-      // Attempt to assign distinct colors based on index if we wanted, 
-      // but GCal embeds usually handle their own coloring unless enforced.
-    });
-
-    return url;
+  const handleCreateEvent = async (eventData: any) => {
+    const { calendarId, ...googleEventData } = eventData;
+    await googleCalendarService.createEvent(DEFAULT_EMAIL, googleEventData, calendarId);
+    // Refresh
+    loadEvents();
   };
+
+  const toggleCalendar = (id: string) => {
+    setSelectedCalendarIds(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
+  const navigateDate = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate);
+    if (view === 'month') {
+      newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+    } else {
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+    }
+    setCurrentDate(newDate);
+  };
+
+  const handleToday = () => setCurrentDate(new Date());
+
+  // Render Helpers
+  const renderMonthGrid = () => {
+    // Basic logic to generate 7x6 grid
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay(); // 0 Sun - 6 Sat
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Adjust for Monday start if needed, but Google Calendar default is Sunday/Monday depends on locale.
+    // Print shows Sunday start (Dom Seg Ter...).
+
+    const days = [];
+    // Padding
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`pad-${i}`} className="h-24 sm:h-32 border-b border-r bg-gray-50/30"></div>);
+    }
+    // Days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayEvents = events.filter(e => {
+        if (!e.start || !e.start.dateTime) return false;
+        return e.start.dateTime.startsWith(dateStr);
+      });
+
+      days.push(
+        <div key={day} className="h-24 sm:h-32 border-b border-r p-1 transition-colors hover:bg-gray-50 flex flex-col gap-1 relative group">
+          <span className={`text-sm font-medium p-1 w-6 h-6 flex items-center justify-center rounded-full ${day === new Date().getDate() && month === new Date().getMonth() ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
+            {day}
+          </span>
+
+          {/* Events list */}
+          <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
+            {dayEvents.map((ev, idx) => (
+              <div key={ev.id || idx} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded truncate cursor-pointer hover:bg-blue-200" title={ev.summary}>
+                {ev.start.dateTime ? new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} {ev.summary}
+              </div>
+            ))}
+          </div>
+
+          {/* Add on hover (simplified) */}
+          <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100">
+            <button onClick={() => { setIsModalOpen(true); /* Pass date context ideally */ }} className="p-1 hover:bg-gray-200 rounded-full text-blue-600">
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return days;
+  }
 
   return (
     <div className="flex h-full bg-gray-50 overflow-hidden">
 
-      {/* Sidebar Controls */}
+      {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Users size={20} className="text-blue-600" />
-            Minhas Agendas
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">Selecione para visualizar</p>
+        <div className="p-6">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus size={20} className="stroke-[3]" />
+            <span className="font-semibold">Novo</span>
+          </button>
         </div>
 
-        <div className="p-4 space-y-2 overflow-y-auto flex-1">
-          {SPECIALISTS.filter(s => !!s.email).map((specialist) => {
-            const isSelected = selectedEmails.includes(specialist.email!);
-            // Extract color class logic if needed, simplify for UI
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="mb-6">
+            <div className="bg-white rounded-lg border border-gray-200 p-1 flex items-center gap-2 shadow-sm mb-4">
+              <input type="date" className="w-full border-none text-sm focus:ring-0 text-gray-600" value={currentDate.toISOString().split('T')[0]} onChange={(e) => setCurrentDate(new Date(e.target.value))} />
+            </div>
+          </div>
 
-            return (
-              <button
-                key={specialist.id}
-                onClick={() => toggleSpecialist(specialist.email!)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${isSelected
-                    ? 'bg-blue-50 border-blue-200 shadow-sm'
-                    : 'bg-white border-gray-200 hover:bg-gray-50'
-                  }`}
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${specialist.color.split(' ')[0]} ${specialist.color.split(' ')[1]}`}>
-                    {specialist.name.charAt(0)}
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Especialistas / Agendas</h3>
+            <div className="space-y-2">
+              {calendars.map(cal => (
+                <div key={cal.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => toggleCalendar(cal.id)}>
+                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedCalendarIds.includes(cal.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
+                    {selectedCalendarIds.includes(cal.id) && <Check size={12} className="text-white" />}
                   </div>
-                  <div className="text-left truncate">
-                    <p className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
-                      {specialist.name}
-                    </p>
-                    <p className="text-[10px] text-gray-500 truncate">{specialist.specialty}</p>
-                  </div>
+                  <span className="text-sm text-gray-700 truncate">{cal.summary}</span>
+                  <span className="w-2 h-2 rounded-full ml-auto" style={{ backgroundColor: cal.backgroundColor || '#3b82f6' }}></span>
                 </div>
-
-                {isSelected && (
-                  <div className="text-blue-600">
-                    <Check size={16} />
-                  </div>
-                )}
-              </button>
-            );
-          })}
+              ))}
+            </div>
+          </div>
         </div>
       </aside>
 
-      {/* Main Calendar View */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-white">
-        {selectedEmails.length > 0 ? (
-          <div className="flex-1 w-full h-full p-4">
-            <div className="w-full h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <iframe
-                key={selectedEmails.join(',')} // Force re-render when selection changes to ensure update
-                src={getCalendarUrl()}
-                style={{ border: 0 }}
-                width="100%"
-                height="100%"
-                frameBorder="0"
-                scrolling="no"
-                title="Agenda Combinada"
-              />
+        {/* Header */}
+        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6 shrink-0">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold text-gray-900 capitalize">
+              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            </h1>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <button onClick={() => navigateDate('prev')} className="p-1 hover:bg-white rounded-md text-gray-500 hover:shadow-sm"><ChevronLeft size={20} /></button>
+              <button onClick={() => handleToday()} className="px-3 py-1 text-sm font-medium text-gray-700 hover:bg-white rounded-md">Hoje</button>
+              <button onClick={() => navigateDate('next')} className="p-1 hover:bg-white rounded-md text-gray-500 hover:shadow-sm"><ChevronRight size={20} /></button>
             </div>
           </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-            <Calendar size={64} className="opacity-20 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">Nenhuma agenda selecionada</h3>
-            <p className="text-sm">Selecione um ou mais profissionais ao lado.</p>
+
+          <div className="flex items-center gap-3">
+            <div className="bg-gray-100 p-1 rounded-lg flex items-center gap-1">
+              <button
+                onClick={() => setView('month')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'month' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <LayoutGrid size={16} />
+                Mês
+              </button>
+              <button
+                onClick={() => setView('week')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'week' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <List size={16} />
+                Semana
+              </button>
+            </div>
+            <button onClick={() => loadEvents()} className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
+              <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+            </button>
           </div>
-        )}
+        </header>
+
+        {/* Grid Header */}
+        <div className="grid grid-cols-7 border-b border-gray-200 shrink-0">
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, i) => (
+            <div key={day} className={`py-3 text-center text-xs font-semibold uppercase tracking-wider ${i === new Date().getDay() ? 'text-blue-600' : 'text-gray-400'}`}>
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="flex-1 overflow-y-auto bg-white">
+          <div className="grid grid-cols-7 auto-rows-fr">
+            {renderMonthGrid()}
+          </div>
+        </div>
       </main>
+
+      <NewAppointmentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleCreateEvent}
+        calendars={calendars}
+        defaultDate={currentDate}
+      />
     </div>
   );
 };
