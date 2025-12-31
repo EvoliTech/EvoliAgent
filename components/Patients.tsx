@@ -21,8 +21,12 @@ export const Patients: React.FC = () => {
     name: '',
     phone: '',
     email: '',
+    plano: '',
     status: 'Ativo'
   });
+  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [customPlano, setCustomPlano] = useState('');
 
   // Fetch Patients on Mount & Realtime Subscription
   useEffect(() => {
@@ -70,9 +74,46 @@ export const Patients: React.FC = () => {
       name: '',
       phone: '',
       email: '',
+      plano: '',
       status: 'Ativo'
     });
+    setCustomPlano('');
+    setEditingPatientId(null);
     setIsModalOpen(true);
+  };
+
+  const handleEditPatient = (patient: Patient) => {
+    setActiveMenuId(null);
+    const isStandardPlan = ['Amil', 'Bradesco', 'Uniodonto', 'Unimed', 'Particular'].includes(patient.plano || '');
+
+    setFormData({
+      name: patient.name,
+      phone: patient.phone,
+      email: patient.email,
+      plano: isStandardPlan ? patient.plano : 'Outros',
+      status: patient.status
+    });
+
+    if (!isStandardPlan && patient.plano) {
+      setCustomPlano(patient.plano);
+    } else {
+      setCustomPlano('');
+    }
+
+    setEditingPatientId(patient.id);
+    setIsModalOpen(true);
+  };
+
+  const handleDeletePatient = async (patient: Patient) => {
+    setActiveMenuId(null);
+    if (confirm(`Tem certeza que deseja excluir o paciente ${patient.name}?`)) {
+      try {
+        await patientService.deletePatient(patient.id);
+        await loadPatients();
+      } catch (error) {
+        alert("Erro ao excluir paciente.");
+      }
+    }
   };
 
   const handleSavePatient = async (e: React.FormEvent) => {
@@ -83,8 +124,17 @@ export const Patients: React.FC = () => {
       return;
     }
 
+    const finalPlano = formData.plano === 'Outros' ? customPlano : formData.plano;
+
     try {
-      await patientService.createPatient(formData as Patient);
+      const patientData: any = { ...formData, plano: finalPlano };
+
+      if (editingPatientId) {
+        await patientService.updatePatient(editingPatientId, patientData);
+      } else {
+        await patientService.createPatient(patientData as Patient);
+      }
+
       await loadPatients(); // Reload list
       setIsModalOpen(false);
     } catch (error) {
@@ -172,6 +222,9 @@ export const Patients: React.FC = () => {
                 Contato
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Plano
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -185,7 +238,7 @@ export const Patients: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-20 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-20 text-center text-gray-500">
                   <div className="flex flex-col items-center justify-center">
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
                     <p>Sincronizando com Supabase...</p>
@@ -232,6 +285,9 @@ export const Patients: React.FC = () => {
                       </div>
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {patient.plano || '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
@@ -241,16 +297,37 @@ export const Patients: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {patient.lastVisit || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-gray-400 hover:text-gray-600">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                    <button
+                      onClick={() => setActiveMenuId(activeMenuId === patient.id ? null : patient.id)}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                    >
                       <MoreVertical size={20} />
                     </button>
+
+                    {/* Menu Dropdown */}
+                    {activeMenuId === patient.id && (
+                      <div className="absolute right-8 top-8 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                          onClick={() => handleEditPatient(patient)}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDeletePatient(patient)}
+                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
                   Nenhum paciente encontrado.
                 </td>
               </tr>
@@ -328,6 +405,36 @@ export const Patients: React.FC = () => {
               />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Plano de Saúde</label>
+            <select
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
+              value={formData.plano || ''}
+              onChange={e => setFormData({ ...formData, plano: e.target.value })}
+            >
+              <option value="">Selecione...</option>
+              <option value="Particular">Particular</option>
+              <option value="Amil">Amil</option>
+              <option value="Bradesco">Bradesco</option>
+              <option value="Uniodonto">Uniodonto</option>
+              <option value="Unimed">Unimed</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+
+          {formData.plano === 'Outros' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Qual Plano?</label>
+              <input
+                type="text"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
+                placeholder="Digite o nome do plano"
+                value={customPlano}
+                onChange={e => setCustomPlano(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100 mt-6">
             <button

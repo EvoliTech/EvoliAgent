@@ -17,6 +17,7 @@ export interface Patient {
   name: string;
   phone: string;
   email?: string;
+  plano?: string;
   status: 'Ativo' | 'Inativo';
   lastVisit?: string;
 }
@@ -31,6 +32,7 @@ export interface SupabaseCustomer {
   botAtivo?: string; // TBD: check actual values
   status_lead_no_crm?: string;
   email?: string; // Not in schema list but good to have if added later
+  plano?: string;
 }
 
 export interface Appointment {
