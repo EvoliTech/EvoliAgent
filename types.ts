@@ -20,6 +20,7 @@ export interface Patient {
   plano?: string;
   status: 'Ativo' | 'Inativo';
   lastVisit?: string;
+  createdAt?: Date;
 }
 
 // Raw Supabase Table Interface

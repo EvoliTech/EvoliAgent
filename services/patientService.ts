@@ -91,6 +91,7 @@ function mapCustomerToPatient(customer: SupabaseCustomer): Patient {
         email: customer.email,
         plano: customer.plano,
         status: isActive ? 'Ativo' : 'Ativo', // Defaulting to Ativo for visibility for now
-        lastVisit: customer.created_at ? new Date(customer.created_at).toLocaleDateString('pt-BR') : '-'
+        lastVisit: customer.created_at ? new Date(customer.created_at).toLocaleDateString('pt-BR') : '-',
+        createdAt: customer.created_at ? new Date(customer.created_at) : undefined
     };
 }

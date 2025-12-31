@@ -14,8 +14,8 @@ export interface GoogleEvent {
   id?: string;
   summary: string;
   description?: string;
-  start: { dateTime: string };
-  end: { dateTime: string };
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
   colorId?: string;
   calendarId?: string;
 }
