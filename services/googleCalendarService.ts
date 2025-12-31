@@ -17,6 +17,7 @@ export interface GoogleEvent {
   start: { dateTime: string };
   end: { dateTime: string };
   colorId?: string;
+  calendarId?: string;
 }
 
 export const googleCalendarService = {

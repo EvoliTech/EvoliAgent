@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, RefreshCw, Users, Check, LayoutGrid, List } from 'lucide-react';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
+import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
 
 export const Agenda: React.FC = () => {
@@ -15,6 +16,11 @@ export const Agenda: React.FC = () => {
   const [view, setView] = useState<'month' | 'week'>('month');
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Details Modal State
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<GoogleEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<GoogleEvent | undefined>(undefined);
 
   // Initial Load
   useEffect(() => {
@@ -67,9 +73,10 @@ export const Agenda: React.FC = () => {
       }
 
       // Fetch for each selected calendar
-      const promises = selectedCalendarIds.map(calId =>
-        googleCalendarService.listEvents(DEFAULT_EMAIL, start, end, calId)
-      );
+      const promises = selectedCalendarIds.map(async (calId) => {
+        const events = await googleCalendarService.listEvents(DEFAULT_EMAIL, start, end, calId);
+        return events.map(e => ({ ...e, calendarId: calId }));
+      });
 
       const results = await Promise.all(promises);
       const allEvents = results.flat();
@@ -83,10 +90,42 @@ export const Agenda: React.FC = () => {
   };
 
   const handleCreateEvent = async (eventData: any) => {
-    const { calendarId, ...googleEventData } = eventData;
-    await googleCalendarService.createEvent(DEFAULT_EMAIL, googleEventData, calendarId);
+    const { calendarId, id, ...googleEventData } = eventData;
+
+    if (id) {
+      // Update
+      await googleCalendarService.updateEvent(DEFAULT_EMAIL, id, googleEventData, calendarId);
+    } else {
+      // Create
+      await googleCalendarService.createEvent(DEFAULT_EMAIL, googleEventData, calendarId);
+    }
+
     // Refresh
     loadEvents();
+    setEditingEvent(undefined); // Reset editing state
+  };
+
+  const handleEventClick = (event: GoogleEvent) => {
+    setSelectedEvent(event);
+    setIsDetailsOpen(true);
+  };
+
+  const handleEditEvent = (event: GoogleEvent) => {
+    setIsDetailsOpen(false);
+    setEditingEvent(event);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteEvent = async (event: GoogleEvent) => {
+    if (confirm('Tem certeza que deseja excluir este agendamento?')) {
+      try {
+        await googleCalendarService.deleteEvent(DEFAULT_EMAIL, event.id!, event.calendarId);
+        setIsDetailsOpen(false);
+        loadEvents();
+      } catch (error: any) {
+        alert('Erro ao excluir: ' + error.message);
+      }
+    }
   };
 
   const toggleCalendar = (id: string) => {
@@ -140,7 +179,7 @@ export const Agenda: React.FC = () => {
           {/* Events list */}
           <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
             {dayEvents.map((ev, idx) => (
-              <div key={ev.id || idx} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded truncate cursor-pointer hover:bg-blue-200" title={ev.summary}>
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded truncate cursor-pointer hover:bg-blue-200" title={ev.summary}>
                 {ev.start.dateTime ? new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} {ev.summary}
               </div>
             ))}
@@ -255,10 +294,19 @@ export const Agenda: React.FC = () => {
 
       <NewAppointmentModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
         onSave={handleCreateEvent}
         calendars={calendars}
         defaultDate={currentDate}
+        initialData={editingEvent}
+      />
+
+      <AppointmentDetailsModal
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        event={selectedEvent}
+        onEdit={handleEditEvent}
+        onDelete={handleDeleteEvent}
       />
     </div>
   );

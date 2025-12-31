@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { GoogleCalendar } from '../services/googleCalendarService';
+import { GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
 import { SupabaseCustomer } from '../types';
 
 interface NewAppointmentModalProps {
@@ -10,7 +10,7 @@ interface NewAppointmentModalProps {
     onClose: () => void;
     onSave: (data: any) => Promise<void>;
     calendars: GoogleCalendar[];
-    defaultDate?: Date;
+    initialData?: GoogleEvent;
 }
 
 export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
@@ -18,7 +18,8 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     onClose,
     onSave,
     calendars,
-    defaultDate
+    defaultDate,
+    initialData
 }) => {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -37,21 +38,48 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            // Reset form
-            setTitle('');
-            if (calendars.length > 0) setSelectedCalendarId(calendars[0].id);
-            if (defaultDate) {
-                setDate(defaultDate.toISOString().split('T')[0]);
+            if (initialData) {
+                // Edit Mode
+                setTitle(initialData.summary);
+                if (initialData.start?.dateTime) {
+                    const startObj = new Date(initialData.start.dateTime);
+                    setDate(startObj.toISOString().split('T')[0]);
+                    setTime(startObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+                }
+
+                // Parse description for fields
+                const getField = (text: string | undefined, label: string) => {
+                    if (!text) return '';
+                    const lines = text.split('\n');
+                    const line = lines.find(l => l.startsWith(label));
+                    return line ? line.replace(label, '').trim() : '';
+                };
+
+                setPatientName(getField(initialData.description, 'Paciente:'));
+                setPatientPhone(getField(initialData.description, 'Telefone:'));
+                setObservations(getField(initialData.description, 'Obs:'));
+
+                // We don't easily know which calendar it belongs to unless passed, defaulting to primary or first available
+                if (initialData.calendarId) setSelectedCalendarId(initialData.calendarId);
+                else if (calendars.length > 0) setSelectedCalendarId(calendars[0].id);
+
             } else {
-                setDate(new Date().toISOString().split('T')[0]);
+                // Create Mode
+                setTitle('');
+                if (calendars.length > 0) setSelectedCalendarId(calendars[0].id);
+                if (defaultDate) {
+                    setDate(defaultDate.toISOString().split('T')[0]);
+                } else {
+                    setDate(new Date().toISOString().split('T')[0]);
+                }
+                setTime('09:00');
+                setPatientName('');
+                setPatientPhone('');
+                setObservations('');
+                setSearchTerm('');
             }
-            setTime('09:00');
-            setPatientName('');
-            setPatientPhone('');
-            setObservations('');
-            setSearchTerm('');
         }
-    }, [isOpen, defaultDate, calendars]);
+    }, [isOpen, defaultDate, calendars, initialData]);
 
     // Search Patients
     useEffect(() => {
@@ -94,9 +122,19 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             const startDate = new Date(dateTimeString);
             const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 min duration default
 
+            const normalizePhone = (phone: string) => {
+                return phone.replace(/\D/g, '');
+            };
+
+            const normalizedPhone = normalizePhone(patientPhone);
+            const whatsappLink = `https://wa.me/${normalizedPhone}`;
+
             const eventData = {
                 summary: title,
-                description: `Paciente: ${patientName}\nTelefone: ${patientPhone}\nObs: ${observations}`,
+                description: `Paciente: ${patientName}
+Telefone: ${patientPhone}
+WhatsApp: ${whatsappLink}
+Obs: ${observations || '-'}`,
                 start: { dateTime: startDate.toISOString() },
                 end: { dateTime: endDate.toISOString() },
                 // We might need to pass colorId from calendar if we want to enforce it, but GCal handles it usually by calendar.
@@ -120,7 +158,13 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             // OR I assume the backend logic I wrote (which hardcoded primary) is strictly for the USER'S primary account connection.
             // If the user has multiple calendars, I should allow selecting one.
 
-            await onSave({ ...eventData, calendarId: selectedCalendarId });
+            // If editing, preserve ID
+            const payload = { ...eventData, calendarId: selectedCalendarId };
+            if (initialData?.id) {
+                (payload as any).id = initialData.id;
+            }
+
+            await onSave(payload);
             onClose();
         } catch (error: any) {
             alert('Erro ao agendar: ' + error.message);
@@ -133,38 +177,38 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-end sm:justify-center bg-black/50 backdrop-blur-sm p-4 sm:p-0">
-            <div className="bg-white w-full max-w-md h-full sm:h-auto sm:rounded-xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-5 duration-300">
+            <div className="bg-white w-full max-w-md h-full sm:h-auto max-h-[90vh] sm:rounded-xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-5 duration-300">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-5 border-b border-gray-100">
-                    <h2 className="text-xl font-bold text-gray-900">Novo Agendamento</h2>
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                    <h2 className="text-xl font-bold text-gray-900">{initialData ? 'Editar Agendamento' : 'Novo Agendamento'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors">
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div className="p-6 overflow-y-auto flex-1 space-y-5">
+                <div className="p-4 overflow-y-auto flex-1 space-y-3">
 
                     {/* Title */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Título / Procedimento</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Título / Procedimento</label>
                         <input
                             type="text"
                             value={title}
                             onChange={e => setTitle(e.target.value)}
                             placeholder="Ex: Consulta Primeira Vez"
-                            className="w-full rounded-lg border-gray-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         />
                     </div>
 
                     {/* Specialist / Calendar */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Especialista (Agenda)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Especialista (Agenda)</label>
                         <select
                             value={selectedCalendarId}
                             onChange={e => setSelectedCalendarId(e.target.value)}
-                            className="w-full rounded-lg border-gray-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         >
                             {calendars.map(cal => (
                                 <option key={cal.id} value={cal.id}>{cal.summary}</option>
@@ -175,26 +219,26 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                     {/* Date & Time */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-0.5">Data</label>
                             <div className="relative">
                                 <CalendarIcon size={16} className="absolute left-3 top-2.5 text-gray-400" />
                                 <input
                                     type="date"
                                     value={date}
                                     onChange={e => setDate(e.target.value)}
-                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Horário</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-0.5">Horário</label>
                             <div className="relative">
                                 <Clock size={16} className="absolute left-3 top-2.5 text-gray-400" />
                                 <input
                                     type="time"
                                     value={time}
                                     onChange={e => setTime(e.target.value)}
-                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>
                         </div>
@@ -202,7 +246,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
                     {/* Patient Search */}
                     <div>
-                        <label className="block text-sm font-medium text-blue-600 mb-1 cursor-pointer hover:underline" onClick={() => setShowPatientResults(!showPatientResults)}>
+                        <label className="block text-sm font-medium text-blue-600 mb-0.5 cursor-pointer hover:underline" onClick={() => setShowPatientResults(!showPatientResults)}>
                             Selecionar Paciente Cadastrado
                         </label>
                         <div className="relative">
@@ -212,7 +256,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                                 value={searchTerm}
                                 onChange={e => { setSearchTerm(e.target.value); setShowPatientResults(true); }}
                                 placeholder="Buscar paciente..."
-                                className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                             {showPatientResults && patients.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -233,7 +277,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
                     {/* Patient Details */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Nome Completo</label>
                         <div className="relative">
                             <User size={16} className="absolute left-3 top-2.5 text-gray-400" />
                             <input
@@ -241,13 +285,13 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                                 value={patientName}
                                 onChange={e => setPatientName(e.target.value)}
                                 placeholder="Nome do paciente"
-                                className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Telefone (WhatsApp)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Telefone (WhatsApp)</label>
                         <div className="flex gap-2">
                             <div className="w-24 bg-gray-50 border border-gray-300 rounded-lg flex items-center justify-center text-sm text-gray-500">
                                 BR +55
@@ -259,7 +303,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                                     value={patientPhone}
                                     onChange={e => setPatientPhone(e.target.value)}
                                     placeholder="11 99999-9999"
-                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>
                         </div>
@@ -267,20 +311,20 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
                     {/* Observations */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Observações</label>
                         <textarea
                             value={observations}
                             onChange={e => setObservations(e.target.value)}
                             placeholder="Observações adicionais..."
                             rows={3}
-                            className="w-full rounded-lg border-gray-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                            className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
                         />
                     </div>
 
                 </div>
 
                 {/* Footer */}
-                <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-xl flex justify-end gap-3">
                     <button
                         onClick={onClose}
                         className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -294,7 +338,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                         className="px-6 py-2 bg-blue-600 rounded-lg text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-70 flex items-center gap-2"
                     >
                         {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                        Agendar
+                        {initialData ? 'Salvar Alterações' : 'Agendar'}
                     </button>
                 </div>
 
