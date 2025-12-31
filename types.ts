@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'patients' | 'professionals' | 'settings';
+export type PageType = 'dashboard' | 'agenda' | 'patients' | 'professionals' | 'settings' | 'google-callback';
 
 export interface Specialist {
   id: string;

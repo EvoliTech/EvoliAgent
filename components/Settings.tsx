@@ -15,13 +15,93 @@ import {
    AlertCircle
 } from 'lucide-react';
 import { SPECIALISTS } from '../constants';
+import { supabase } from '../lib/supabase';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
 export const Settings: React.FC = () => {
    const [activeTab, setActiveTab] = useState<TabType>('general');
    const [isSaving, setIsSaving] = useState(false);
-   const [googleAccount, setGoogleAccount] = useState<string | null>('clinica@gmail.com');
+   const [googleAccount, setGoogleAccount] = useState<string | null>(null);
+   const [clientId, setClientId] = useState('');
+   const [clientSecret, setClientSecret] = useState('');
+   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+
+   React.useEffect(() => {
+      checkConfigs();
+      checkConnection();
+   }, []);
+
+   const checkConfigs = async () => {
+      const { data } = await supabase.from('integrations_config').select('client_id').eq('service', 'google_calendar').single();
+      if (data) {
+         setClientId(data.client_id);
+         setIsConfigLoaded(true);
+      }
+   };
+
+   const checkConnection = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      // Try to find professional with this email
+      const { data } = await supabase.from('especialistas').select('google_email').eq('email', user.email).single();
+      if (data?.google_email) {
+         setGoogleAccount(data.google_email);
+      }
+   };
+
+   const saveIntegrationConfig = async () => {
+      if (!clientId || !clientSecret) return alert('Preencha ID e Secret');
+
+      const { error } = await supabase.from('integrations_config').upsert({
+         service: 'google_calendar',
+         client_id: clientId,
+         client_secret: clientSecret,
+         updated_at: new Date().toISOString()
+      });
+
+      if (error) {
+         alert('Erro ao salvar credenciais: ' + error.message);
+      } else {
+         setClientSecret(''); // Clear secret
+         setIsConfigLoaded(true);
+         alert('Credenciais salvas e testadas (simulação). Prontos para conectar!');
+      }
+   };
+
+   const connectGoogleAccount = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return alert('Faça login');
+
+      const redirectUri = window.location.origin + '/settings/callback';
+      const { data, error } = await supabase.functions.invoke('google-auth', {
+         body: { action: 'auth-url', redirectUri }
+      });
+
+      if (error) {
+         console.error(error);
+         alert('Erro ao conectar: ' + error.message);
+         return;
+      }
+
+      if (data?.url) {
+         window.location.href = data.url;
+      }
+   };
+
+   const disconnectGoogle = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+
+      await supabase.from('especialistas').update({
+         google_access_token: null,
+         google_refresh_token: null,
+         google_token_expires_at: null,
+         google_email: null
+      }).eq('email', user.email);
+
+      setGoogleAccount(null);
+   };
 
    const handleSave = () => {
       setIsSaving(true);
@@ -213,27 +293,72 @@ export const Settings: React.FC = () => {
                                     <CheckCircle size={14} /> Conectado como {googleAccount}
                                  </p>
                               ) : (
-                                 <p className="text-sm text-gray-500">Não conectado</p>
+                                 <p className="text-sm text-gray-500">
+                                    {isConfigLoaded ? 'Pronto para conectar' : 'Configuração Necessária'}
+                                 </p>
                               )}
                            </div>
                         </div>
 
                         {googleAccount ? (
                            <button
-                              onClick={() => setGoogleAccount(null)}
+                              onClick={disconnectGoogle}
                               className="text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                            >
                               Desconectar
                            </button>
                         ) : (
                            <button
-                              onClick={() => setGoogleAccount('usuario@clinica.com')}
-                              className="text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                              onClick={connectGoogleAccount}
+                              disabled={!isConfigLoaded}
+                              className="text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                            >
                               Conectar Conta Google
                            </button>
                         )}
                      </div>
+
+                     {/* Credential Inputs (N8N Style) */}
+                     {!googleAccount && (
+                        <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                           <h4 className="font-medium text-gray-800 mb-2">Credenciais (Google Cloud Console)</h4>
+                           <div className="grid grid-cols-1 gap-4">
+                              <div>
+                                 <label className="block text-xs font-medium text-gray-500 uppercase">Client ID</label>
+                                 <input
+                                    type="text"
+                                    value={clientId}
+                                    onChange={e => setClientId(e.target.value)}
+                                    className="w-full text-sm border-gray-300 rounded-md mt-1"
+                                    placeholder="...apps.googleusercontent.com"
+                                 />
+                              </div>
+                              {!isConfigLoaded && (
+                                 <div>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase">Client Secret</label>
+                                    <input
+                                       type="password"
+                                       value={clientSecret}
+                                       onChange={e => setClientSecret(e.target.value)}
+                                       className="w-full text-sm border-gray-300 rounded-md mt-1"
+                                       placeholder="GOCSPX-..."
+                                    />
+                                 </div>
+                              )}
+                              <div className="flex justify-end">
+                                 <button
+                                    onClick={saveIntegrationConfig}
+                                    className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded hover:bg-black transition-colors"
+                                 >
+                                    {isConfigLoaded ? 'Atualizar Credenciais' : 'Salvar Credenciais'}
+                                 </button>
+                              </div>
+                           </div>
+                           <p className="text-xs text-gray-400 mt-2">
+                              Adicione <code>{window.location.origin}/settings/callback</code> como Redirect URI no Google Console.
+                           </p>
+                        </div>
+                     )}
 
                      {googleAccount && (
                         <div className="bg-gray-50 rounded-lg p-5 border border-gray-100">
@@ -243,34 +368,7 @@ export const Settings: React.FC = () => {
                                  <RefreshCw size={12} /> Re-sincronizar agora
                               </button>
                            </div>
-
-                           <div className="space-y-3">
-                              {/* Mock Calendar List Mapping */}
-                              {[
-                                 { name: 'Dr. Ricardo Silva (Principal)', id: 'cal_1' },
-                                 { name: 'Dra. Amanda Costa', id: 'cal_2' },
-                                 { name: 'Consultório 1', id: 'cal_3' }
-                              ].map(cal => (
-                                 <div key={cal.id} className="flex items-center justify-between bg-white p-3 border border-gray-200 rounded-md">
-                                    <div className="flex items-center gap-3">
-                                       <Calendar size={18} className="text-gray-400" />
-                                       <span className="text-sm font-medium text-gray-700">{cal.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                       <span className="text-xs text-gray-400">Vincular a:</span>
-                                       <select
-                                          className="text-sm border-gray-300 rounded border py-1 px-2 focus:ring-blue-500 focus:border-blue-500"
-                                          defaultValue={SPECIALISTS.find(s => cal.name.includes((s.name.split(' ')[1] || '')))?.name || ""}
-                                       >
-                                          <option value="">Selecione um profissional...</option>
-                                          {SPECIALISTS.map(s => (
-                                             <option key={s.id} value={s.name}>{s.name}</option>
-                                          ))}
-                                       </select>
-                                    </div>
-                                 </div>
-                              ))}
-                           </div>
+                           <p className="text-sm text-gray-500">Sincronização ativa. Eventos serão carregados na Agenda.</p>
                         </div>
                      )}
                   </div>

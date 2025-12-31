@@ -6,6 +6,7 @@ import { Agenda } from './components/Agenda';
 import { Professionals } from './components/Professionals';
 import { Patients } from './components/Patients';
 import { Settings } from './components/Settings';
+import { GoogleCallback } from './components/GoogleCallback';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -22,6 +23,11 @@ export default function App() {
       setSession(session);
       setLoading(false);
     });
+
+    // Check for callback
+    if (window.location.pathname.includes('/settings/callback')) {
+      setCurrentPage('google-callback');
+    }
 
     // Listen for changes
     const {
@@ -50,6 +56,8 @@ export default function App() {
         return <Professionals />;
       case 'settings':
         return <Settings />;
+      case 'google-callback':
+        return <GoogleCallback onNavigate={setCurrentPage} />;
       default:
         return <div className="p-8 text-gray-500">Página em construção.</div>;
     }
