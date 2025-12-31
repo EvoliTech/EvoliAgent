@@ -1,19 +1,46 @@
 import React, { useState } from 'react';
-import { SPECIALISTS, AVAILABLE_TREATMENTS } from '../constants';
+import { AVAILABLE_TREATMENTS } from '../constants';
 import { Specialist } from '../types';
-import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square } from 'lucide-react';
+import { specialistService } from '../services/specialistService';
+import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square, Trash2, AlertTriangle } from 'lucide-react';
 import { Modal } from './ui/Modal';
 
 export const Professionals: React.FC = () => {
-  const [specialists, setSpecialists] = useState<Specialist[]>(SPECIALISTS);
-  
+  const [specialists, setSpecialists] = useState<Specialist[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch initial data & subscribe
+  React.useEffect(() => {
+    loadSpecialists();
+
+    const subscription = specialistService.subscribeToSpecialists(() => {
+      loadSpecialists();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const loadSpecialists = async () => {
+    try {
+      const data = await specialistService.fetchSpecialists();
+      setSpecialists(data);
+    } catch (error) {
+      console.error('Failed to load specialists', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   // States para Modais
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTreatmentsModalOpen, setIsTreatmentsModalOpen] = useState(false);
-  
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   // States de Edição
   const [currentSpecialist, setCurrentSpecialist] = useState<Partial<Specialist>>({});
   const [selectedSpecialistForTreatments, setSelectedSpecialistForTreatments] = useState<Specialist | null>(null);
+  const [specialistToDelete, setSpecialistToDelete] = useState<Specialist | null>(null);
 
   // --- Handlers para Dados Básicos (Novo e Editar) ---
 
@@ -34,26 +61,43 @@ export const Professionals: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleSaveBasicInfo = (e: React.FormEvent) => {
+  const handleSaveBasicInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentSpecialist.name) return;
 
-    if (currentSpecialist.id) {
-      // Editar Existente
-      setSpecialists(prev => prev.map(s => 
-        s.id === currentSpecialist.id ? { ...s, ...currentSpecialist } as Specialist : s
-      ));
-    } else {
-      // Criar Novo
-      const newSpec: Specialist = {
-        ...currentSpecialist,
-        id: Math.random().toString(36).substr(2, 9),
-        treatments: [],
-        color: 'bg-gray-100 text-gray-700 border-gray-200' // Cor padrão
-      } as Specialist;
-      setSpecialists(prev => [...prev, newSpec]);
+    try {
+      if (currentSpecialist.id) {
+        // Editar Existente
+        await specialistService.updateSpecialist(currentSpecialist as Specialist);
+      } else {
+        // Criar Novo
+        await specialistService.createSpecialist(currentSpecialist as Specialist);
+      }
+      setIsEditModalOpen(false);
+      loadSpecialists(); // Refresh just in case (though subscription should handle it)
+    } catch (error) {
+      console.error('Error saving specialist', error);
+      alert('Erro ao salvar especialista');
     }
-    setIsEditModalOpen(false);
+  };
+
+  const handleOpenDelete = (spec: Specialist) => {
+    setSpecialistToDelete(spec);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!specialistToDelete) return;
+
+    try {
+      await specialistService.deleteSpecialist(specialistToDelete.id);
+      setIsDeleteModalOpen(false);
+      setIsEditModalOpen(false); // If called from edit modal
+      setSpecialistToDelete(null);
+    } catch (error) {
+      console.error('Error deleting specialist', error);
+      alert('Erro ao deletar especialista');
+    }
   };
 
   // --- Handlers para Tratamentos ---
@@ -82,25 +126,29 @@ export const Professionals: React.FC = () => {
     });
   };
 
-  const handleSaveTreatments = () => {
+  const handleSaveTreatments = async () => {
     if (!selectedSpecialistForTreatments) return;
 
-    setSpecialists(prev => prev.map(s => 
-      s.id === selectedSpecialistForTreatments.id ? selectedSpecialistForTreatments : s
-    ));
-    setIsTreatmentsModalOpen(false);
+    try {
+      await specialistService.updateSpecialist(selectedSpecialistForTreatments);
+      await loadSpecialists();
+      setIsTreatmentsModalOpen(false);
+    } catch (error) {
+      console.error('Error saving treatments', error);
+      alert('Erro ao salvar tratamentos');
+    }
   };
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      
+
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Especialistas</h1>
           <p className="text-gray-500">Gerencie o corpo clínico e atribua tratamentos habilitados.</p>
         </div>
-        <button 
+        <button
           onClick={handleOpenNew}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm flex items-center gap-2"
         >
@@ -112,29 +160,29 @@ export const Professionals: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {specialists.map(spec => (
           <div key={spec.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
-            
+
             {/* Header do Card (Nome e Especialidade Principal) */}
             <div className="p-6 border-b border-gray-50">
-               <h3 className="text-lg font-bold text-gray-900">{spec.name}</h3>
-               <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mt-1 ${spec.color}`}>
-                 {spec.specialty || 'Sem especialidade'}
-               </span>
+              <h3 className="text-lg font-bold text-gray-900">{spec.name}</h3>
+              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mt-1 ${spec.color}`}>
+                {spec.specialty || 'Sem especialidade'}
+              </span>
             </div>
 
             {/* Corpo do Card (Contatos) */}
             <div className="px-6 py-4 space-y-3 flex-1">
-               <div className="flex items-center text-sm text-gray-600">
-                  <Mail size={16} className="mr-3 text-gray-400"/>
-                  {spec.email || 'Não informado'}
-               </div>
-               <div className="flex items-center text-sm text-gray-600">
-                  <Phone size={16} className="mr-3 text-gray-400"/>
-                  {spec.phone || 'Não informado'}
-               </div>
+              <div className="flex items-center text-sm text-gray-600">
+                <Mail size={16} className="mr-3 text-gray-400" />
+                {spec.email || 'Não informado'}
+              </div>
+              <div className="flex items-center text-sm text-gray-600">
+                <Phone size={16} className="mr-3 text-gray-400" />
+                {spec.phone || 'Não informado'}
+              </div>
             </div>
 
             {/* Área de Tratamentos (Clicável) */}
-            <div 
+            <div
               onClick={() => handleOpenTreatments(spec)}
               className="mx-6 mb-4 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors group"
             >
@@ -157,19 +205,19 @@ export const Professionals: React.FC = () => {
                   <span className="text-xs text-gray-400 italic">Nenhum tratamento selecionado</span>
                 )}
                 {(spec.treatments?.length || 0) > 3 && (
-                   <span className="text-[10px] text-gray-400 pl-1 self-center">+{spec.treatments!.length - 3} mais</span>
+                  <span className="text-[10px] text-gray-400 pl-1 self-center">+{spec.treatments!.length - 3} mais</span>
                 )}
               </div>
             </div>
 
             {/* Footer com Botão Editar */}
             <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-               <button 
-                 onClick={() => handleOpenEdit(spec)}
-                 className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border border-gray-200 transition-colors"
-               >
-                  <Edit2 size={14} /> Editar Dados
-               </button>
+              <button
+                onClick={() => handleOpenEdit(spec)}
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border border-gray-200 transition-colors"
+              >
+                <Edit2 size={14} /> Editar Dados
+              </button>
             </div>
           </div>
         ))}
@@ -221,6 +269,21 @@ export const Professionals: React.FC = () => {
               onChange={e => setCurrentSpecialist({ ...currentSpecialist, phone: e.target.value })}
             />
           </div>
+
+
+          {currentSpecialist.id && ( // Only show delete for existing specialists
+            <div className="pt-4 mt-4 border-t border-gray-100 flex justify-between items-center">
+              <span className="text-xs text-gray-500">Zona de Perigo</span>
+              <button
+                type="button"
+                onClick={() => handleOpenDelete(currentSpecialist as Specialist)}
+                className="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+              >
+                <Trash2 size={14} /> Excluir Especialista
+              </button>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
@@ -249,12 +312,12 @@ export const Professionals: React.FC = () => {
           <p className="text-sm text-gray-500 mb-4">
             Selecione quais procedimentos este especialista está habilitado a realizar na clínica.
           </p>
-          
+
           <div className="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-3 bg-gray-50">
             {AVAILABLE_TREATMENTS.map(treatment => {
               const isSelected = selectedSpecialistForTreatments?.treatments?.includes(treatment);
               return (
-                <div 
+                <div
                   key={treatment}
                   onClick={() => toggleTreatment(treatment)}
                   className={`flex items-center p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-100'}`}
@@ -287,6 +350,42 @@ export const Professionals: React.FC = () => {
         </div>
       </Modal>
 
-    </div>
+      {/* --- Modal de Deletar (Confirmação) --- */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Excluir Especialista"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-center p-4 bg-red-50 rounded-full w-12 h-12 mx-auto mb-2 text-red-600">
+            <AlertTriangle size={24} />
+          </div>
+
+          <div className="text-center">
+            <h3 className="text-lg font-medium text-gray-900">Tem certeza?</h3>
+            <p className="text-sm text-gray-500 mt-2">
+              Você está prestes a excluir <strong>{specialistToDelete?.name}</strong>.
+              Esta ação não pode ser desfeita e removerá o especialista da lista.
+            </p>
+          </div>
+
+          <div className="flex justify-center gap-3 pt-4">
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 w-full"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 shadow-sm w-full flex items-center justify-center gap-2"
+            >
+              <Trash2 size={16} /> Confirmar Exclusão
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+    </div >
   );
 };

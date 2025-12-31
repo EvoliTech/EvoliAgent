@@ -1,238 +1,140 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { CalendarState, Appointment } from '../types';
-import { formatDate, addDays } from '../utils';
+import React, { useState } from 'react';
 import { SPECIALISTS } from '../constants';
-import { googleCalendarService } from '../services/googleCalendarService';
-
-import { CalendarSidebar } from './Calendar/CalendarSidebar';
-import { MonthView } from './Calendar/MonthView';
-import { WeekView } from './Calendar/WeekView';
-import { Modal } from './ui/Modal';
-import { AppointmentForm } from './AppointmentForm';
-
-import { ChevronLeft, ChevronRight, Plus, RefreshCw, LayoutGrid, List } from 'lucide-react';
+import { Calendar, Check, Users } from 'lucide-react';
 
 export const Agenda: React.FC = () => {
-  // --- State ---
-  const [calendarState, setCalendarState] = useState<CalendarState>({
-    currentDate: new Date(),
-    view: 'week',
-    selectedSpecialistIds: SPECIALISTS.map(s => s.id) // All selected by default
+  // Default to the specific email requested, or empty if not found
+  const DEFAULT_EMAIL = 'open.evertonai@gmail.com';
+
+  // State to track selected specialist emails
+  const [selectedEmails, setSelectedEmails] = useState<string[]>(() => {
+    // Check if the default email exists in our specialists list
+    const defaultExists = SPECIALISTS.some(s => s.email === DEFAULT_EMAIL);
+    return defaultExists ? [DEFAULT_EMAIL] : [];
   });
-  
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Partial<Appointment> | undefined>(undefined);
 
-  // --- Effects ---
-
-  const fetchAppointments = useCallback(async () => {
-    setIsLoading(true);
-    // Fetch a broad range to cover month view
-    const start = new Date(calendarState.currentDate.getFullYear(), calendarState.currentDate.getMonth() - 1, 1);
-    const end = new Date(calendarState.currentDate.getFullYear(), calendarState.currentDate.getMonth() + 2, 0);
-    
-    try {
-      const data = await googleCalendarService.fetchEvents(start, end);
-      setAppointments(data);
-    } catch (error) {
-      console.error("Failed to sync", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [calendarState.currentDate]);
-
-  useEffect(() => {
-    fetchAppointments();
-  }, [fetchAppointments]);
-
-  // --- Handlers ---
-
-  const handleNavigate = (direction: 'prev' | 'next') => {
-    const daysToAdd = calendarState.view === 'month' ? 30 : 7;
-    const factor = direction === 'next' ? 1 : -1;
-    
-    // For proper month navigation
-    let newDate = new Date(calendarState.currentDate);
-    if (calendarState.view === 'month') {
-      newDate.setMonth(newDate.getMonth() + factor);
-    } else {
-      newDate = addDays(newDate, daysToAdd * factor);
-    }
-    
-    setCalendarState(prev => ({ ...prev, currentDate: newDate }));
-  };
-
-  const handleSlotClick = (date: Date) => {
-    setEditingAppointment({
-      start: date,
-      end: new Date(date.getTime() + 30 * 60000), // Default 30 min
-      specialistId: calendarState.selectedSpecialistIds[0] || SPECIALISTS[0].id
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleEventClick = (apt: Appointment) => {
-    setEditingAppointment(apt);
-    setIsModalOpen(true);
-  };
-
-  const handleSaveAppointment = async (data: Omit<Appointment, 'id'>) => {
-    setIsModalOpen(false);
-    setIsLoading(true);
-    try {
-      if (editingAppointment?.id) {
-        await googleCalendarService.updateEvent({ ...data, id: editingAppointment.id } as Appointment);
+  const toggleSpecialist = (email: string) => {
+    setSelectedEmails(prev => {
+      if (prev.includes(email)) {
+        return prev.filter(e => e !== email);
       } else {
-        await googleCalendarService.createEvent(data);
+        return [...prev, email];
       }
-      await fetchAppointments();
-    } catch (error) {
-      alert("Erro ao salvar agendamento");
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
-  const handleDeleteAppointment = async (id: string) => {
-    if (!confirm("Tem certeza que deseja cancelar este agendamento?")) return;
-    setIsModalOpen(false);
-    setIsLoading(true);
-    try {
-      await googleCalendarService.deleteEvent(id);
-      await fetchAppointments();
-    } catch (error) {
-       alert("Erro ao excluir");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Construct the aggregated Google Calendar URL
+  const getCalendarUrl = () => {
+    const baseUrl = "https://calendar.google.com/calendar/embed";
+    const params = new URLSearchParams();
 
-  // Filter appointments for display
-  const displayedAppointments = appointments.filter(apt => 
-    calendarState.selectedSpecialistIds.includes(apt.specialistId)
-  );
+    // Core parameters
+    params.append('ctz', 'America/Sao_Paulo');
+    params.append('showTitle', '0');
+    params.append('showNav', '1');
+    params.append('showDate', '1');
+    params.append('showPrint', '0');
+    params.append('showTabs', '1');
+    params.append('showCalendars', '0');
+    params.append('showTz', '0');
+    params.append('height', '600');
+    params.append('wkst', '2'); // Start week on Monday
+    params.append('bgcolor', '#FFFFFF');
+
+    // Add each selected source
+    // Note: We construct the src parameters manually because URLSearchParams might encode them differently than GCal expects for multiple keys
+    let url = `${baseUrl}?${params.toString()}`;
+
+    selectedEmails.forEach((email, index) => {
+      // Find the specialist to get their color if possible (optional enhancement)
+      const specialist = SPECIALISTS.find(s => s.email === email);
+      // Map tailwind colors to hex roughly if needed, or let Google assign default
+      // Ideally we would pass &color=%23HEXCODE
+
+      url += `&src=${encodeURIComponent(email)}`;
+
+      // Attempt to assign distinct colors based on index if we wanted, 
+      // but GCal embeds usually handle their own coloring unless enforced.
+    });
+
+    return url;
+  };
 
   return (
     <div className="flex h-full bg-gray-50 overflow-hidden">
-      
-      <CalendarSidebar 
-        currentDate={calendarState.currentDate}
-        onDateChange={(d) => setCalendarState(p => ({ ...p, currentDate: d }))}
-        selectedSpecialists={calendarState.selectedSpecialistIds}
-        onToggleSpecialist={(id) => {
-          setCalendarState(prev => {
-             const ids = prev.selectedSpecialistIds;
-             return {
-               ...prev,
-               selectedSpecialistIds: ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
-             };
-          });
-        }}
-      />
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top Navigation Bar */}
-        <header className="bg-white border-b border-gray-200 h-16 px-6 flex items-center justify-between shrink-0 shadow-sm z-20">
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button onClick={() => handleNavigate('prev')} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
-                <ChevronLeft size={20} />
-              </button>
-              <span className="px-4 font-medium text-gray-700 min-w-[140px] text-center select-none">
-                 {formatDate(calendarState.currentDate)}
-              </span>
-              <button onClick={() => handleNavigate('next')} className="p-1 hover:bg-white hover:shadow rounded-md transition-all text-gray-600">
-                <ChevronRight size={20} />
-              </button>
-            </div>
-
-            <button 
-              onClick={() => setCalendarState(p => ({ ...p, currentDate: new Date() }))}
-              className="text-sm font-medium text-gray-500 hover:text-blue-600 px-3 py-1 rounded border border-transparent hover:border-gray-200"
-            >
-              Hoje
-            </button>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <div className="flex bg-gray-100 rounded-lg p-1 text-sm font-medium">
-              <button 
-                onClick={() => setCalendarState(p => ({ ...p, view: 'month' }))}
-                className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition-all ${calendarState.view === 'month' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
-              >
-                <LayoutGrid size={16} /> Mês
-              </button>
-              <button 
-                onClick={() => setCalendarState(p => ({ ...p, view: 'week' }))}
-                className={`px-3 py-1.5 rounded-md flex items-center gap-1 transition-all ${calendarState.view === 'week' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
-              >
-                <List size={16} /> Semana
-              </button>
-            </div>
-
-            <button 
-              onClick={() => fetchAppointments()}
-              disabled={isLoading}
-              className={`p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-all ${isLoading ? 'animate-spin' : ''}`}
-            >
-              <RefreshCw size={20} />
-            </button>
-
-            <button 
-              onClick={() => {
-                setEditingAppointment(undefined);
-                setIsModalOpen(true);
-              }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-700 shadow-md transition-colors font-medium text-sm"
-            >
-              <Plus size={18} /> Novo
-            </button>
-          </div>
-        </header>
-
-        {/* Main Calendar Area */}
-        <div className="flex-1 overflow-hidden p-6 relative">
-          {calendarState.view === 'month' ? (
-            <MonthView 
-              currentDate={calendarState.currentDate}
-              appointments={displayedAppointments}
-              onSlotClick={handleSlotClick}
-              onEventClick={handleEventClick}
-            />
-          ) : (
-            <WeekView 
-              currentDate={calendarState.currentDate}
-              appointments={displayedAppointments}
-              onSlotClick={handleSlotClick}
-              onEventClick={handleEventClick}
-            />
-          )}
-
-          {/* Loading Overlay */}
-          {isLoading && (
-            <div className="absolute top-4 right-8 bg-white/90 px-4 py-2 rounded-full shadow-lg border border-blue-100 text-blue-600 text-sm font-medium animate-pulse z-10 flex items-center">
-              <RefreshCw size={14} className="mr-2 animate-spin"/> Sincronizando...
-            </div>
-          )}
+      {/* Sidebar Controls */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Users size={20} className="text-blue-600" />
+            Minhas Agendas
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">Selecione para visualizar</p>
         </div>
+
+        <div className="p-4 space-y-2 overflow-y-auto flex-1">
+          {SPECIALISTS.filter(s => !!s.email).map((specialist) => {
+            const isSelected = selectedEmails.includes(specialist.email!);
+            // Extract color class logic if needed, simplify for UI
+
+            return (
+              <button
+                key={specialist.id}
+                onClick={() => toggleSpecialist(specialist.email!)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${isSelected
+                    ? 'bg-blue-50 border-blue-200 shadow-sm'
+                    : 'bg-white border-gray-200 hover:bg-gray-50'
+                  }`}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${specialist.color.split(' ')[0]} ${specialist.color.split(' ')[1]}`}>
+                    {specialist.name.charAt(0)}
+                  </div>
+                  <div className="text-left truncate">
+                    <p className={`text-sm font-medium ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                      {specialist.name}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate">{specialist.specialty}</p>
+                  </div>
+                </div>
+
+                {isSelected && (
+                  <div className="text-blue-600">
+                    <Check size={16} />
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Main Calendar View */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+        {selectedEmails.length > 0 ? (
+          <div className="flex-1 w-full h-full p-4">
+            <div className="w-full h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <iframe
+                key={selectedEmails.join(',')} // Force re-render when selection changes to ensure update
+                src={getCalendarUrl()}
+                style={{ border: 0 }}
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                scrolling="no"
+                title="Agenda Combinada"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+            <Calendar size={64} className="opacity-20 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900">Nenhuma agenda selecionada</h3>
+            <p className="text-sm">Selecione um ou mais profissionais ao lado.</p>
+          </div>
+        )}
       </main>
-
-      {/* Appointment Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingAppointment?.id ? "Editar Agendamento" : "Novo Agendamento"}
-      >
-        <AppointmentForm 
-          initialData={editingAppointment}
-          onSubmit={handleSaveAppointment}
-          onDelete={handleDeleteAppointment}
-          onCancel={() => setIsModalOpen(false)}
-        />
-      </Modal>
-
     </div>
   );
-}
+};

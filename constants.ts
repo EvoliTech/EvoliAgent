@@ -2,16 +2,14 @@ import { Specialist, Appointment, DashboardStats, Patient } from './types';
 
 // Lista global de tratamentos disponíveis na clínica para seleção
 export const AVAILABLE_TREATMENTS = [
-  'Consulta Geral',
-  'Limpeza de Pele',
-  'Botox',
-  'Preenchimento Labial',
-  'Eletrocardiograma',
-  'Pediatria Rotina',
-  'Vacinação',
-  'Pequena Cirurgia',
-  'Laser CO2',
-  'Peeling Químico'
+  'Odontologia Geral',
+  'Endodontia',
+  'Prótese Dentária',
+  'Implantodontia',
+  'Ortodontia',
+  'Odontologia Estética',
+  'Laserterapia',
+  'Harmonização Orofacial'
 ];
 
 export const SPECIALISTS: Specialist[] = [
@@ -27,11 +25,11 @@ export const SPECIALISTS: Specialist[] = [
   },
   {
     id: '2',
-    name: 'Dra. Amanda Costa',
+    name: 'Dra.        Costa',
     specialty: 'Dermatologia',
     color: 'bg-rose-100 text-rose-700 border-rose-200',
     avatarUrl: 'https://picsum.photos/100/100?random=2',
-    email: 'amanda.costa@clinica.com',
+    email: 'open.evertonai@gmail.com',
     phone: '(11) 99999-1002',
     treatments: ['Consulta Geral', 'Botox', 'Preenchimento Labial', 'Limpeza de Pele', 'Peeling Químico']
   },
