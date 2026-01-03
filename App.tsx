@@ -47,7 +47,6 @@ export default function App() {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard':
-      case 'dashboard':
         return <Dashboard onNavigate={setCurrentPage} />;
       case 'agenda':
         return <Agenda />;
