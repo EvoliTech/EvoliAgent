@@ -28,7 +28,8 @@ export const googleCalendarService = {
       body: { action: 'list-calendars', userEmail }
     });
     if (error || (data && data.error)) throw new Error(error?.message || data?.error);
-    return data.items || [];
+    const items = data.items || [];
+    return items.filter((c: GoogleCalendar) => c.summary.includes('Dr'));
   },
 
   async listEvents(userEmail: string, start: Date, end: Date, calendarId?: string): Promise<GoogleEvent[]> {
