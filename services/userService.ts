@@ -102,12 +102,11 @@ export const userService = {
         const { data, error } = await supabase
             .from('users')
             .select('google_email, google_access_token')
-            .eq('role', 'admin')
-            .order('created_at', { ascending: true })
+            .not('google_access_token', 'is', null)
             .limit(1)
             .maybeSingle();
 
-        if (error || !data || !data.google_access_token) {
+        if (error || !data) {
             return null;
         }
 

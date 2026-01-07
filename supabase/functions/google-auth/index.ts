@@ -167,6 +167,33 @@ serve(async (req) => {
             return handleCalendarAction(action, body, supabase);
         }
 
+        if (action === 'disconnect') {
+            try {
+                // Nuclear option: Clear tokens for ANY user that has them.
+                // This runs with Service Role, so it bypasses RLS.
+                const { error } = await supabase
+                    .from('users')
+                    .update({
+                        google_access_token: null,
+                        google_refresh_token: null,
+                        google_token_expires_at: null,
+                        google_email: null
+                    })
+                    .not('google_access_token', 'is', null);
+
+                if (error) throw error;
+
+                return new Response(JSON.stringify({ success: true }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            } catch (e: any) {
+                console.error('Disconnect failed:', e);
+                return new Response(JSON.stringify({ error: e.message }), {
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+                });
+            }
+        }
+
         throw new Error(`Unknown action: ${action}`);
 
     } catch (error: any) {

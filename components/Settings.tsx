@@ -182,15 +182,12 @@ export const Settings: React.FC = () => {
             return;
          }
 
-         // 1. Remove Google tokens and email from the admin user
-         const { error: userError } = await supabase.from('users').update({
-            google_access_token: null,
-            google_refresh_token: null,
-            google_token_expires_at: null,
-            google_email: null
-         }).eq('id', admin.id);
+         // 1. Invoke Edge Function to clear tokens (bypasses RLS issues)
+         const { error: fnError } = await supabase.functions.invoke('google-auth', {
+            body: { action: 'disconnect' }
+         });
 
-         if (userError) throw userError;
+         if (fnError) throw fnError;
 
          // 2. Remove specialists imported from Google (identified by specialty: 'Google Calendar')
          const { error: specError } = await supabase
@@ -213,9 +210,10 @@ export const Settings: React.FC = () => {
          }
 
          setGoogleAccount(null);
-         alert('Google Calendar desconectado com sucesso! A integração e os dados importados foram removidos.');
+         alert('Google Calendar desconectado com sucesso!');
          window.location.reload();
       } catch (error: any) {
+         console.error('Erro detalhado ao desconectar:', error);
          alert('Erro ao desconectar: ' + error.message);
       }
    };

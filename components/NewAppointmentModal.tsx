@@ -3,13 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
-import { SupabaseCustomer } from '../types';
+import { specialistService } from '../services/specialistService';
+import { Specialist, SupabaseCustomer } from '../types';
 
 interface NewAppointmentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (data: any) => Promise<void>;
-    calendars: GoogleCalendar[];
+    specialists: Specialist[];
+    defaultDate?: Date;
     initialData?: GoogleEvent;
 }
 
@@ -17,7 +19,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     isOpen,
     onClose,
     onSave,
-    calendars,
+    specialists,
     defaultDate,
     initialData
 }) => {
@@ -61,12 +63,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
                 // We don't easily know which calendar it belongs to unless passed, defaulting to primary or first available
                 if (initialData.calendarId) setSelectedCalendarId(initialData.calendarId);
-                else if (calendars.length > 0) setSelectedCalendarId(calendars[0].id);
+                else if (specialists.length > 0) setSelectedCalendarId(specialists[0].calendarId || specialists[0].id);
 
             } else {
                 // Create Mode
                 setTitle('');
-                if (calendars.length > 0) setSelectedCalendarId(calendars[0].id);
+                if (specialists.length > 0) setSelectedCalendarId(specialists[0].calendarId || specialists[0].id);
                 if (defaultDate) {
                     setDate(defaultDate.toISOString().split('T')[0]);
                 } else {
@@ -79,7 +81,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 setSearchTerm('');
             }
         }
-    }, [isOpen, defaultDate, calendars, initialData]);
+    }, [isOpen, defaultDate, specialists, initialData]);
 
     // Search Patients
     useEffect(() => {
@@ -253,8 +255,9 @@ Obs: ${observations || '-'}`,
                             onChange={e => setSelectedCalendarId(e.target.value)}
                             className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         >
-                            {calendars.map(cal => (
-                                <option key={cal.id} value={cal.id}>{cal.summary}</option>
+                            <option value="" disabled>Selecione um especialista</option>
+                            {specialists.map(spec => (
+                                <option key={spec.id} value={spec.calendarId || spec.id}>{spec.name}</option>
                             ))}
                         </select>
                     </div>

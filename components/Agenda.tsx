@@ -5,11 +5,13 @@ import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/
 import { userService } from '../services/userService';
 import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
+import { specialistService } from '../services/specialistService';
+import { Specialist } from '../types';
 
 export const Agenda: React.FC = () => {
   // State
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
-  const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
+  const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
   const [events, setEvents] = useState<GoogleEvent[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -24,7 +26,7 @@ export const Agenda: React.FC = () => {
 
   // Initial Load
   useEffect(() => {
-    loadCalendars();
+    loadSidebarData();
   }, []);
 
   // Fetch Events when dependencies change
@@ -36,24 +38,31 @@ export const Agenda: React.FC = () => {
     }
   }, [currentDate, view, selectedCalendarIds]);
 
-  const loadCalendars = async () => {
+  const loadSidebarData = async () => {
     try {
       setLoading(true);
-      const email = await userService.getAdminEmail();
-      if (!email) {
-        console.warn('No admin email found for Google Calendar sync');
-        return;
-      }
+
+      // 1. Get connected Google email
+      const email = await userService.getConnectedGoogleEmail();
       setAdminEmail(email);
 
-      const calendarList = await googleCalendarService.listCalendars(email);
-      setCalendars(calendarList);
+      // 2. Fetch specialists from DB
+      const specialistList = await specialistService.fetchSpecialists();
+      setSpecialists(specialistList);
 
-      const primary = calendarList.find(c => c.primary);
-      if (primary) setSelectedCalendarIds([primary.id]);
-      else if (calendarList.length > 0) setSelectedCalendarIds([calendarList[0].id]);
+      // 3. Selection logic
+      if (selectedCalendarIds.length === 0 && specialistList.length > 0) {
+        // Find the first specialist that has a calendar linked
+        const firstWithCalendar = specialistList.find(s => s.calendarId);
+        if (firstWithCalendar?.calendarId) {
+          setSelectedCalendarIds([firstWithCalendar.calendarId]);
+        } else {
+          // Fallback to the first one even if no calendarId (for local view if supported later)
+          setSelectedCalendarIds([specialistList[0].id]);
+        }
+      }
     } catch (error) {
-      console.error('Error loading calendars:', error);
+      console.error('Error loading agenda data:', error);
     } finally {
       setLoading(false);
     }
@@ -80,11 +89,18 @@ export const Agenda: React.FC = () => {
         end.setDate(start.getDate() + 6); // Sunday
       }
 
-      // Fetch for each selected calendar
-      const promises = selectedCalendarIds.map(async (calId) => {
-        const events = await googleCalendarService.listEvents(adminEmail, start, end, calId);
-        return events.map(e => ({ ...e, calendarId: calId }));
-      });
+      // Fetch for each selected calendar (only if it looks like a valid Google calendar ID)
+      const promises = selectedCalendarIds
+        .filter(id => id && (id.includes('@') || id === 'primary'))
+        .map(async (calId) => {
+          try {
+            const events = await googleCalendarService.listEvents(adminEmail, start, end, calId);
+            return events.map(e => ({ ...e, calendarId: calId }));
+          } catch (e) {
+            console.error(`Failed to load events for calendar ${calId}:`, e);
+            return [];
+          }
+        });
 
       const results = await Promise.all(promises);
       const allEvents = results.flat();
@@ -233,15 +249,18 @@ export const Agenda: React.FC = () => {
           <div className="mb-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Especialistas / Agendas</h3>
             <div className="space-y-2">
-              {calendars.map(cal => (
-                <div key={cal.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => toggleCalendar(cal.id)}>
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedCalendarIds.includes(cal.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
-                    {selectedCalendarIds.includes(cal.id) && <Check size={12} className="text-white" />}
+              {specialists.map(spec => (
+                <div key={spec.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => toggleCalendar(spec.calendarId || spec.id)}>
+                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${(spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
+                    {((spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id)) && <Check size={12} className="text-white" />}
                   </div>
-                  <span className="text-sm text-gray-700 truncate">{cal.summary}</span>
-                  <span className="w-2 h-2 rounded-full ml-auto" style={{ backgroundColor: cal.backgroundColor || '#3b82f6' }}></span>
+                  <span className="text-sm text-gray-700 truncate">{spec.name}</span>
+                  <div className={`w-2.5 h-2.5 rounded-full ml-auto shrink-0 shadow-sm ${spec.color.split(' ')[0]}`}></div>
                 </div>
               ))}
+              {specialists.length === 0 && (
+                <p className="text-xs text-gray-500 italic py-2">Nenhum especialista cadastrado.</p>
+              )}
             </div>
           </div>
         </div>
@@ -306,7 +325,7 @@ export const Agenda: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
         onSave={handleCreateEvent}
-        calendars={calendars}
+        specialists={specialists}
         defaultDate={currentDate}
         initialData={editingEvent}
       />
