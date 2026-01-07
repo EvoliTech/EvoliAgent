@@ -172,6 +172,19 @@ export const Agenda: React.FC = () => {
 
   const handleToday = () => setCurrentDate(new Date());
 
+  const handleNewAppointmentClick = (dateContext?: Date) => {
+    if (!adminEmail) {
+      alert("Integração Necessária!\n\nPara criar agendamentos, o sistema precisa estar integrado ao Google Calendar.\nPor favor, acesse o menu 'Integrações' e conecte sua conta.");
+      return;
+    }
+    // If we passed a date from the grid add button, we might want to use it? 
+    // Currently NewAppointmentModal takes defaultDate={currentDate}. 
+    // If I want to support clicking "+" on a specific day, I should update state or pass it to modal.
+    // However, the current code just used setIsModalOpen(true). 
+    // I will stick to the requested rule enforcement.
+    setIsModalOpen(true);
+  };
+
   // Render Helpers
   const renderMonthGrid = () => {
     // Basic logic to generate 7x6 grid
@@ -213,7 +226,7 @@ export const Agenda: React.FC = () => {
 
           {/* Add on hover (simplified) */}
           <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100">
-            <button onClick={() => { setIsModalOpen(true); /* Pass date context ideally */ }} className="p-1 hover:bg-gray-200 rounded-full text-blue-600">
+            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(); }} className="p-1 hover:bg-gray-200 rounded-full text-blue-600">
               <Plus size={14} />
             </button>
           </div>
@@ -231,8 +244,8 @@ export const Agenda: React.FC = () => {
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
         <div className="p-6">
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            onClick={() => handleNewAppointmentClick()}
+            className={`w-full flex items-center justify-center gap-2 text-white py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] ${adminEmail ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' : 'bg-gray-400 cursor-not-allowed'}`}
           >
             <Plus size={20} className="stroke-[3]" />
             <span className="font-semibold">Novo</span>
@@ -249,17 +262,19 @@ export const Agenda: React.FC = () => {
           <div className="mb-4">
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Especialistas / Agendas</h3>
             <div className="space-y-2">
-              {specialists.map(spec => (
-                <div key={spec.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => toggleCalendar(spec.calendarId || spec.id)}>
-                  <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${(spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
-                    {((spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id)) && <Check size={12} className="text-white" />}
+              {specialists
+                .filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))
+                .map(spec => (
+                  <div key={spec.id} className="flex items-center gap-3 group cursor-pointer" onClick={() => toggleCalendar(spec.calendarId || spec.id)}>
+                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${(spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 group-hover:border-blue-400'}`}>
+                      {((spec.calendarId && selectedCalendarIds.includes(spec.calendarId)) || selectedCalendarIds.includes(spec.id)) && <Check size={12} className="text-white" />}
+                    </div>
+                    <span className="text-sm text-gray-700 truncate">{spec.name}</span>
+                    <div className={`w-2.5 h-2.5 rounded-full ml-auto shrink-0 shadow-sm ${spec.color.split(' ')[0]}`}></div>
                   </div>
-                  <span className="text-sm text-gray-700 truncate">{spec.name}</span>
-                  <div className={`w-2.5 h-2.5 rounded-full ml-auto shrink-0 shadow-sm ${spec.color.split(' ')[0]}`}></div>
-                </div>
-              ))}
-              {specialists.length === 0 && (
-                <p className="text-xs text-gray-500 italic py-2">Nenhum especialista cadastrado.</p>
+                ))}
+              {specialists.filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name)).length === 0 && (
+                <p className="text-xs text-gray-500 italic py-2">Nenhum especialista compatível encontrado.</p>
               )}
             </div>
           </div>
@@ -325,7 +340,7 @@ export const Agenda: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
         onSave={handleCreateEvent}
-        specialists={specialists}
+        specialists={specialists.filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))}
         defaultDate={currentDate}
         initialData={editingEvent}
       />

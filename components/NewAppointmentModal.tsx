@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileText } from 'lucide-react';
+import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileText, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
@@ -92,7 +92,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             }
 
             const { data } = await supabase
-                .from('clientes')
+                .from('Cliente')
                 .select('*')
                 .ilike('nome', `%${searchTerm}%`)
                 .limit(5);
@@ -103,6 +103,24 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
         const debounce = setTimeout(searchPatients, 300);
         return () => clearTimeout(debounce);
     }, [searchTerm]);
+
+    const handleShowAllPatients = async () => {
+        // If results are already showing, toggle off
+        if (showPatientResults && patients.length > 0 && searchTerm === '') {
+            setShowPatientResults(false);
+            return;
+        }
+
+        const { data } = await supabase
+            .from('Cliente')
+            .select('*')
+            .limit(50); // Reasonable limit for "all"
+
+        if (data) {
+            setPatients(data);
+            setShowPatientResults(true);
+        }
+    };
 
     const handleSelectPatient = (patient: SupabaseCustomer) => {
         setPatientName(patient.nome || '');
@@ -292,7 +310,7 @@ Obs: ${observations || '-'}`,
 
                     {/* Patient Search */}
                     <div>
-                        <label className="block text-sm font-medium text-blue-600 mb-0.5 cursor-pointer hover:underline" onClick={() => setShowPatientResults(!showPatientResults)}>
+                        <label className="block text-sm font-bold text-black-600 mb-0.5">
                             Selecionar Paciente Cadastrado
                         </label>
                         <div className="relative">
@@ -302,8 +320,15 @@ Obs: ${observations || '-'}`,
                                 value={searchTerm}
                                 onChange={e => { setSearchTerm(e.target.value); setShowPatientResults(true); }}
                                 placeholder="Buscar paciente..."
-                                className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                className="w-full rounded-lg border-gray-300 border pl-9 pr-10 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                             />
+                            <button
+                                onClick={handleShowAllPatients}
+                                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 focus:outline-none"
+                                title="Listar todos"
+                            >
+                                <ChevronDown size={16} />
+                            </button>
                             {showPatientResults && patients.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                     {patients.map(p => (

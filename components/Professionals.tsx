@@ -175,69 +175,71 @@ export const Professionals: React.FC = () => {
 
       {/* Grid de Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {specialists.map(spec => (
-          <div key={spec.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
+        {specialists
+          .filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))
+          .map(spec => (
+            <div key={spec.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
 
-            {/* Header do Card (Nome e Especialidade Principal) */}
-            <div className="p-6 border-b border-gray-50">
-              <h3 className="text-lg font-bold text-gray-900">{spec.name}</h3>
-              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mt-1 ${spec.color}`}>
-                {spec.specialty || 'Sem especialidade'}
-              </span>
-            </div>
-
-            {/* Corpo do Card (Contatos) */}
-            <div className="px-6 py-4 space-y-3 flex-1">
-              <div className="flex items-center text-sm text-gray-600">
-                <Mail size={16} className="mr-3 text-gray-400" />
-                {spec.email || 'Não informado'}
-              </div>
-              <div className="flex items-center text-sm text-gray-600">
-                <Phone size={16} className="mr-3 text-gray-400" />
-                {spec.phone || 'Não informado'}
-              </div>
-            </div>
-
-            {/* Área de Tratamentos (Clicável) */}
-            <div
-              onClick={() => handleOpenTreatments(spec)}
-              className="mx-6 mb-4 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors group"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1 group-hover:text-blue-600">
-                  <BriefcaseMedical size={12} /> Tratamentos Habilitados
-                </span>
-                <span className="text-[10px] bg-white px-1.5 rounded border text-gray-400 group-hover:border-blue-200 group-hover:text-blue-500">
-                  Editar
+              {/* Header do Card (Nome e Especialidade Principal) */}
+              <div className="p-6 border-b border-gray-50">
+                <h3 className="text-lg font-bold text-gray-900">{spec.name}</h3>
+                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium mt-1 ${spec.color}`}>
+                  {spec.specialty || 'Sem especialidade'}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1">
-                {(spec.treatments && spec.treatments.length > 0) ? (
-                  spec.treatments.slice(0, 3).map((t, idx) => (
-                    <span key={idx} className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
-                      {t}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-gray-400 italic">Nenhum tratamento selecionado</span>
-                )}
-                {(spec.treatments?.length || 0) > 3 && (
-                  <span className="text-[10px] text-gray-400 pl-1 self-center">+{spec.treatments!.length - 3} mais</span>
-                )}
-              </div>
-            </div>
 
-            {/* Footer com Botão Editar */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-              <button
-                onClick={() => handleOpenEdit(spec)}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border border-gray-200 transition-colors"
+              {/* Corpo do Card (Contatos) */}
+              <div className="px-6 py-4 space-y-3 flex-1">
+                <div className="flex items-center text-sm text-gray-600">
+                  <Mail size={16} className="mr-3 text-gray-400" />
+                  {spec.email || 'Não informado'}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Phone size={16} className="mr-3 text-gray-400" />
+                  {spec.phone || 'Não informado'}
+                </div>
+              </div>
+
+              {/* Área de Tratamentos (Clicável) */}
+              <div
+                onClick={() => handleOpenTreatments(spec)}
+                className="mx-6 mb-4 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors group"
               >
-                <Edit2 size={14} /> Editar Dados
-              </button>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-500 uppercase flex items-center gap-1 group-hover:text-blue-600">
+                    <BriefcaseMedical size={12} /> Tratamentos Habilitados
+                  </span>
+                  <span className="text-[10px] bg-white px-1.5 rounded border text-gray-400 group-hover:border-blue-200 group-hover:text-blue-500">
+                    Editar
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(spec.treatments && spec.treatments.length > 0) ? (
+                    spec.treatments.slice(0, 3).map((t, idx) => (
+                      <span key={idx} className="text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200 text-gray-600">
+                        {t}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Nenhum tratamento selecionado</span>
+                  )}
+                  {(spec.treatments?.length || 0) > 3 && (
+                    <span className="text-[10px] text-gray-400 pl-1 self-center">+{spec.treatments!.length - 3} mais</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer com Botão Editar */}
+              <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                <button
+                  onClick={() => handleOpenEdit(spec)}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border border-gray-200 transition-colors"
+                >
+                  <Edit2 size={14} /> Editar Dados
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </div>
 
       {/* --- Modal de Dados Básicos --- */}
