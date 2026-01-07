@@ -29,7 +29,37 @@ export const googleCalendarService = {
     });
     if (error || (data && data.error)) throw new Error(error?.message || data?.error);
     const items = data.items || [];
-    return items.filter((c: GoogleCalendar) => c.summary.includes('Dr'));
+    return items;
+  },
+
+  async createCalendar(userEmail: string, summary: string): Promise<GoogleCalendar> {
+    const { data, error } = await supabase.functions.invoke('google-auth', {
+      body: {
+        action: 'create-calendar',
+        userEmail,
+        summary
+      }
+    });
+
+    if (error || (data && data.error)) {
+      throw new Error(error?.message || data?.error);
+    }
+
+    return data;
+  },
+
+  async deleteCalendar(userEmail: string, calendarId: string): Promise<void> {
+    const { data, error } = await supabase.functions.invoke('google-auth', {
+      body: {
+        action: 'delete-calendar',
+        userEmail,
+        calendarId
+      }
+    });
+
+    if (error || (data && data.error)) {
+      throw new Error(error?.message || data?.error);
+    }
   },
 
   async listEvents(userEmail: string, start: Date, end: Date, calendarId?: string): Promise<GoogleEvent[]> {

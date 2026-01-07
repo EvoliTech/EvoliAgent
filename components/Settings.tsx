@@ -16,12 +16,15 @@ import {
 } from 'lucide-react';
 import { SPECIALISTS } from '../constants';
 import { supabase } from '../lib/supabase';
+import { googleCalendarService } from '../services/googleCalendarService';
+import { specialistService } from '../services/specialistService';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
 export const Settings: React.FC = () => {
    const [activeTab, setActiveTab] = useState<TabType>('general');
    const [isSaving, setIsSaving] = useState(false);
+   const [isSyncing, setIsSyncing] = useState(false);
    const [googleAccount, setGoogleAccount] = useState<string | null>(null);
    const [clientId, setClientId] = useState('');
    const [clientSecret, setClientSecret] = useState('');
@@ -101,6 +104,47 @@ export const Settings: React.FC = () => {
       }).eq('email', user.email);
 
       setGoogleAccount(null);
+   };
+
+   const handleSyncCalendars = async () => {
+      if (!googleAccount) return;
+      setIsSyncing(true);
+      try {
+         const { data: { user } } = await supabase.auth.getUser();
+         if (!user || !user.email) throw new Error('Usuario invalido');
+
+         const calendars = await googleCalendarService.listCalendars(googleAccount); // Using googleAccount as email source or user.email? Usually user.email is safer if googleAccount is just display name
+         // Actually googleAccount is set from google_email, so it is the email.
+
+         const currentSpecialists = await specialistService.fetchSpecialists();
+         let addedCount = 0;
+
+         for (const cal of calendars) {
+            // Skip main calendar if it's just the user's email (optional, but maybe they want it?)
+            // Let's include everything for now.
+
+            const exists = currentSpecialists.some(s => s.name === cal.summary || s.email === cal.id);
+            if (!exists) {
+               await specialistService.createSpecialistFromGoogle({
+                  name: cal.summary,
+                  specialty: 'Google Calendar',
+                  color: cal.backgroundColor || 'bg-blue-100 text-blue-800', // simplistic mapping
+                  avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3004/3004458.png',
+                  email: cal.id, // Using calendar ID as email/identifier
+                  phone: '',
+                  treatments: []
+               });
+               addedCount++;
+            }
+         }
+
+         alert(`Sincronização concluída! ${addedCount} novos calendários adicionados como especialistas.`);
+      } catch (error: any) {
+         console.error(error);
+         alert('Erro na sincronização: ' + error.message);
+      } finally {
+         setIsSyncing(false);
+      }
    };
 
    const handleSave = () => {
@@ -333,18 +377,16 @@ export const Settings: React.FC = () => {
                                     placeholder="...apps.googleusercontent.com"
                                  />
                               </div>
-                              {!isConfigLoaded && (
-                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase">Client Secret</label>
-                                    <input
-                                       type="password"
-                                       value={clientSecret}
-                                       onChange={e => setClientSecret(e.target.value)}
-                                       className="w-full text-sm border-gray-300 rounded-md mt-1"
-                                       placeholder="GOCSPX-..."
-                                    />
-                                 </div>
-                              )}
+                              <div>
+                                 <label className="block text-xs font-medium text-gray-500 uppercase">Client Secret</label>
+                                 <input
+                                    type="password"
+                                    value={clientSecret}
+                                    onChange={e => setClientSecret(e.target.value)}
+                                    className="w-full text-sm border-gray-300 rounded-md mt-1"
+                                    placeholder="GOCSPX-..."
+                                 />
+                              </div>
                               <div className="flex justify-end">
                                  <button
                                     onClick={saveIntegrationConfig}
@@ -364,8 +406,13 @@ export const Settings: React.FC = () => {
                         <div className="bg-gray-50 rounded-lg p-5 border border-gray-100">
                            <div className="flex justify-between items-center mb-4">
                               <h4 className="font-medium text-gray-900">Calendários Encontrados</h4>
-                              <button className="text-blue-600 text-xs font-medium flex items-center gap-1 hover:underline">
-                                 <RefreshCw size={12} /> Re-sincronizar agora
+                              <button
+                                 onClick={handleSyncCalendars}
+                                 disabled={isSyncing}
+                                 className="text-blue-600 text-xs font-medium flex items-center gap-1 hover:underline disabled:opacity-50"
+                              >
+                                 <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                                 {isSyncing ? 'Sincronizando...' : 'Re-sincronizar agora'}
                               </button>
                            </div>
                            <p className="text-sm text-gray-500">Sincronização ativa. Eventos serão carregados na Agenda.</p>

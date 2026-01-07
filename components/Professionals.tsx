@@ -70,7 +70,7 @@ export const Professionals: React.FC = () => {
         // Editar Existente
         await specialistService.updateSpecialist(currentSpecialist as Specialist);
       } else {
-        // Criar Novo
+        // Criar Novo (Google Calendar sync is handled automatically in specialistService)
         await specialistService.createSpecialist(currentSpecialist as Specialist);
       }
       setIsEditModalOpen(false);

@@ -33,10 +33,10 @@ export const GoogleCallback: React.FC<GoogleCallbackProps> = ({ onNavigate }) =>
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user || !user.email) throw new Error('Usuário não identificado. Faça login novamente.');
 
-                // Redirect URI must match what was sent.
-                // If we are here, path is likely /settings/callback (if correctly routed)
-                // or just match origin + pathname
-                const redirectUri = window.location.origin + window.location.pathname;
+                // Redirect URI must match what was sent in Settings.tsx
+                const redirectUri = window.location.origin + '/settings/callback';
+
+                console.log('Exchanging code for token with redirectUri:', redirectUri);
 
                 const { data, error: fnError } = await supabase.functions.invoke('google-auth', {
                     body: {
