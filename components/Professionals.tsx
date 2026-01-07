@@ -268,6 +268,22 @@ export const Professionals: React.FC = () => {
               onChange={e => setCurrentSpecialist({ ...currentSpecialist, specialty: e.target.value })}
             />
           </div>
+
+          {/* Show Calendar ID if exists (read-only) */}
+          {currentSpecialist.calendarId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">ID da Agenda (Google Calendar)</label>
+              <input
+                type="text"
+                disabled
+                className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm py-2 border px-3 text-gray-500 cursor-not-allowed"
+                value={currentSpecialist.calendarId || ''}
+                title="Este campo é gerado automaticamente e não pode ser editado"
+              />
+              <p className="mt-1 text-xs text-gray-500">Este ID é gerado automaticamente pelo Google Calendar</p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700">E-mail</label>
             <input
@@ -275,7 +291,11 @@ export const Professionals: React.FC = () => {
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
               value={currentSpecialist.email || ''}
               onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
+              placeholder="email@exemplo.com"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              {currentSpecialist.id ? 'E-mail do especialista' : 'Será preenchido automaticamente com seu e-mail se deixado em branco'}
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Telefone</label>

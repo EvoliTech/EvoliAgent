@@ -27,10 +27,12 @@ export const specialistService = {
     },
 
     async createSpecialist(specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
-        // 1. Create Google Calendar first
-        let googleCalendarId = specialist.email;
+        // 1. Get owner email
+        const adminEmail = await getAdminEmail();
+
+        // 2. Create Google Calendar first
+        let googleCalendarId = specialist.email || adminEmail || '';
         try {
-            const adminEmail = await getAdminEmail();
             if (adminEmail) {
                 const newCal = await googleCalendarService.createCalendar(adminEmail, specialist.name);
                 googleCalendarId = newCal.id;
@@ -44,7 +46,8 @@ export const specialistService = {
             specialty: specialist.specialty,
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
-            email: googleCalendarId,
+            calendar_id: googleCalendarId, // Store Google Calendar ID
+            email: specialist.email || adminEmail || '', // Use provided email or owner's email
             phone: specialist.phone,
             treatments: specialist.treatments || []
         };
@@ -63,12 +66,16 @@ export const specialistService = {
     async createSpecialistFromGoogle(specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
         // This version is used when importing from Google Calendar
         // It does NOT create a new Google Calendar (to avoid duplication)
+        // Email is automatically filled with owner's email
+        const adminEmail = await getAdminEmail();
+
         const newSpecialist = {
             name: specialist.name,
             specialty: specialist.specialty,
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
-            email: specialist.email,
+            calendar_id: specialist.calendarId, // Google Calendar ID
+            email: adminEmail || '', // Automatically fill with owner's email
             phone: specialist.phone,
             treatments: specialist.treatments || []
         };
@@ -90,6 +97,7 @@ export const specialistService = {
             specialty: specialist.specialty,
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
+            calendar_id: specialist.calendarId,
             email: specialist.email,
             phone: specialist.phone,
             treatments: specialist.treatments ?? []
@@ -111,11 +119,11 @@ export const specialistService = {
         // 1. Get specialist info BEFORE deletion
         const { data: spec } = await supabase
             .from('especialistas')
-            .select('email')
+            .select('calendar_id')
             .eq('id', id)
             .single();
 
-        const calendarId = spec?.email;
+        const calendarId = spec?.calendar_id;
 
         // 2. Delete from DB (fast operation)
         const { error } = await supabase
@@ -164,6 +172,7 @@ function mapSupabaseToSpecialist(data: any): Specialist {
         specialty: data.specialty,
         color: data.color,
         avatarUrl: data.avatar_url,
+        calendarId: data.calendar_id,
         email: data.email,
         phone: data.phone,
         treatments: data.treatments || []

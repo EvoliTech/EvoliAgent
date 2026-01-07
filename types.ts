@@ -7,7 +7,8 @@ export interface Specialist {
   specialty: string; // Especialidade principal (título)
   color: string; // Tailwind color class or hex
   avatarUrl?: string; // Mantido opcional caso queira reverter futuramente
-  email?: string;
+  calendarId?: string; // Google Calendar ID
+  email?: string; // E-mail do especialista (editável)
   phone?: string;
   treatments?: string[]; // Lista de tratamentos habilitados
 }

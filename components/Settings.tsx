@@ -123,14 +123,15 @@ export const Settings: React.FC = () => {
             // Skip main calendar if it's just the user's email (optional, but maybe they want it?)
             // Let's include everything for now.
 
-            const exists = currentSpecialists.some(s => s.name === cal.summary || s.email === cal.id);
+            const exists = currentSpecialists.some(s => s.name === cal.summary || s.calendarId === cal.id);
             if (!exists) {
                await specialistService.createSpecialistFromGoogle({
                   name: cal.summary,
                   specialty: 'Google Calendar',
                   color: cal.backgroundColor || 'bg-blue-100 text-blue-800', // simplistic mapping
                   avatarUrl: 'https://cdn-icons-png.flaticon.com/512/3004/3004458.png',
-                  email: cal.id, // Using calendar ID as email/identifier
+                  calendarId: cal.id, // Using calendar ID
+                  email: '', // Will be filled automatically with owner's email
                   phone: '',
                   treatments: []
                });
