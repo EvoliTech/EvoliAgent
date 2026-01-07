@@ -193,20 +193,23 @@ export const Agenda: React.FC = () => {
     const firstDay = new Date(year, month, 1).getDay(); // 0 Sun - 6 Sat
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Adjust for Monday start if needed, but Google Calendar default is Sunday/Monday depends on locale.
-    // Print shows Sunday start (Dom Seg Ter...).
+    // Adjust for Monday start: Mon(1)=0, ..., Sat(6)=5, Sun(0)=6
+    const paddingDays = (firstDay + 6) % 7;
 
     const days = [];
     // Padding
-    for (let i = 0; i < firstDay; i++) {
+    for (let i = 0; i < paddingDays; i++) {
       days.push(<div key={`pad-${i}`} className="h-24 sm:h-32 border-b border-r bg-gray-50/30"></div>);
     }
     // Days
     for (let day = 1; day <= daysInMonth; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayEvents = events.filter(e => {
-        if (!e.start || !e.start.dateTime) return false;
-        return e.start.dateTime.startsWith(dateStr);
+        if (!e.start) return false;
+        // Check dateTime (normal) or date (all-day)
+        if (e.start.dateTime) return e.start.dateTime.startsWith(dateStr);
+        if (e.start.date) return e.start.date === dateStr;
+        return false;
       });
 
       days.push(
@@ -218,8 +221,11 @@ export const Agenda: React.FC = () => {
           {/* Events list */}
           <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
             {dayEvents.map((ev, idx) => (
-              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded truncate cursor-pointer hover:bg-blue-200" title={ev.summary}>
-                {ev.start.dateTime ? new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} {ev.summary}
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-xs px-2 py-1 rounded truncate cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`} title={ev.summary}>
+                {ev.start?.dateTime
+                  ? `${new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${ev.summary}`
+                  : `[Dia Todo] ${ev.summary}`
+                }
               </div>
             ))}
           </div>
@@ -321,11 +327,18 @@ export const Agenda: React.FC = () => {
 
         {/* Grid Header */}
         <div className="grid grid-cols-7 border-b border-gray-200 shrink-0">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, i) => (
-            <div key={day} className={`py-3 text-center text-xs font-semibold uppercase tracking-wider ${i === new Date().getDay() ? 'text-blue-600' : 'text-gray-400'}`}>
-              {day}
-            </div>
-          ))}
+          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day, i) => {
+            // Adjust current day index to match Monday start (Mon=1 -> 0, ..., Sun=0 -> 6)
+            const today = new Date();
+            const currentDayAdjusted = (today.getDay() + 6) % 7;
+            const isToday = i === currentDayAdjusted;
+
+            return (
+              <div key={day} className={`py-3 text-center text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
+                {day}
+              </div>
+            );
+          })}
         </div>
 
         {/* Calendar Grid */}
