@@ -5,8 +5,7 @@ import {
   Users,
   Stethoscope,
   Settings,
-  LogOut,
-  Megaphone
+  LogOut
 } from 'lucide-react';
 import { PageType } from '../../types';
 
@@ -23,7 +22,6 @@ export const MainSidebar: React.FC<MainSidebarProps> = ({ activePage, onNavigate
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'patients', label: 'Pacientes', icon: Users },
     { id: 'professionals', label: 'Especialistas', icon: Stethoscope },
-    { id: 'marketing', label: 'Marketing', icon: Megaphone },
   ];
 
   const isSettingsActive = activePage === 'settings';
