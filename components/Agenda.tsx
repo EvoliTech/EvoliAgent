@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, RefreshCw, Users, Check, LayoutGrid, List } from 'lucide-react';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
+import { userService } from '../services/userService';
 import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
 
 export const Agenda: React.FC = () => {
-  const DEFAULT_EMAIL = 'open.evertonai@gmail.com'; // In production, get from auth context
-
   // State
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
   const [events, setEvents] = useState<GoogleEvent[]>([]);
@@ -39,7 +39,14 @@ export const Agenda: React.FC = () => {
   const loadCalendars = async () => {
     try {
       setLoading(true);
-      const calendarList = await googleCalendarService.listCalendars(DEFAULT_EMAIL);
+      const email = await userService.getAdminEmail();
+      if (!email) {
+        console.warn('No admin email found for Google Calendar sync');
+        return;
+      }
+      setAdminEmail(email);
+
+      const calendarList = await googleCalendarService.listCalendars(email);
       setCalendars(calendarList);
 
       const primary = calendarList.find(c => c.primary);
@@ -53,6 +60,7 @@ export const Agenda: React.FC = () => {
   };
 
   const loadEvents = async () => {
+    if (!adminEmail) return;
     try {
       setLoading(true);
 
@@ -74,7 +82,7 @@ export const Agenda: React.FC = () => {
 
       // Fetch for each selected calendar
       const promises = selectedCalendarIds.map(async (calId) => {
-        const events = await googleCalendarService.listEvents(DEFAULT_EMAIL, start, end, calId);
+        const events = await googleCalendarService.listEvents(adminEmail, start, end, calId);
         return events.map(e => ({ ...e, calendarId: calId }));
       });
 
@@ -90,14 +98,15 @@ export const Agenda: React.FC = () => {
   };
 
   const handleCreateEvent = async (eventData: any) => {
+    if (!adminEmail) return;
     const { calendarId, id, ...googleEventData } = eventData;
 
     if (id) {
       // Update
-      await googleCalendarService.updateEvent(DEFAULT_EMAIL, id, googleEventData, calendarId);
+      await googleCalendarService.updateEvent(adminEmail, id, googleEventData, calendarId);
     } else {
       // Create
-      await googleCalendarService.createEvent(DEFAULT_EMAIL, googleEventData, calendarId);
+      await googleCalendarService.createEvent(adminEmail, googleEventData, calendarId);
     }
 
     // Refresh
@@ -117,9 +126,10 @@ export const Agenda: React.FC = () => {
   };
 
   const handleDeleteEvent = async (event: GoogleEvent) => {
+    if (!adminEmail) return;
     if (confirm('Tem certeza que deseja excluir este agendamento?')) {
       try {
-        await googleCalendarService.deleteEvent(DEFAULT_EMAIL, event.id!, event.calendarId);
+        await googleCalendarService.deleteEvent(adminEmail, event.id!, event.calendarId);
         setIsDetailsOpen(false);
         loadEvents();
       } catch (error: any) {

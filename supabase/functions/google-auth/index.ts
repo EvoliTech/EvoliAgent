@@ -122,25 +122,37 @@ serve(async (req) => {
             // Save Tokens
             const expiresAt = Date.now() + (tokens.expires_in * 1000);
 
-            // Check if user exists
-            const { data: userCheck } = await supabase.from('especialistas').select('id').eq('email', userEmail).single();
+            // Check if user exists in users table (admin/owner)
+            const { data: userCheck } = await supabase.from('users').select('id').eq('email', userEmail).single();
+
             if (!userCheck) {
-                throw new Error(`Usuário ${userEmail} não encontrado na tabela 'especialistas'.`);
+                // Create user if doesn't exist
+                const { error: insertError } = await supabase.from('users').insert({
+                    email: userEmail,
+                    google_access_token: tokens.access_token,
+                    google_refresh_token: tokens.refresh_token,
+                    google_token_expires_at: expiresAt,
+                    google_email: userEmail,
+                    role: 'admin'
+                });
+
+                if (insertError) throw new Error(`DB Error: ${insertError.message}`);
+            } else {
+                // Update existing user
+                const updatePayload: any = {
+                    google_access_token: tokens.access_token,
+                    google_token_expires_at: expiresAt,
+                    google_email: userEmail
+                };
+                if (tokens.refresh_token) updatePayload.google_refresh_token = tokens.refresh_token;
+
+                const { error: dbError } = await supabase
+                    .from('users')
+                    .update(updatePayload)
+                    .eq('email', userEmail);
+
+                if (dbError) throw new Error(`DB Error: ${dbError.message}`);
             }
-
-            const updatePayload: any = {
-                google_access_token: tokens.access_token,
-                google_token_expires_at: expiresAt,
-                google_email: userEmail
-            };
-            if (tokens.refresh_token) updatePayload.google_refresh_token = tokens.refresh_token;
-
-            const { error: dbError } = await supabase
-                .from('especialistas')
-                .update(updatePayload)
-                .eq('email', userEmail);
-
-            if (dbError) throw new Error(`DB Error: ${dbError.message}`);
 
             return new Response(JSON.stringify({ success: true }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -257,23 +269,24 @@ async function handleCalendarAction(action: string, payload: any, supabase: any)
 async function getGoogleAccessToken(supabase: any, userEmail: string) {
     if (!userEmail) throw new Error('userEmail is required');
 
-    const { data: specialist } = await supabase
-        .from('especialistas')
+    // Try to get token from users table (admin/owner)
+    const { data: user } = await supabase
+        .from('users')
         .select('google_access_token, google_refresh_token, google_token_expires_at')
         .eq('email', userEmail)
         .single();
 
-    if (!specialist || !specialist.google_access_token) {
-        throw new Error('Usuário não conectado ao Google.');
+    if (!user || !user.google_access_token) {
+        throw new Error('Usuário não conectado ao Google. Conecte sua conta em Configurações > Integrações.');
     }
 
-    let accessToken = specialist.google_access_token;
-    const expiresAt = specialist.google_token_expires_at || 0;
+    let accessToken = user.google_access_token;
+    const expiresAt = user.google_token_expires_at || 0;
 
     // Refresh if expiring in < 5 mins
     if (Date.now() > expiresAt - 300000) {
         console.log("Token expiring/expired, refreshing...");
-        if (!specialist.google_refresh_token) throw new Error('Token expirado e sem refresh token.');
+        if (!user.google_refresh_token) throw new Error('Token expirado e sem refresh token.');
 
         const { data: config } = await supabase.from('integrations_config').select('*').eq('service', 'google_calendar').single();
         if (!config) throw new Error('Credenciais de app perdidas.');
@@ -284,7 +297,7 @@ async function getGoogleAccessToken(supabase: any, userEmail: string) {
             body: new URLSearchParams({
                 client_id: config.client_id?.trim(),
                 client_secret: config.client_secret?.trim(),
-                refresh_token: specialist.google_refresh_token,
+                refresh_token: user.google_refresh_token,
                 grant_type: 'refresh_token'
             })
         });
@@ -295,7 +308,7 @@ async function getGoogleAccessToken(supabase: any, userEmail: string) {
         accessToken = newTokens.access_token;
         const newExpiresAt = Date.now() + (newTokens.expires_in * 1000);
 
-        await supabase.from('especialistas').update({
+        await supabase.from('users').update({
             google_access_token: accessToken,
             google_token_expires_at: newExpiresAt
         }).eq('email', userEmail);

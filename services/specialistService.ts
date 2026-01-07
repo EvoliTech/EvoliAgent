@@ -2,13 +2,11 @@
 import { supabase } from '../lib/supabase';
 import { Specialist } from '../types';
 import { googleCalendarService } from './googleCalendarService';
+import { userService } from './userService';
 
 // Helper to get connected admin email
 async function getAdminEmail() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email) return null;
-    const { data } = await supabase.from('especialistas').select('google_email').eq('email', user.email).single();
-    return data?.google_email || user.email;
+    return userService.getAdminEmail();
 }
 
 export const specialistService = {
