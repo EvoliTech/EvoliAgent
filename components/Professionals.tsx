@@ -4,6 +4,7 @@ import { Specialist } from '../types';
 import { specialistService } from '../services/specialistService';
 import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square, Trash2, AlertTriangle } from 'lucide-react';
 import { Modal } from './ui/Modal';
+import { LoadingModal } from './ui/LoadingModal';
 
 export const Professionals: React.FC = () => {
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
@@ -36,6 +37,7 @@ export const Professionals: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTreatmentsModalOpen, setIsTreatmentsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCreatingSpecialist, setIsCreatingSpecialist] = useState(false);
 
   // States de Edição
   const [currentSpecialist, setCurrentSpecialist] = useState<Partial<Specialist>>({});
@@ -69,14 +71,26 @@ export const Professionals: React.FC = () => {
       if (currentSpecialist.id) {
         // Editar Existente
         await specialistService.updateSpecialist(currentSpecialist as Specialist);
+        setIsEditModalOpen(false);
+        loadSpecialists(); // Refresh just in case (though subscription should handle it)
       } else {
-        // Criar Novo (Google Calendar sync is handled automatically in specialistService)
-        await specialistService.createSpecialist(currentSpecialist as Specialist);
+        // Criar Novo - Mostrar loading por 2,5 segundos
+        setIsCreatingSpecialist(true);
+
+        // Criar especialista e aguardar integração com Google Calendar
+        const createPromise = specialistService.createSpecialist(currentSpecialist as Specialist);
+        const delayPromise = new Promise(resolve => setTimeout(resolve, 2500));
+
+        // Aguardar ambos: criação do especialista e delay mínimo de 2,5s
+        await Promise.all([createPromise, delayPromise]);
+
+        setIsCreatingSpecialist(false);
+        setIsEditModalOpen(false);
+        loadSpecialists(); // Refresh just in case (though subscription should handle it)
       }
-      setIsEditModalOpen(false);
-      loadSpecialists(); // Refresh just in case (though subscription should handle it)
     } catch (error) {
       console.error('Error saving specialist', error);
+      setIsCreatingSpecialist(false);
       alert('Erro ao salvar especialista');
     }
   };
@@ -94,6 +108,9 @@ export const Professionals: React.FC = () => {
       setIsDeleteModalOpen(false);
       setIsEditModalOpen(false); // If called from edit modal
       setSpecialistToDelete(null);
+
+      // Force refresh to update UI immediately
+      await loadSpecialists();
     } catch (error) {
       console.error('Error deleting specialist', error);
       alert('Erro ao deletar especialista');
@@ -385,6 +402,12 @@ export const Professionals: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* --- Modal de Loading --- */}
+      <LoadingModal
+        isOpen={isCreatingSpecialist}
+        message="Criando..."
+      />
 
     </div >
   );

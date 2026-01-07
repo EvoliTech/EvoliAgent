@@ -8,7 +8,7 @@ async function getAdminEmail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user?.email) return null;
     const { data } = await supabase.from('especialistas').select('google_email').eq('email', user.email).single();
-    return data?.google_email || user.email; // Fallback to user email if not explicitly linked, but usually we need the one with tokens
+    return data?.google_email || user.email;
 }
 
 export const specialistService = {
@@ -37,7 +37,6 @@ export const specialistService = {
             }
         } catch (e) {
             console.error('Failed to create Google Calendar for specialist:', e);
-            // Proceed to create in DB anyway? Yes, but maybe warn.
         }
 
         const newSpecialist = {
@@ -45,7 +44,7 @@ export const specialistService = {
             specialty: specialist.specialty,
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
-            email: googleCalendarId, // Store Calendar ID as email/identifier
+            email: googleCalendarId,
             phone: specialist.phone,
             treatments: specialist.treatments || []
         };
@@ -69,7 +68,7 @@ export const specialistService = {
             specialty: specialist.specialty,
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
-            email: specialist.email, // Already a Google Calendar ID
+            email: specialist.email,
             phone: specialist.phone,
             treatments: specialist.treatments || []
         };
@@ -109,11 +108,16 @@ export const specialistService = {
     },
 
     async deleteSpecialist(id: string): Promise<void> {
-        // 1. Get specialist to find Calendar ID
-        const { data: spec } = await supabase.from('especialistas').select('email').eq('id', id).single();
+        // 1. Get specialist info BEFORE deletion
+        const { data: spec } = await supabase
+            .from('especialistas')
+            .select('email')
+            .eq('id', id)
+            .single();
+
         const calendarId = spec?.email;
 
-        // 2. Delete from DB
+        // 2. Delete from DB (fast operation)
         const { error } = await supabase
             .from('especialistas')
             .delete()
@@ -121,16 +125,20 @@ export const specialistService = {
 
         if (error) throw error;
 
-        // 3. Delete from Google Calendar (Post-delete to ensure DB is clean)
+        // 3. Delete from Google Calendar in background (non-blocking)
         if (calendarId && calendarId.includes('@group.calendar.google.com')) {
-            try {
-                const adminEmail = await getAdminEmail();
-                if (adminEmail) {
-                    await googleCalendarService.deleteCalendar(adminEmail, calendarId);
+            // Fire and forget - don't await this
+            (async () => {
+                try {
+                    const adminEmail = await getAdminEmail();
+                    if (adminEmail) {
+                        await googleCalendarService.deleteCalendar(adminEmail, calendarId);
+                        console.log(`Google Calendar ${calendarId} deleted successfully`);
+                    }
+                } catch (e) {
+                    console.error('Failed to delete Google Calendar (background):', e);
                 }
-            } catch (e) {
-                console.error('Failed to delete Google Calendar:', e);
-            }
+            })();
         }
     },
 
@@ -149,8 +157,6 @@ export const specialistService = {
 };
 
 // Mapeamento: Supabase (snake_case) -> App (camelCase)
-// Note: The table columns are defined in snake_case in the DB migration, but typically selected as snake_case.
-// To avoid confusion, let's explicitely map.
 function mapSupabaseToSpecialist(data: any): Specialist {
     return {
         id: data.id,
