@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
+import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
 import { SupabaseCustomer } from '../types';
 
 interface NewAppointmentModalProps {
@@ -121,6 +121,49 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             const dateTimeString = `${date}T${time}:00`;
             const startDate = new Date(dateTimeString);
             const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 min duration default
+
+            // --- Business Rule: Prevent Duplicates/Overlaps ---
+            // Check if there's already an appointment for this specialist at this time
+            const { data: overlaps, error: overlapError } = await supabase
+                .from('agendamentos')
+                .select('google_event_id, titulo')
+                .eq('calendar_id', selectedCalendarId)
+                // Logical check for overlapping intervals: 
+                // (StartA < EndB) AND (EndA > StartB)
+                .lt('data_inicio', endDate.toISOString())
+                .gt('data_fim', startDate.toISOString());
+
+            if (overlapError) {
+                console.error('Error checking overlaps:', overlapError);
+            }
+
+            // If found someone else (ignore current event if editing)
+            const realOverlaps = overlaps?.filter(o => o.google_event_id !== initialData?.id);
+
+            if (realOverlaps && realOverlaps.length > 0) {
+                alert(`Conflito de Horário! Já existe um agendamento ("${realOverlaps[0].titulo}") registrado no sistema para este horário.`);
+                setLoading(false);
+                return;
+            }
+
+            // --- Double Check: Google Calendar side ---
+            // Fetch directly from Google to catch events created outside the app
+            const DEFAULT_EMAIL = 'open.evertonai@gmail.com';
+            try {
+                const gEvents = await googleCalendarService.listEvents(DEFAULT_EMAIL, startDate, endDate, selectedCalendarId);
+
+                // Filter out self (if editing) and cancelled events
+                const realGOverlaps = gEvents.filter(e => e.id !== initialData?.id && e.status !== 'cancelled');
+
+                if (realGOverlaps.length > 0) {
+                    alert(`Ops! Já existe um evento ("${realGOverlaps[0].summary}") agendado para este mesmo horário. Por favor, escolha outro período.`);
+                    setLoading(false);
+                    return;
+                }
+            } catch (err) {
+                console.warn('Could not verify GCal overlaps, proceeding with local check only.', err);
+            }
+            // ------------------------------------------------
 
             const normalizePhone = (phone: string) => {
                 return phone.replace(/\D/g, '');
