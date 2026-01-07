@@ -57,11 +57,9 @@ export const Settings: React.FC = () => {
    };
 
    const checkConnection = async () => {
-      // Always show the primary admin's Google connection status
-      const email = await userService.getAdminEmail();
-      if (email && email.includes('@')) {
-         setGoogleAccount(email);
-      }
+      // Show the connected Google email if available
+      const email = await userService.getConnectedGoogleEmail();
+      setGoogleAccount(email);
    };
 
    const loadUsers = async () => {
@@ -167,25 +165,59 @@ export const Settings: React.FC = () => {
    };
 
    const disconnectGoogle = async () => {
-      // Find the admin user to disconnect
-      const { data: admin } = await supabase
-         .from('users')
-         .select('email')
-         .eq('role', 'admin')
-         .order('created_at', { ascending: true })
-         .limit(1)
-         .maybeSingle();
+      if (!confirm('Tem certeza que deseja desconectar sua conta do Google? Esta ação removerá a integração da agenda, os especialistas importados e os agendamentos sincronizados.')) return;
 
-      if (!admin?.email) return;
+      try {
+         // Find the admin user to disconnect
+         const { data: admin } = await supabase
+            .from('users')
+            .select('id, email')
+            .eq('role', 'admin')
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
 
-      await supabase.from('users').update({
-         google_access_token: null,
-         google_refresh_token: null,
-         google_token_expires_at: null,
-         google_email: null
-      }).eq('email', admin.email);
+         if (!admin) {
+            alert('Erro: Administrador não encontrado no banco de dados.');
+            return;
+         }
 
-      setGoogleAccount(null);
+         // 1. Remove Google tokens and email from the admin user
+         const { error: userError } = await supabase.from('users').update({
+            google_access_token: null,
+            google_refresh_token: null,
+            google_token_expires_at: null,
+            google_email: null
+         }).eq('id', admin.id);
+
+         if (userError) throw userError;
+
+         // 2. Remove specialists imported from Google (identified by specialty: 'Google Calendar')
+         const { error: specError } = await supabase
+            .from('especialistas')
+            .delete()
+            .eq('specialty', 'Google Calendar');
+
+         if (specError) {
+            console.error('Erro ao remover especialistas importados:', specError);
+         }
+
+         // 3. Remove mirrored appointments (identified by having a google_event_id)
+         const { error: apptError } = await supabase
+            .from('agendamentos')
+            .delete()
+            .not('google_event_id', 'is', null);
+
+         if (apptError) {
+            console.error('Erro ao remover agendamentos sincronizados:', apptError);
+         }
+
+         setGoogleAccount(null);
+         alert('Google Calendar desconectado com sucesso! A integração e os dados importados foram removidos.');
+         window.location.reload();
+      } catch (error: any) {
+         alert('Erro ao desconectar: ' + error.message);
+      }
    };
 
    const handleSyncCalendars = async () => {

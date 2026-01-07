@@ -94,6 +94,23 @@ export const userService = {
             return null;
         }
 
-        return data?.google_email || data?.email || null;
+        // Return login email as fallback for admin identification
+        return data?.email || null;
+    },
+
+    async getConnectedGoogleEmail(): Promise<string | null> {
+        const { data, error } = await supabase
+            .from('users')
+            .select('google_email, google_access_token')
+            .eq('role', 'admin')
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        if (error || !data || !data.google_access_token) {
+            return null;
+        }
+
+        return data.google_email || null;
     }
 };
