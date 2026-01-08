@@ -7,8 +7,10 @@ import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { specialistService } from '../services/specialistService';
 import { Specialist } from '../types';
+import { useCompany } from '../contexts/CompanyContext';
 
 export const Agenda: React.FC = () => {
+  const { empresaId } = useCompany();
   // State
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
@@ -26,8 +28,10 @@ export const Agenda: React.FC = () => {
 
   // Initial Load
   useEffect(() => {
-    loadSidebarData();
-  }, []);
+    if (empresaId) {
+      loadSidebarData();
+    }
+  }, [empresaId]);
 
   // Fetch Events when dependencies change
   useEffect(() => {
@@ -43,11 +47,11 @@ export const Agenda: React.FC = () => {
       setLoading(true);
 
       // 1. Get connected Google email
-      const email = await userService.getConnectedGoogleEmail();
+      const email = await userService.getConnectedGoogleEmail(empresaId!);
       setAdminEmail(email);
 
       // 2. Fetch specialists from DB
-      const specialistList = await specialistService.fetchSpecialists();
+      const specialistList = await specialistService.fetchSpecialists(empresaId!);
       setSpecialists(specialistList);
 
       // 3. Selection logic
@@ -94,7 +98,7 @@ export const Agenda: React.FC = () => {
         .filter(id => id && (id.includes('@') || id === 'primary'))
         .map(async (calId) => {
           try {
-            const events = await googleCalendarService.listEvents(adminEmail, start, end, calId);
+            const events = await googleCalendarService.listEvents(empresaId!, adminEmail, start, end, calId);
             return events.map(e => ({ ...e, calendarId: calId }));
           } catch (e) {
             console.error(`Failed to load events for calendar ${calId}:`, e);
@@ -114,20 +118,24 @@ export const Agenda: React.FC = () => {
   };
 
   const handleCreateEvent = async (eventData: any) => {
-    if (!adminEmail) return;
+    if (!adminEmail || !empresaId) return;
     const { calendarId, id, ...googleEventData } = eventData;
 
-    if (id) {
-      // Update
-      await googleCalendarService.updateEvent(adminEmail, id, googleEventData, calendarId);
-    } else {
-      // Create
-      await googleCalendarService.createEvent(adminEmail, googleEventData, calendarId);
-    }
+    try {
+      if (id) {
+        // Update
+        await googleCalendarService.updateEvent(empresaId, adminEmail, id, googleEventData, calendarId);
+      } else {
+        // Create
+        await googleCalendarService.createEvent(empresaId, adminEmail, googleEventData, calendarId);
+      }
 
-    // Refresh
-    loadEvents();
-    setEditingEvent(undefined); // Reset editing state
+      // Refresh
+      loadEvents();
+      setEditingEvent(undefined); // Reset editing state
+    } catch (error: any) {
+      alert('Erro ao salvar agendamento: ' + error.message);
+    }
   };
 
   const handleEventClick = (event: GoogleEvent) => {
@@ -142,10 +150,10 @@ export const Agenda: React.FC = () => {
   };
 
   const handleDeleteEvent = async (event: GoogleEvent) => {
-    if (!adminEmail) return;
+    if (!adminEmail || !empresaId) return;
     if (confirm('Tem certeza que deseja excluir este agendamento?')) {
       try {
-        await googleCalendarService.deleteEvent(adminEmail, event.id!, event.calendarId);
+        await googleCalendarService.deleteEvent(empresaId, adminEmail, event.id!, event.calendarId);
         setIsDetailsOpen(false);
         loadEvents();
       } catch (error: any) {

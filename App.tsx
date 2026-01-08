@@ -11,18 +11,26 @@ import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
+import { useCompany } from './contexts/CompanyContext';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const { empresaId, loading: companyLoading } = useCompany();
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+      })
+      .catch((err) => {
+        console.error('Session load error:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     // Check for callback
     if (window.location.pathname.includes('/settings/callback')) {
@@ -63,16 +71,38 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading || (session && companyLoading)) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-gray-500 text-sm animate-pulse">
+          {loading ? 'Carregando sessão...' : 'Carregando dados da empresa...'}
+        </p>
       </div>
     );
   }
 
   if (!session) {
     return <Login />;
+  }
+
+  if (!empresaId) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 max-w-md text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Acesso Restrito</h2>
+          <p className="text-gray-600 mb-4">
+            Seu usuário não possui uma empresa vinculada. Entre em contato com o administrador.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Sair da conta
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

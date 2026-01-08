@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
 import { Specialist, SupabaseCustomer } from '../types';
+import { useCompany } from '../contexts/CompanyContext';
 
 interface NewAppointmentModalProps {
     isOpen: boolean;
@@ -23,6 +24,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     defaultDate,
     initialData
 }) => {
+    const { empresaId } = useCompany();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [patients, setPatients] = useState<SupabaseCustomer[]>([]);
@@ -86,7 +88,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     // Search Patients
     useEffect(() => {
         const searchPatients = async () => {
-            if (searchTerm.length < 3) {
+            if (searchTerm.length < 3 || !empresaId) {
                 setPatients([]);
                 return;
             }
@@ -94,6 +96,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             const { data } = await supabase
                 .from('Cliente')
                 .select('*')
+                .eq('IDEmpresa', empresaId)
                 .ilike('nome', `%${searchTerm}%`)
                 .limit(5);
 
@@ -105,6 +108,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     }, [searchTerm]);
 
     const handleShowAllPatients = async () => {
+        if (!empresaId) return;
         // If results are already showing, toggle off
         if (showPatientResults && patients.length > 0 && searchTerm === '') {
             setShowPatientResults(false);
@@ -114,6 +118,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
         const { data } = await supabase
             .from('Cliente')
             .select('*')
+            .eq('IDEmpresa', empresaId)
             .limit(50); // Reasonable limit for "all"
 
         if (data) {
@@ -147,6 +152,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             const { data: overlaps, error: overlapError } = await supabase
                 .from('agendamentos')
                 .select('google_event_id, titulo')
+                .eq('IDEmpresa', empresaId!)
                 .eq('calendar_id', selectedCalendarId)
                 // Logical check for overlapping intervals: 
                 // (StartA < EndB) AND (EndA > StartB)
@@ -170,7 +176,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             // Fetch directly from Google to catch events created outside the app
             const DEFAULT_EMAIL = 'open.evertonai@gmail.com';
             try {
-                const gEvents = await googleCalendarService.listEvents(DEFAULT_EMAIL, startDate, endDate, selectedCalendarId);
+                const gEvents = await googleCalendarService.listEvents(empresaId!, DEFAULT_EMAIL, startDate, endDate, selectedCalendarId);
 
                 // Filter out self (if editing) and cancelled events
                 const realGOverlaps = gEvents.filter(e => e.id !== initialData?.id && e.status !== 'cancelled');

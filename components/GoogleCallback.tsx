@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { PageType } from '../types';
+import { useCompany } from '../contexts/CompanyContext';
 
 interface GoogleCallbackProps {
     onNavigate: (page: PageType) => void;
 }
 
 export const GoogleCallback: React.FC<GoogleCallbackProps> = ({ onNavigate }) => {
+    const { empresaId } = useCompany();
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [message, setMessage] = useState('Processando autenticação com Google...');
 
@@ -32,6 +34,7 @@ export const GoogleCallback: React.FC<GoogleCallbackProps> = ({ onNavigate }) =>
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user || !user.email) throw new Error('Usuário não identificado. Faça login novamente.');
+                if (!empresaId) throw new Error('Empresa não identificada.');
 
                 // Redirect URI must match what was sent in Settings.tsx
                 const redirectUri = window.location.origin + '/settings/callback';
@@ -43,7 +46,8 @@ export const GoogleCallback: React.FC<GoogleCallbackProps> = ({ onNavigate }) =>
                         action: 'exchange-token',
                         code,
                         redirectUri,
-                        userEmail: user.email
+                        userEmail: user.email,
+                        empresaId: empresaId
                     }
                 });
 

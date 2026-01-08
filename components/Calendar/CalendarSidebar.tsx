@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { specialistService } from '../../services/specialistService';
 import { Specialist } from '../../types';
+import { useCompany } from '../../contexts/CompanyContext';
 
 interface CalendarSidebarProps {
   currentDate: Date;
@@ -16,24 +17,28 @@ export const CalendarSidebar: React.FC<CalendarSidebarProps> = ({
   selectedSpecialists,
   onToggleSpecialist
 }) => {
+  const { empresaId } = useCompany();
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadSpecialists();
-
-    const subscription = specialistService.subscribeToSpecialists(() => {
+    if (empresaId) {
       loadSpecialists();
-    });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+      const subscription = specialistService.subscribeToSpecialists(() => {
+        loadSpecialists();
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [empresaId]);
 
   const loadSpecialists = async () => {
+    if (!empresaId) return;
     try {
-      const data = await specialistService.fetchSpecialists();
+      const data = await specialistService.fetchSpecialists(empresaId);
       setSpecialists(data);
     } catch (error) {
       console.error('Failed to load specialists', error);

@@ -53,10 +53,14 @@ serve(async (req) => {
             const redirectUri = body.redirectUri || url.searchParams.get('redirectUri');
             if (!redirectUri) throw new Error('Missing redirectUri');
 
+            const empresaId = body.empresaId || url.searchParams.get('empresaId');
+            if (!empresaId) throw new Error('empresaId required');
+
             const { data: config, error } = await supabase
                 .from('integrations_config')
                 .select('*')
                 .eq('service', 'google_calendar')
+                .eq('IDEmpresa', empresaId)
                 .single();
 
             if (error || !config) {
@@ -77,13 +81,14 @@ serve(async (req) => {
         }
 
         if (action === 'exchange-token') {
-            const { code, redirectUri, userEmail } = body;
-            if (!code || !redirectUri || !userEmail) throw new Error('Missing code, redirectUri, or userEmail');
+            const { code, redirectUri, userEmail, empresaId } = body;
+            if (!code || !redirectUri || !userEmail || !empresaId) throw new Error('Missing code, redirectUri, userEmail, or empresaId');
 
             const { data: config } = await supabase
                 .from('integrations_config')
                 .select('*')
                 .eq('service', 'google_calendar')
+                .eq('IDEmpresa', empresaId)
                 .single();
 
             if (!config) throw new Error('Credenciais não configuradas no sistema.');
@@ -123,7 +128,7 @@ serve(async (req) => {
             const expiresAt = Date.now() + (tokens.expires_in * 1000);
 
             // Check if user exists in users table (admin/owner)
-            const { data: userCheck } = await supabase.from('users').select('id').eq('email', userEmail).single();
+            const { data: userCheck } = await supabase.from('users').select('id').eq('email', userEmail).eq('IDEmpresa', empresaId).maybeSingle();
 
             if (!userCheck) {
                 // Create user if doesn't exist
@@ -133,7 +138,8 @@ serve(async (req) => {
                     google_refresh_token: tokens.refresh_token,
                     google_token_expires_at: expiresAt,
                     google_email: userEmail,
-                    role: 'admin'
+                    role: 'admin',
+                    IDEmpresa: empresaId
                 });
 
                 if (insertError) throw new Error(`DB Error: ${insertError.message}`);
@@ -149,7 +155,8 @@ serve(async (req) => {
                 const { error: dbError } = await supabase
                     .from('users')
                     .update(updatePayload)
-                    .eq('email', userEmail);
+                    .eq('email', userEmail)
+                    .eq('IDEmpresa', empresaId);
 
                 if (dbError) throw new Error(`DB Error: ${dbError.message}`);
             }
@@ -164,13 +171,17 @@ serve(async (req) => {
         // =================================================================================
 
         if (['fetch-events', 'create-event', 'update-event', 'delete-event', 'list-calendars', 'create-calendar', 'delete-calendar'].includes(action)) {
-            return handleCalendarAction(action, body, supabase);
+            const empresaId = body.empresaId || url.searchParams.get('empresaId');
+            if (!empresaId) throw new Error('empresaId required');
+            return handleCalendarAction(action, body, supabase, empresaId);
         }
 
         if (action === 'disconnect') {
             try {
-                // Nuclear option: Clear tokens for ANY user that has them.
-                // This runs with Service Role, so it bypasses RLS.
+                const empresaId = body.empresaId || url.searchParams.get('empresaId');
+                if (!empresaId) throw new Error('empresaId required');
+
+                // Clear tokens for users in the specific company.
                 const { error } = await supabase
                     .from('users')
                     .update({
@@ -179,6 +190,7 @@ serve(async (req) => {
                         google_token_expires_at: null,
                         google_email: null
                     })
+                    .eq('IDEmpresa', empresaId)
                     .not('google_access_token', 'is', null);
 
                 if (error) throw error;
@@ -209,9 +221,9 @@ serve(async (req) => {
 });
 
 // Helper for calendar actions
-async function handleCalendarAction(action: string, payload: any, supabase: any) {
+async function handleCalendarAction(action: string, payload: any, supabase: any, empresaId: string) {
     const { userEmail } = payload;
-    const accessToken = await getGoogleAccessToken(supabase, userEmail);
+    const accessToken = await getGoogleAccessToken(supabase, userEmail, empresaId);
 
     if (action === 'list-calendars') {
         const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
@@ -293,7 +305,7 @@ async function handleCalendarAction(action: string, payload: any, supabase: any)
     return new Response(JSON.stringify({ error: 'Not implemented' }), { status: 400, headers: corsHeaders });
 }
 
-async function getGoogleAccessToken(supabase: any, userEmail: string) {
+async function getGoogleAccessToken(supabase: any, userEmail: string, empresaId: string) {
     if (!userEmail) throw new Error('userEmail is required');
 
     // Try to get token from users table (admin/owner)
@@ -301,7 +313,8 @@ async function getGoogleAccessToken(supabase: any, userEmail: string) {
         .from('users')
         .select('google_access_token, google_refresh_token, google_token_expires_at')
         .eq('email', userEmail)
-        .single();
+        .eq('IDEmpresa', empresaId)
+        .maybeSingle();
 
     if (!user || !user.google_access_token) {
         throw new Error('Usuário não conectado ao Google. Conecte sua conta em Configurações > Integrações.');
@@ -315,7 +328,7 @@ async function getGoogleAccessToken(supabase: any, userEmail: string) {
         console.log("Token expiring/expired, refreshing...");
         if (!user.google_refresh_token) throw new Error('Token expirado e sem refresh token.');
 
-        const { data: config } = await supabase.from('integrations_config').select('*').eq('service', 'google_calendar').single();
+        const { data: config } = await supabase.from('integrations_config').select('*').eq('service', 'google_calendar').eq('IDEmpresa', empresaId).single();
         if (!config) throw new Error('Credenciais de app perdidas.');
 
         const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -338,7 +351,7 @@ async function getGoogleAccessToken(supabase: any, userEmail: string) {
         await supabase.from('users').update({
             google_access_token: accessToken,
             google_token_expires_at: newExpiresAt
-        }).eq('email', userEmail);
+        }).eq('email', userEmail).eq('IDEmpresa', empresaId);
 
         console.log("Token refreshed successfully.");
     }

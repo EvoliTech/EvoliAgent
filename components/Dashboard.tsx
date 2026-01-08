@@ -4,6 +4,7 @@ import { patientService } from '../services/patientService';
 import { googleCalendarService } from '../services/googleCalendarService';
 import { supabase } from '../lib/supabase';
 import { Patient, PageType } from '../types';
+import { useCompany } from '../contexts/CompanyContext';
 
 interface DashboardProps {
   onNavigate?: (page: PageType) => void;
@@ -28,6 +29,7 @@ const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
 );
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+  const { empresaId } = useCompany();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -41,15 +43,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [hoveredPoint, setHoveredPoint] = useState<{ x: number, y: number, value: number, label: string } | null>(null);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (empresaId) {
+      loadDashboardData();
+    }
+  }, [empresaId]);
 
   const loadDashboardData = async () => {
+    if (!empresaId) return;
     try {
       setLoading(true);
 
       // --- 1. PATIENTS DATA ---
-      const patients = await patientService.fetchPatients();
+      const patients = await patientService.fetchPatients(empresaId);
       const totalPatients = patients.length;
 
       const twoDaysAgo = new Date();
@@ -93,6 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       const { data: agendamentos, error } = await supabase
         .from('agendamentos')
         .select('*')
+        .eq('IDEmpresa', empresaId)
         .gte('data_inicio', monthStart.toISOString())
         .lte('data_inicio', monthEnd.toISOString());
 

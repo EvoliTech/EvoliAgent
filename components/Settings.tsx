@@ -19,10 +19,12 @@ import { googleCalendarService } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
 import { userService, UserProfile } from '../services/userService';
 import { Modal } from './ui/Modal';
+import { useCompany } from '../contexts/CompanyContext';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
 export const Settings: React.FC = () => {
+   const { empresaId } = useCompany();
    const [activeTab, setActiveTab] = useState<TabType>('general');
    const [isSaving, setIsSaving] = useState(false);
    const [isSyncing, setIsSyncing] = useState(false);
@@ -43,13 +45,16 @@ export const Settings: React.FC = () => {
    const [isAdminLoading, setIsAdminLoading] = useState(true);
 
    React.useEffect(() => {
-      checkConfigs();
-      checkConnection();
-      loadUsers();
-   }, []);
+      if (empresaId) {
+         checkConfigs();
+         checkConnection();
+         loadUsers();
+      }
+   }, [empresaId]);
 
    const checkConfigs = async () => {
-      const { data } = await supabase.from('integrations_config').select('client_id').eq('service', 'google_calendar').single();
+      if (!empresaId) return;
+      const { data } = await supabase.from('integrations_config').select('client_id').eq('service', 'google_calendar').eq('IDEmpresa', empresaId).maybeSingle();
       if (data) {
          setClientId(data.client_id);
          setIsConfigLoaded(true);
@@ -57,14 +62,16 @@ export const Settings: React.FC = () => {
    };
 
    const checkConnection = async () => {
+      if (!empresaId) return;
       // Show the connected Google email if available
-      const email = await userService.getConnectedGoogleEmail();
+      const email = await userService.getConnectedGoogleEmail(empresaId);
       setGoogleAccount(email);
    };
 
    const loadUsers = async () => {
+      if (!empresaId) return;
       try {
-         const data = await userService.fetchUsers();
+         const data = await userService.fetchUsers(empresaId);
          const { data: { user } } = await supabase.auth.getUser();
 
          if (user?.email) {
@@ -114,11 +121,13 @@ export const Settings: React.FC = () => {
          return;
       }
 
+      if (!empresaId) return;
+
       try {
          if (currentUser.id) {
-            await userService.updateUser(currentUser.id, currentUser);
+            await userService.updateUser(empresaId, currentUser.id, currentUser);
          } else {
-            await userService.createUser(currentUser);
+            await userService.createUser(empresaId, currentUser);
          }
          setIsUserModalOpen(false);
          loadUsers();
@@ -129,8 +138,9 @@ export const Settings: React.FC = () => {
 
    const handleDeleteUser = async (id: string) => {
       if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+      if (!empresaId) return;
       try {
-         await userService.deleteUser(id);
+         await userService.deleteUser(empresaId, id);
          loadUsers();
       } catch (error: any) {
          alert(error.message);
@@ -138,12 +148,13 @@ export const Settings: React.FC = () => {
    };
 
    const saveIntegrationConfig = async () => {
-      if (!clientId || !clientSecret) return alert('Preencha ID e Secret');
+      if (!clientId || !clientSecret || !empresaId) return alert('Preencha ID e Secret');
       const { error } = await supabase.from('integrations_config').upsert({
          service: 'google_calendar',
          client_id: clientId,
          client_secret: clientSecret,
-         updated_at: new Date().toISOString()
+         updated_at: new Date().toISOString(),
+         IDEmpresa: empresaId
       });
       if (error) alert('Erro ao salvar credenciais: ' + error.message);
       else {
@@ -154,11 +165,12 @@ export const Settings: React.FC = () => {
    };
 
    const connectGoogleAccount = async () => {
+      if (!empresaId) return alert('Empresa não identificada');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return alert('Faça login');
       const redirectUri = window.location.origin + '/settings/callback';
       const { data, error } = await supabase.functions.invoke('google-auth', {
-         body: { action: 'auth-url', redirectUri }
+         body: { action: 'auth-url', redirectUri, empresaId }
       });
       if (error) alert('Erro ao conectar: ' + error.message);
       else if (data?.url) window.location.href = data.url;
@@ -167,12 +179,15 @@ export const Settings: React.FC = () => {
    const disconnectGoogle = async () => {
       if (!confirm('Tem certeza que deseja desconectar sua conta do Google? Esta ação removerá a integração da agenda, os especialistas importados e os agendamentos sincronizados.')) return;
 
+      if (!empresaId) return;
+
       try {
          // Find the admin user to disconnect
          const { data: admin } = await supabase
             .from('users')
             .select('id, email')
             .eq('role', 'admin')
+            .eq('IDEmpresa', empresaId)
             .order('created_at', { ascending: true })
             .limit(1)
             .maybeSingle();
@@ -184,26 +199,28 @@ export const Settings: React.FC = () => {
 
          // 1. Invoke Edge Function to clear tokens (bypasses RLS issues)
          const { error: fnError } = await supabase.functions.invoke('google-auth', {
-            body: { action: 'disconnect' }
+            body: { action: 'disconnect', empresaId }
          });
 
          if (fnError) throw fnError;
 
-         // 2. Remove specialists imported from Google (identified by specialty: 'Google Calendar')
+         // 2. Remove specialists imported from Google
          const { error: specError } = await supabase
             .from('especialistas')
             .delete()
-            .eq('specialty', 'Google Calendar');
+            .eq('specialty', 'Google Calendar')
+            .eq('IDEmpresa', empresaId);
 
          if (specError) {
             console.error('Erro ao remover especialistas importados:', specError);
          }
 
-         // 3. Remove mirrored appointments (identified by having a google_event_id)
+         // 3. Remove mirrored appointments
          const { error: apptError } = await supabase
             .from('agendamentos')
             .delete()
-            .not('google_event_id', 'is', null);
+            .not('google_event_id', 'is', null)
+            .eq('IDEmpresa', empresaId);
 
          if (apptError) {
             console.error('Erro ao remover agendamentos sincronizados:', apptError);
@@ -219,16 +236,16 @@ export const Settings: React.FC = () => {
    };
 
    const handleSyncCalendars = async () => {
-      if (!googleAccount) return;
+      if (!googleAccount || !empresaId) return;
       setIsSyncing(true);
       try {
-         const calendars = await googleCalendarService.listCalendars(googleAccount);
-         const currentSpecialists = await specialistService.fetchSpecialists();
+         const calendarList = await googleCalendarService.listCalendars(empresaId, googleAccount);
+         const currentSpecialists = await specialistService.fetchSpecialists(empresaId);
          let addedCount = 0;
-         for (const cal of calendars) {
+         for (const cal of calendarList) {
             const exists = currentSpecialists.some(s => s.name === cal.summary || s.calendarId === cal.id);
             if (!exists) {
-               await specialistService.createSpecialistFromGoogle({
+               await specialistService.createSpecialistFromGoogle(empresaId, {
                   name: cal.summary,
                   specialty: 'Google Calendar',
                   color: cal.backgroundColor || 'bg-blue-100 text-blue-800',

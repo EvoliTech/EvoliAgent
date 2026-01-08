@@ -6,26 +6,32 @@ import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square, Trash2
 import { Modal } from './ui/Modal';
 import { LoadingModal } from './ui/LoadingModal';
 
+import { useCompany } from '../contexts/CompanyContext';
+
 export const Professionals: React.FC = () => {
+  const { empresaId } = useCompany();
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch initial data & subscribe
   React.useEffect(() => {
-    loadSpecialists();
-
-    const subscription = specialistService.subscribeToSpecialists(() => {
+    if (empresaId) {
       loadSpecialists();
-    });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+      const subscription = specialistService.subscribeToSpecialists(() => {
+        loadSpecialists();
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [empresaId]);
 
   const loadSpecialists = async () => {
+    if (!empresaId) return;
     try {
-      const data = await specialistService.fetchSpecialists();
+      const data = await specialistService.fetchSpecialists(empresaId);
       setSpecialists(data);
     } catch (error) {
       console.error('Failed to load specialists', error);
@@ -68,17 +74,17 @@ export const Professionals: React.FC = () => {
     if (!currentSpecialist.name) return;
 
     try {
-      if (currentSpecialist.id) {
+      if (currentSpecialist.id && empresaId) {
         // Editar Existente
-        await specialistService.updateSpecialist(currentSpecialist as Specialist);
+        await specialistService.updateSpecialist(empresaId, currentSpecialist as Specialist);
         setIsEditModalOpen(false);
         loadSpecialists(); // Refresh just in case (though subscription should handle it)
-      } else {
+      } else if (empresaId) {
         // Criar Novo - Mostrar loading por 2,5 segundos
         setIsCreatingSpecialist(true);
 
         // Criar especialista e aguardar integração com Google Calendar
-        const createPromise = specialistService.createSpecialist(currentSpecialist as Specialist);
+        const createPromise = specialistService.createSpecialist(empresaId, currentSpecialist as Specialist);
         const delayPromise = new Promise(resolve => setTimeout(resolve, 2500));
 
         // Aguardar ambos: criação do especialista e delay mínimo de 2,5s
@@ -101,10 +107,10 @@ export const Professionals: React.FC = () => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!specialistToDelete) return;
+    if (!specialistToDelete || !empresaId) return;
 
     try {
-      await specialistService.deleteSpecialist(specialistToDelete.id);
+      await specialistService.deleteSpecialist(empresaId, specialistToDelete.id);
       setIsDeleteModalOpen(false);
       setIsEditModalOpen(false); // If called from edit modal
       setSpecialistToDelete(null);
@@ -144,10 +150,10 @@ export const Professionals: React.FC = () => {
   };
 
   const handleSaveTreatments = async () => {
-    if (!selectedSpecialistForTreatments) return;
+    if (!selectedSpecialistForTreatments || !empresaId) return;
 
     try {
-      await specialistService.updateSpecialist(selectedSpecialistForTreatments);
+      await specialistService.updateSpecialist(empresaId, selectedSpecialistForTreatments);
       await loadSpecialists();
       setIsTreatmentsModalOpen(false);
     } catch (error) {

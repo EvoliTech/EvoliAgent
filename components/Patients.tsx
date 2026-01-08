@@ -5,7 +5,10 @@ import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
 
+import { useCompany } from '../contexts/CompanyContext';
+
 export const Patients: React.FC = () => {
+  const { empresaId } = useCompany();
   // Estado principal dos pacientes
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,21 +33,24 @@ export const Patients: React.FC = () => {
 
   // Fetch Patients on Mount & Realtime Subscription
   useEffect(() => {
-    loadPatients();
+    if (empresaId) {
+      loadPatients();
 
-    const subscription = patientService.subscribeToPatients(() => {
-      loadPatients(); // Allow auto-refresh on external changes
-    });
+      const subscription = patientService.subscribeToPatients(() => {
+        loadPatients(); // Allow auto-refresh on external changes
+      });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [empresaId]);
 
   const loadPatients = async () => {
+    if (!empresaId) return;
     setIsLoading(true);
     try {
-      const data = await patientService.fetchPatients();
+      const data = await patientService.fetchPatients(empresaId);
       setPatients(data);
     } catch (error) {
       console.error('Failed to load patients', error);
@@ -108,8 +114,10 @@ export const Patients: React.FC = () => {
     setActiveMenuId(null);
     if (confirm(`Tem certeza que deseja excluir o paciente ${patient.name}?`)) {
       try {
-        await patientService.deletePatient(patient.id);
-        await loadPatients();
+        if (empresaId) {
+          await patientService.deletePatient(empresaId, patient.id);
+          await loadPatients();
+        }
       } catch (error) {
         alert("Erro ao excluir paciente.");
       }
@@ -129,10 +137,10 @@ export const Patients: React.FC = () => {
     try {
       const patientData: any = { ...formData, plano: finalPlano };
 
-      if (editingPatientId) {
-        await patientService.updatePatient(editingPatientId, patientData);
-      } else {
-        await patientService.createPatient(patientData as Patient);
+      if (editingPatientId && empresaId) {
+        await patientService.updatePatient(empresaId, editingPatientId, patientData);
+      } else if (empresaId) {
+        await patientService.createPatient(empresaId, patientData as Patient);
       }
 
       await loadPatients(); // Reload list

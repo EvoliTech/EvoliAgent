@@ -23,21 +23,22 @@ export interface GoogleEvent {
 
 export const googleCalendarService = {
 
-  async listCalendars(userEmail: string): Promise<GoogleCalendar[]> {
+  async listCalendars(empresaId: number, userEmail: string): Promise<GoogleCalendar[]> {
     const { data, error } = await supabase.functions.invoke('google-auth', {
-      body: { action: 'list-calendars', userEmail }
+      body: { action: 'list-calendars', userEmail, empresaId }
     });
     if (error || (data && data.error)) throw new Error(error?.message || data?.error);
     const items = data.items || [];
     return items;
   },
 
-  async createCalendar(userEmail: string, summary: string): Promise<GoogleCalendar> {
+  async createCalendar(empresaId: number, userEmail: string, summary: string): Promise<GoogleCalendar> {
     const { data, error } = await supabase.functions.invoke('google-auth', {
       body: {
         action: 'create-calendar',
         userEmail,
-        summary
+        summary,
+        empresaId
       }
     });
 
@@ -48,12 +49,13 @@ export const googleCalendarService = {
     return data;
   },
 
-  async deleteCalendar(userEmail: string, calendarId: string): Promise<void> {
+  async deleteCalendar(empresaId: number, userEmail: string, calendarId: string): Promise<void> {
     const { data, error } = await supabase.functions.invoke('google-auth', {
       body: {
         action: 'delete-calendar',
         userEmail,
-        calendarId
+        calendarId,
+        empresaId
       }
     });
 
@@ -62,14 +64,15 @@ export const googleCalendarService = {
     }
   },
 
-  async listEvents(userEmail: string, start: Date, end: Date, calendarId?: string): Promise<GoogleEvent[]> {
+  async listEvents(empresaId: number, userEmail: string, start: Date, end: Date, calendarId?: string): Promise<GoogleEvent[]> {
     const { data, error } = await supabase.functions.invoke('google-auth', {
       body: {
         action: 'fetch-events',
         userEmail,
         timeMin: start.toISOString(),
         timeMax: end.toISOString(),
-        calendarId
+        calendarId,
+        empresaId
       }
     });
 
@@ -77,14 +80,15 @@ export const googleCalendarService = {
     return data.items || [];
   },
 
-  async createEvent(userEmail: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
+  async createEvent(empresaId: number, userEmail: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
     // 1. Create in Google Calendar first
     const { data: googleData, error: googleError } = await supabase.functions.invoke('google-auth', {
       body: {
         action: 'create-event',
         userEmail,
         event,
-        calendarId
+        calendarId,
+        empresaId
       }
     });
 
@@ -104,7 +108,8 @@ export const googleCalendarService = {
         especialista_id: calendarId, // Using calendarId as specialist reference
         status: googleData.status || 'confirmed',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        IDEmpresa: empresaId
       });
 
     if (supabaseError) {
@@ -116,7 +121,7 @@ export const googleCalendarService = {
     return googleData;
   },
 
-  async updateEvent(userEmail: string, eventId: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
+  async updateEvent(empresaId: number, userEmail: string, eventId: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
     // 1. Update in Google Calendar
     const { data: googleData, error: googleError } = await supabase.functions.invoke('google-auth', {
       body: {
@@ -124,7 +129,8 @@ export const googleCalendarService = {
         userEmail,
         eventId,
         event,
-        calendarId
+        calendarId,
+        empresaId
       }
     });
 
@@ -142,7 +148,8 @@ export const googleCalendarService = {
         status: googleData.status || 'confirmed',
         updated_at: new Date().toISOString()
       })
-      .eq('google_event_id', eventId);
+      .eq('google_event_id', eventId)
+      .eq('IDEmpresa', empresaId);
 
     if (supabaseError) {
       console.error('Mirroring error (Update):', supabaseError);
@@ -151,14 +158,15 @@ export const googleCalendarService = {
     return googleData;
   },
 
-  async deleteEvent(userEmail: string, eventId: string, calendarId?: string): Promise<void> {
+  async deleteEvent(empresaId: number, userEmail: string, eventId: string, calendarId?: string): Promise<void> {
     // 1. Delete in Google Calendar
     const { data, error: googleError } = await supabase.functions.invoke('google-auth', {
       body: {
         action: 'delete-event',
         userEmail,
         eventId,
-        calendarId
+        calendarId,
+        empresaId
       }
     });
 
@@ -170,7 +178,8 @@ export const googleCalendarService = {
     const { error: supabaseError } = await supabase
       .from('agendamentos')
       .delete()
-      .eq('google_event_id', eventId);
+      .eq('google_event_id', eventId)
+      .eq('IDEmpresa', empresaId);
 
     if (supabaseError) {
       console.error('Mirroring error (Delete):', supabaseError);
