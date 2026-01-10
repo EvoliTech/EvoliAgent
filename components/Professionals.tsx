@@ -6,6 +6,7 @@ import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square, Trash2
 import { Modal } from './ui/Modal';
 import { LoadingModal } from './ui/LoadingModal';
 import { AlertModal } from './ui/AlertModal';
+import { logService } from '../services/logService';
 
 import { useCompany } from '../contexts/CompanyContext';
 
@@ -64,6 +65,14 @@ export const Professionals: React.FC = () => {
 
   const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
     setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+    if (type === 'error') {
+      logService.logError({
+        empresaId,
+        message: `${title}: ${message}`,
+        component: 'Professionals.tsx',
+        functionName: 'showAlert'
+      });
+    }
   };
 
   // --- Handlers para Dados Básicos (Novo e Editar) ---

@@ -25,6 +25,7 @@ import { useCompany } from '../contexts/CompanyContext';
 import { companyService, CompanySettings } from '../services/companyService';
 import { formatWhatsApp } from '../utils';
 import { AlertModal } from './ui/AlertModal';
+import { logService } from '../services/logService';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
@@ -80,6 +81,14 @@ export const Settings: React.FC = () => {
 
    const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
       setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+      if (type === 'error') {
+         logService.logError({
+            empresaId,
+            message: `${title}: ${message}`,
+            component: 'Settings.tsx',
+            functionName: 'showAlert'
+         });
+      }
    };
 
    React.useEffect(() => {

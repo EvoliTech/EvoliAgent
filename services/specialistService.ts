@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Specialist } from '../types';
 import { googleCalendarService } from './googleCalendarService';
 import { userService } from './userService';
+import { logService } from './logService';
 
 // Helpers
 async function getAdminEmail(empresaId: number) {
@@ -28,6 +29,13 @@ export const specialistService = {
 
         if (error) {
             console.error('Error fetching specialists:', error);
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'specialistService',
+                functionName: 'fetchSpecialists',
+                context: error
+            });
             throw error;
         }
 
@@ -71,7 +79,16 @@ export const specialistService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'specialistService',
+                functionName: 'createSpecialist',
+                context: { specialist, newSpecialist, error }
+            });
+            throw error;
+        }
 
         return mapSupabaseToSpecialist(data);
     },
@@ -101,7 +118,16 @@ export const specialistService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'specialistService',
+                functionName: 'createSpecialistFromGoogle',
+                context: { specialist, newSpecialist, error }
+            });
+            throw error;
+        }
 
         return mapSupabaseToSpecialist(data);
     },
@@ -126,7 +152,16 @@ export const specialistService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'specialistService',
+                functionName: 'updateSpecialist',
+                context: { specialist, updates, error }
+            });
+            throw error;
+        }
 
         return mapSupabaseToSpecialist(data);
     },
@@ -149,7 +184,16 @@ export const specialistService = {
             .eq('id', id)
             .eq('IDEmpresa', empresaId);
 
-        if (error) throw error;
+        if (error) {
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'specialistService',
+                functionName: 'deleteSpecialist',
+                context: { id, error }
+            });
+            throw error;
+        }
 
         // 3. Delete from Google Calendar in background (non-blocking)
         if (calendarId && calendarId.includes('@group.calendar.google.com')) {

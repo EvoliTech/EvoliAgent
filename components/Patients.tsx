@@ -5,6 +5,7 @@ import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
 import { AlertModal } from './ui/AlertModal';
+import { logService } from '../services/logService';
 
 import { useCompany } from '../contexts/CompanyContext';
 
@@ -47,6 +48,14 @@ export const Patients: React.FC = () => {
 
   const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
     setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+    if (type === 'error') {
+      logService.logError({
+        empresaId,
+        message: `${title}: ${message}`,
+        component: 'Patients.tsx',
+        functionName: 'showAlert'
+      });
+    }
   };
 
   // Fetch Patients on Mount & Realtime Subscription
@@ -170,8 +179,10 @@ export const Patients: React.FC = () => {
       await loadPatients(); // Reload list
       setIsModalOpen(false);
       showAlert('Sucesso', 'Paciente salvo com sucesso!', 'success');
-    } catch (error) {
-      showAlert('Erro', 'Erro ao salvar paciente.', 'error');
+    } catch (error: any) {
+      console.error('Error saving patient:', error);
+      const errorMessage = error.message || 'Erro inesperado ao salvar paciente.';
+      showAlert('Erro', `Não foi possível salvar os dados: ${errorMessage}`, 'error');
     }
   };
 

@@ -1,6 +1,7 @@
 
 import { supabase } from '../lib/supabase';
 import { Patient, SupabaseCustomer } from '../types';
+import { logService } from './logService';
 
 export const patientService = {
     async fetchPatients(empresaId: number): Promise<Patient[]> {
@@ -12,6 +13,13 @@ export const patientService = {
 
         if (error) {
             console.error('Error fetching patients:', error);
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'patientService',
+                functionName: 'fetchPatients',
+                context: error
+            });
             throw error;
         }
 
@@ -19,27 +27,55 @@ export const patientService = {
     },
 
     async createPatient(empresaId: number, patient: Omit<Patient, 'id' | 'lastVisit' | 'createdAt'>): Promise<void> {
-        const newCustomer = {
+        const phone = patient.phone.includes('@s.whatsapp.net')
+            ? patient.phone
+            : `${patient.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+
+        const newCustomer: any = {
             nome: patient.name,
-            telefoneWhatsapp: patient.phone,
+            nome_completo: patient.name,
+            telefoneWhatsapp: phone,
             email: patient.email,
             plano: patient.plano,
-            IDEmpresa: empresaId
+            IDEmpresa: empresaId,
+            botAtivo: patient.status === 'Ativo' ? 'true' : 'false',
+            status_lead_no_crm: patient.status === 'Ativo' ? 'novo' : 'arquivado'
         };
 
         const { error } = await supabase
             .from('Cliente')
             .insert(newCustomer);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error in createPatient:', error);
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'patientService',
+                functionName: 'createPatient',
+                context: { patient, newCustomer, error }
+            });
+            throw error;
+        }
     },
 
     async updatePatient(empresaId: number, id: string, patient: Partial<Patient>): Promise<void> {
         const updates: any = {};
-        if (patient.name) updates.nome = patient.name;
-        if (patient.phone) updates.telefoneWhatsapp = patient.phone;
+        if (patient.name) {
+            updates.nome = patient.name;
+            updates.nome_completo = patient.name;
+        }
+        if (patient.phone) {
+            updates.telefoneWhatsapp = patient.phone.includes('@s.whatsapp.net')
+                ? patient.phone
+                : `${patient.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+        }
         if (patient.email) updates.email = patient.email;
         if (patient.plano) updates.plano = patient.plano;
+        if (patient.status) {
+            updates.botAtivo = patient.status === 'Ativo' ? 'true' : 'false';
+            updates.status_lead_no_crm = patient.status === 'Ativo' ? 'novo' : 'arquivado';
+        }
 
         const { error } = await supabase
             .from('Cliente')
@@ -47,7 +83,17 @@ export const patientService = {
             .eq('id', id)
             .eq('IDEmpresa', empresaId);
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error in updatePatient:', error);
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'patientService',
+                functionName: 'updatePatient',
+                context: { id, updates, error }
+            });
+            throw error;
+        }
     },
 
     async deletePatient(empresaId: number, id: string): Promise<void> {
@@ -57,7 +103,16 @@ export const patientService = {
             .eq('id', id)
             .eq('IDEmpresa', empresaId);
 
-        if (error) throw error;
+        if (error) {
+            await logService.logError({
+                empresaId,
+                message: error.message,
+                component: 'patientService',
+                functionName: 'deletePatient',
+                context: { id, error }
+            });
+            throw error;
+        }
     },
 
     subscribeToPatients(onChanges: () => void) {
