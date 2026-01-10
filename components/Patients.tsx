@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Patient } from '../types';
 import { patientService } from '../services/patientService';
-import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2 } from 'lucide-react';
+import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
 import { AlertModal } from './ui/AlertModal';
@@ -255,7 +255,7 @@ export const Patients: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -341,31 +341,44 @@ export const Patients: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {patient.lastVisit || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
-                    <button
-                      onClick={() => setActiveMenuId(activeMenuId === patient.id ? null : patient.id)}
-                      className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                    >
-                      <MoreVertical size={20} />
-                    </button>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="relative inline-block text-left">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === patient.id ? null : patient.id);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      >
+                        <MoreVertical size={20} />
+                      </button>
 
-                    {/* Menu Dropdown */}
-                    {activeMenuId === patient.id && (
-                      <div className="absolute right-8 top-8 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-200">
-                        <button
-                          onClick={() => handleEditPatient(patient)}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDeletePatient(patient)}
-                          className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    )}
+                      {/* Menu Dropdown */}
+                      {activeMenuId === patient.id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-50 border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-200">
+                          <button
+                            onClick={() => {
+                              handleEditPatient(patient);
+                              setActiveMenuId(null);
+                            }}
+                            className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Edit2 className="w-4 h-4 mr-2 text-gray-400" />
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleDeletePatient(patient);
+                              setActiveMenuId(null);
+                            }}
+                            className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2 text-red-400" />
+                            Excluir
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
