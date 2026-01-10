@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Users, Calendar, Clock, ArrowUpRight, ArrowRight, Loader2 } from 'lucide-react';
 import { patientService } from '../services/patientService';
 import { googleCalendarService } from '../services/googleCalendarService';
+import { specialistService } from '../services/specialistService';
+import { userService } from '../services/userService';
 import { supabase } from '../lib/supabase';
 import { Patient, PageType } from '../types';
 import { useCompany } from '../contexts/CompanyContext';
@@ -90,19 +92,79 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       setRecentPatientsList(patients.slice(0, 5));
 
-      // --- 2. APPOINTMENTS DATA (Supabase Mirror) ---
+      // --- 2. APPOINTMENTS DATA ---
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-      const { data: agendamentos, error } = await supabase
-        .from('agendamentos')
-        .select('*')
-        .eq('IDEmpresa', empresaId)
-        .gte('data_inicio', monthStart.toISOString())
-        .lte('data_inicio', monthEnd.toISOString());
+      // Fetch specialists and admin email for Google integration
+      const specialists = await specialistService.fetchSpecialists(empresaId);
+      const adminEmail = await userService.getConnectedGoogleEmail(empresaId);
 
-      if (error) throw error;
+      // Filter for "Dr" specialists
+      const drSpecialists = specialists.filter(s => s.name && /Dr\.?|Dra\.?/i.test(s.name));
+      const drCalendarIds = drSpecialists.map(s => s.calendarId).filter(Boolean) as string[];
+
+      let agendamentos: any[] = [];
+
+      if (adminEmail && drCalendarIds.length > 0) {
+        // Fetch real-time data from Google Calendar for each "Dr" specialist
+        try {
+          const promises = drCalendarIds.map(calId =>
+            googleCalendarService.listEvents(empresaId, adminEmail, monthStart, monthEnd, calId)
+          );
+          const results = await Promise.all(promises);
+
+          // Filter out cancelled events and ALL-DAY events (all-day events ONLY have e.start.date, no dateTime)
+          agendamentos = results.flat()
+            .filter(e => e.status !== 'cancelled' && e.start?.dateTime)
+            .map(e => ({
+              ...e,
+              data_inicio: e.start?.dateTime
+            }));
+        } catch (e) {
+          console.error("Error fetching from Google Calendar:", e);
+          // Fallback to mirror if Google fails
+          const { data } = await supabase
+            .from('agendamentos')
+            .select('*')
+            .eq('IDEmpresa', empresaId)
+            .neq('status', 'cancelled')
+            .gte('data_inicio', monthStart.toISOString())
+            .lte('data_inicio', monthEnd.toISOString());
+
+          // In mirror, all-day events usually don't have 'T' in string or have '00:00:00'? 
+          // Actually, Google all-day events stored in our DB will likely be JUST the date part or start at 00:00.
+          // Let's filter by checking if it contains 'T' (ISO with time) and is not exactly 00:00:00 if we want to be strict,
+          // but usually 'T' is the safest indicator of a dateTime in ISO strings.
+          agendamentos = data?.filter(a =>
+            drCalendarIds.includes(a.especialista_id || a.calendar_id) &&
+            a.data_inicio?.includes('T')
+          ) || [];
+        }
+      } else {
+        // No Google integration or no Dr specialists: use mirror table
+        const { data, error } = await supabase
+          .from('agendamentos')
+          .select('*')
+          .eq('IDEmpresa', empresaId)
+          .neq('status', 'cancelled')
+          .gte('data_inicio', monthStart.toISOString())
+          .lte('data_inicio', monthEnd.toISOString());
+
+        if (error) throw error;
+
+        const baseFilter = (a: any) => a.data_inicio?.includes('T');
+
+        if (drCalendarIds.length > 0) {
+          agendamentos = data?.filter(a =>
+            drCalendarIds.includes(a.especialista_id || a.calendar_id) &&
+            baseFilter(a)
+          ) || [];
+        } else {
+          agendamentos = data?.filter(baseFilter) || [];
+        }
+      }
 
       const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
@@ -116,7 +178,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       const daysInMonth = monthEnd.getDate();
       for (let i = 1; i <= daysInMonth; i++) dayCounts[i] = 0;
 
-      agendamentos?.forEach(e => {
+      agendamentos.forEach(e => {
+        if (!e.data_inicio) return;
         const d = new Date(e.data_inicio);
         const day = d.getDate();
         if (dayCounts[day] !== undefined) dayCounts[day]++;
