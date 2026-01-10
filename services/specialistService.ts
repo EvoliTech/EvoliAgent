@@ -4,9 +4,18 @@ import { Specialist } from '../types';
 import { googleCalendarService } from './googleCalendarService';
 import { userService } from './userService';
 
-// Helper to get connected admin email
+// Helpers
 async function getAdminEmail(empresaId: number) {
     return userService.getAdminEmail(empresaId);
+}
+
+async function getClinicName(empresaId: number) {
+    const { data } = await supabase
+        .from('Empresa')
+        .select('nome')
+        .eq('id', empresaId)
+        .single();
+    return data?.nome || 'Clínica';
 }
 
 export const specialistService = {
@@ -26,14 +35,17 @@ export const specialistService = {
     },
 
     async createSpecialist(empresaId: number, specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
-        // 1. Get owner email
-        const adminEmail = await getAdminEmail(empresaId);
+        // 1. Get owner email and clinic name
+        const [adminEmail, clinicName] = await Promise.all([
+            getAdminEmail(empresaId),
+            getClinicName(empresaId)
+        ]);
 
         // 2. Create Google Calendar first
         let googleCalendarId = specialist.email || adminEmail || '';
         try {
             if (adminEmail) {
-                const newCal = await googleCalendarService.createCalendar(adminEmail, specialist.name);
+                const newCal = await googleCalendarService.createCalendar(empresaId, adminEmail, specialist.name);
                 googleCalendarId = newCal.id;
             }
         } catch (e) {
@@ -49,6 +61,7 @@ export const specialistService = {
             email: specialist.email || adminEmail || '', // Use provided email or owner's email
             phone: specialist.phone,
             treatments: specialist.treatments || [],
+            created_by: clinicName, // Set as clinic name
             IDEmpresa: empresaId
         };
 
@@ -71,13 +84,14 @@ export const specialistService = {
 
         const newSpecialist = {
             name: specialist.name,
-            specialty: specialist.specialty,
+            specialty: '', // Leave empty as per user's request (was "Google Calendar")
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
             calendar_id: specialist.calendarId, // Google Calendar ID
             email: adminEmail || '', // Automatically fill with owner's email
             phone: specialist.phone,
             treatments: specialist.treatments || [],
+            created_by: 'Google Calendar', // Set origin
             IDEmpresa: empresaId
         };
 
@@ -144,7 +158,7 @@ export const specialistService = {
                 try {
                     const adminEmail = await getAdminEmail(empresaId);
                     if (adminEmail) {
-                        await googleCalendarService.deleteCalendar(adminEmail, calendarId);
+                        await googleCalendarService.deleteCalendar(empresaId, adminEmail, calendarId);
                         console.log(`Google Calendar ${calendarId} deleted successfully`);
                     }
                 } catch (e) {
@@ -179,6 +193,7 @@ function mapSupabaseToSpecialist(data: any): Specialist {
         calendarId: data.calendar_id,
         email: data.email,
         phone: data.phone,
-        treatments: data.treatments || []
+        treatments: data.treatments || [],
+        created_by: data.created_by
     };
 }

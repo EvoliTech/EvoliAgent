@@ -47,7 +47,6 @@ export const Professionals: React.FC = () => {
 
   // States de Edição
   const [currentSpecialist, setCurrentSpecialist] = useState<Partial<Specialist>>({});
-  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [selectedSpecialistForTreatments, setSelectedSpecialistForTreatments] = useState<Specialist | null>(null);
   const [alertConfig, setAlertConfig] = useState<{
     isOpen: boolean;
@@ -272,91 +271,95 @@ export const Professionals: React.FC = () => {
         title={currentSpecialist.id ? "Editar Especialista" : "Novo Especialista"}
       >
         <form onSubmit={handleSaveBasicInfo} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Nome Completo</label>
-            <input
-              type="text"
-              required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-              value={currentSpecialist.name || ''}
-              onChange={e => setCurrentSpecialist({ ...currentSpecialist, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Especialidade Principal (Título)</label>
-            <input
-              type="text"
-              required
-              placeholder="Ex: Cardiologia"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-              value={currentSpecialist.specialty || ''}
-              onChange={e => setCurrentSpecialist({ ...currentSpecialist, specialty: e.target.value })}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nome Completo</label>
+              <input
+                type="text"
+                required
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                value={currentSpecialist.name || ''}
+                onChange={e => setCurrentSpecialist({ ...currentSpecialist, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Especialidade (Título)</label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Cardiologia"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                value={currentSpecialist.specialty || ''}
+                onChange={e => setCurrentSpecialist({ ...currentSpecialist, specialty: e.target.value })}
+              />
+            </div>
           </div>
 
-          {/* Show Calendar ID if exists (read-only) */}
           {currentSpecialist.calendarId && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700">ID da Agenda (Google Calendar)</label>
+            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">ID da Agenda (Google Calendar)</label>
               <input
                 type="text"
                 disabled
-                className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm py-2 border px-3 text-gray-500 cursor-not-allowed"
+                className="w-full bg-transparent border-none p-0 text-xs text-gray-500 cursor-not-allowed focus:ring-0"
                 value={currentSpecialist.calendarId || ''}
-                title="Este campo é gerado automaticamente e não pode ser editado"
               />
-              <p className="mt-1 text-xs text-gray-500">Este ID é gerado automaticamente pelo Google Calendar</p>
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">E-mail</label>
-            <input
-              type="email"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-              value={currentSpecialist.email || ''}
-              onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
-              placeholder="email@exemplo.com"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              {currentSpecialist.id ? 'E-mail do especialista' : 'Será preenchido automaticamente com seu e-mail se deixado em branco'}
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Telefone</label>
-            <input
-              type="tel"
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-              value={currentSpecialist.phone || ''}
-              onChange={e => setCurrentSpecialist({ ...currentSpecialist, phone: e.target.value })}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">E-mail</label>
+              <input
+                type="email"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                value={currentSpecialist.email || ''}
+                onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Telefone</label>
+              <input
+                type="tel"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                value={currentSpecialist.phone || ''}
+                onChange={e => setCurrentSpecialist({ ...currentSpecialist, phone: e.target.value })}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
           </div>
 
 
           {currentSpecialist.id && ( // Only show delete for existing specialists
             <div className="pt-4 mt-4 border-t border-gray-100 flex justify-between items-center">
-              <span className="text-xs text-gray-500">Zona de Perigo</span>
               <button
                 type="button"
                 onClick={() => handleOpenDelete(currentSpecialist as Specialist)}
-                className="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                className="flex items-center gap-1 text-red-400 hover:text-red-600 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                title="Excluir Especialista"
               >
-                <Trash2 size={14} /> Excluir Especialista
+                <Trash2 size={16} />
               </button>
+
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Criado por:</span>
+                <p className="text-xs font-bold text-gray-700">{currentSpecialist.created_by || '-'}</p>
+              </div>
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
             <button
               type="button"
               onClick={() => setIsEditModalOpen(false)}
-              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50"
+              className="px-6 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 shadow-sm"
+              className="px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
             >
               Salvar Dados
             </button>

@@ -11,6 +11,7 @@ export interface Specialist {
   email?: string; // E-mail do especialista (editável)
   phone?: string;
   treatments?: string[]; // Lista de tratamentos habilitados
+  created_by?: string;
 }
 
 export interface Patient {
