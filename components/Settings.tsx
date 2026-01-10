@@ -20,6 +20,8 @@ import { specialistService } from '../services/specialistService';
 import { userService, UserProfile } from '../services/userService';
 import { Modal } from './ui/Modal';
 import { useCompany } from '../contexts/CompanyContext';
+import { companyService, CompanySettings } from '../services/companyService';
+import { formatWhatsApp } from '../utils';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
@@ -32,6 +34,22 @@ export const Settings: React.FC = () => {
    const [clientId, setClientId] = useState('');
    const [clientSecret, setClientSecret] = useState('');
    const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+   const [company, setCompany] = useState<Partial<CompanySettings>>({
+      nome: '',
+      telefoneWhatsapp: '',
+      endereco: '',
+      configuracoes: {
+         dias_funcionamento: [
+            { dia: 'Segunda-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+            { dia: 'Terça-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+            { dia: 'Quarta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+            { dia: 'Quinta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+            { dia: 'Sexta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+            { dia: 'Sábado', aberto: false, inicio: '08:00', fim: '12:00' },
+            { dia: 'Domingo', aberto: false, inicio: '08:00', fim: '12:00' },
+         ]
+      }
+   });
 
    // Security & Access states
    const [users, setUsers] = useState<UserProfile[]>([]);
@@ -46,11 +64,39 @@ export const Settings: React.FC = () => {
 
    React.useEffect(() => {
       if (empresaId) {
+         loadCompanyData();
          checkConfigs();
          checkConnection();
          loadUsers();
       }
    }, [empresaId]);
+
+   const loadCompanyData = async () => {
+      try {
+         const data = await companyService.fetchCompany(empresaId);
+         if (data) {
+            const configuracoes = data.configuracoes || { dias_funcionamento: [] };
+            if (!configuracoes.dias_funcionamento || configuracoes.dias_funcionamento.length === 0) {
+               configuracoes.dias_funcionamento = [
+                  { dia: 'Segunda-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+                  { dia: 'Terça-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+                  { dia: 'Quarta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+                  { dia: 'Quinta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+                  { dia: 'Sexta-feira', aberto: true, inicio: '08:00', fim: '18:00' },
+                  { dia: 'Sábado', aberto: false, inicio: '08:00', fim: '12:00' },
+                  { dia: 'Domingo', aberto: false, inicio: '08:00', fim: '12:00' },
+               ];
+            }
+            setCompany({
+               ...data,
+               telefoneWhatsapp: formatWhatsApp(data.telefoneWhatsapp),
+               configuracoes
+            });
+         }
+      } catch (error) {
+         console.error('Failed to load company data', error);
+      }
+   };
 
    const checkConfigs = async () => {
       if (!empresaId) return;
@@ -266,39 +312,116 @@ export const Settings: React.FC = () => {
       }
    };
 
-   const saveConfigs = () => {
+   const saveConfigs = async () => {
+      if (!empresaId) return;
       setIsSaving(true);
-      setTimeout(() => {
-         setIsSaving(false);
+      try {
+         await companyService.updateCompany(empresaId, company);
          alert('Configurações salvas com sucesso!');
-      }, 800);
+      } catch (error: any) {
+         alert('Erro ao salvar as configurações: ' + error.message);
+      } finally {
+         setIsSaving(false);
+      }
    };
 
    const renderContent = () => {
       switch (activeTab) {
          case 'general':
             return (
-               <div className="space-y-8">
-                  <div className="flex items-center gap-6 pb-6 border-b border-gray-100">
-                     <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 text-gray-400">
-                        <Upload size={24} />
-                     </div>
-                     <div>
-                        <h3 className="font-medium text-gray-900">Logotipo da Clínica</h3>
-                        <p className="text-sm text-gray-500 mb-3">Recomendado: 400x400px, PNG ou JPG.</p>
-                        <button className="text-sm bg-white border border-gray-300 px-3 py-1.5 rounded-md text-gray-700 hover:bg-gray-50">
-                           Carregar imagem
-                        </button>
-                     </div>
-                  </div>
+               <div className="space-y-8 animate-in fade-in duration-500">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700">Nome da Clínica</label>
-                        <input type="text" defaultValue="ClínicaSync Médica" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm focus:ring-blue-500 focus:border-blue-500" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome da Clínica</label>
+                        <input
+                           type="text"
+                           value={company.nome || ''}
+                           onChange={e => setCompany({ ...company, nome: e.target.value })}
+                           className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                           placeholder="Ex: Clínica ClínicaSync"
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">WhatsApp de Contato</label>
+                        <input
+                           type="text"
+                           value={company.telefoneWhatsapp || ''}
+                           readOnly
+                           className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-gray-500 cursor-not-allowed outline-none"
+                           placeholder="(00) 00000-0000"
+                        />
                      </div>
                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700">Endereço</label>
-                        <input type="text" defaultValue="Av. Paulista, 1000 - SP" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Endereço Completo</label>
+                        <input
+                           type="text"
+                           value={company.endereco || ''}
+                           onChange={e => setCompany({ ...company, endereco: e.target.value })}
+                           className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500"
+                           placeholder="Rua, Número, Bairro, Cidade - UF"
+                        />
+                     </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-gray-100">
+                     <div className="flex items-center gap-2 mb-6 text-gray-900">
+                        <Clock className="text-blue-600" size={20} />
+                        <h3 className="text-lg font-bold">Horário de Funcionamento</h3>
+                     </div>
+
+                     <div className="space-y-3">
+                        {company.configuracoes?.dias_funcionamento?.map((dia, index) => (
+                           <div key={dia.dia} className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 transition-all hover:bg-white hover:shadow-md hover:shadow-gray-100 group">
+                              <div className="w-32">
+                                 <span className="text-sm font-bold text-gray-700">{dia.dia}</span>
+                              </div>
+
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                 <div className="relative inline-flex items-center">
+                                    <input
+                                       type="checkbox"
+                                       checked={dia.aberto}
+                                       onChange={e => {
+                                          const newDias = [...(company.configuracoes?.dias_funcionamento || [])];
+                                          newDias[index] = { ...dia, aberto: e.target.checked };
+                                          setCompany({ ...company, configuracoes: { ...company.configuracoes!, dias_funcionamento: newDias } });
+                                       }}
+                                       className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                 </div>
+                                 <span className={`text-xs font-bold uppercase tracking-wider ${dia.aberto ? 'text-blue-600' : 'text-gray-400'}`}>
+                                    {dia.aberto ? 'Aberto' : 'Fechado'}
+                                 </span>
+                              </label>
+
+                              {dia.aberto && (
+                                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                    <input
+                                       type="time"
+                                       value={dia.inicio}
+                                       onChange={e => {
+                                          const newDias = [...(company.configuracoes?.dias_funcionamento || [])];
+                                          newDias[index] = { ...dia, inicio: e.target.value };
+                                          setCompany({ ...company, configuracoes: { ...company.configuracoes!, dias_funcionamento: newDias } });
+                                       }}
+                                       className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                    <span className="text-gray-400 text-xs font-bold">até</span>
+                                    <input
+                                       type="time"
+                                       value={dia.fim}
+                                       onChange={e => {
+                                          const newDias = [...(company.configuracoes?.dias_funcionamento || [])];
+                                          newDias[index] = { ...dia, fim: e.target.value };
+                                          setCompany({ ...company, configuracoes: { ...company.configuracoes!, dias_funcionamento: newDias } });
+                                       }}
+                                       className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                 </div>
+                              )}
+                           </div>
+                        ))}
                      </div>
                   </div>
                </div>

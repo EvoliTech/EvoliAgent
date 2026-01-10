@@ -38,8 +38,8 @@ export const startOfWeek = (date: Date): Date => {
 
 export const isSameDay = (d1: Date, d2: Date): boolean => {
   return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth() === d2.getMonth() &&
-         d1.getDate() === d2.getDate();
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
 };
 
 export const generateWhatsAppLink = (phone: string, text: string = ''): string => {
@@ -54,3 +54,38 @@ export const getStartOfDay = (date: Date): Date => {
   newDate.setHours(0, 0, 0, 0);
   return newDate;
 };
+
+export const formatWhatsApp = (phone: string | null | undefined): string => {
+  if (!phone) return '';
+
+  // Remove sufixo do n8n/whatsapp se existir
+  let cleaned = phone.split('@')[0];
+  // Remove tudo que não for número
+  cleaned = cleaned.replace(/\D/g, '');
+
+  // Se já começar com 55, mantém. Se não, assume brasileiro.
+  // Padroniza: 55 + DDD + Numero
+  if (cleaned.length < 10) return cleaned; // Curto demais
+
+  let country = '55';
+  let ddd = '';
+  let number = '';
+
+  if (cleaned.startsWith('55') && cleaned.length >= 12) {
+    ddd = cleaned.substring(2, 4);
+    number = cleaned.substring(4);
+  } else if (cleaned.length >= 10) {
+    ddd = cleaned.substring(0, 2);
+    number = cleaned.substring(2);
+  } else {
+    return cleaned;
+  }
+
+  // Máscara: 55 (DD) 9XXXX-XXXX ou 55 (DD) XXXX-XXXX
+  if (number.length === 9) {
+    return `${country} (${ddd}) ${number.substring(0, 5)}-${number.substring(5)}`;
+  } else {
+    return `${country} (${ddd}) ${number.substring(0, 4)}-${number.substring(4)}`;
+  }
+};
+
