@@ -22,9 +22,11 @@ export const Patients: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'Todos' | 'Ativo' | 'Inativo'>('Todos');
 
   // Estado do formulário
-  const [formData, setFormData] = useState<Partial<Patient>>({
+  const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    ddd: '',
+    phoneOnly: '',
     email: '',
     plano: '',
     status: 'Ativo'
@@ -106,6 +108,8 @@ export const Patients: React.FC = () => {
     setFormData({
       name: '',
       phone: '',
+      ddd: '',
+      phoneOnly: '',
       email: '',
       plano: '',
       status: 'Ativo'
@@ -119,9 +123,25 @@ export const Patients: React.FC = () => {
     setActiveMenuId(null);
     const isStandardPlan = ['Amil', 'Bradesco', 'Uniodonto', 'Unimed', 'Particular'].includes(patient.plano || '');
 
+    // Extract DDD and Phone number from stored format (e.g. 5511999999999)
+    let ddd = '';
+    let phoneOnly = '';
+    if (patient.phone) {
+      const cleanPhone = patient.phone.replace(/\D/g, ''); // 5511999999999
+      if (cleanPhone.startsWith('55')) {
+        ddd = cleanPhone.substring(2, 4);
+        phoneOnly = cleanPhone.substring(4);
+      } else {
+        ddd = cleanPhone.substring(0, 2);
+        phoneOnly = cleanPhone.substring(2);
+      }
+    }
+
     setFormData({
       name: patient.name,
       phone: patient.phone,
+      ddd: ddd,
+      phoneOnly: phoneOnly,
       email: patient.email,
       plano: isStandardPlan ? patient.plano : 'Outros',
       status: patient.status
@@ -160,15 +180,17 @@ export const Patients: React.FC = () => {
   const handleSavePatient = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.phone) {
-      showAlert('Campo Obrigatório', 'Nome e telefone são obrigatórios.', 'warning');
+    if (!formData.name || !formData.ddd || !formData.phoneOnly) {
+      showAlert('Campo Obrigatório', 'Nome, DDD e telefone são obrigatórios.', 'warning');
       return;
     }
 
+    const finalPhone = `55${formData.ddd.replace(/\D/g, '')}${formData.phoneOnly.replace(/\D/g, '')}`;
     const finalPlano = formData.plano === 'Outros' ? customPlano : formData.plano;
 
     try {
-      const patientData: any = { ...formData, plano: finalPlano };
+      const { ddd: _d, phoneOnly: _p, ...submitData } = formData;
+      const patientData: any = { ...submitData, phone: finalPhone, plano: finalPlano };
 
       if (editingPatientId && empresaId) {
         await patientService.updatePatient(empresaId, editingPatientId, patientData);
@@ -417,9 +439,23 @@ export const Patients: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Telefone</label>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-1">
+              <label className="block text-sm font-medium text-gray-700">DDD</label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <input
+                  type="text"
+                  required
+                  maxLength={2}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3 pl-3"
+                  placeholder="11"
+                  value={formData.ddd}
+                  onChange={e => setFormData({ ...formData, ddd: e.target.value.replace(/\D/g, '') })}
+                />
+              </div>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Telefone (só números)</label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Phone className="h-4 w-4 text-gray-400" />
@@ -428,12 +464,15 @@ export const Patients: React.FC = () => {
                   type="tel"
                   required
                   className="block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-                  placeholder="(11) 99999-9999"
-                  value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="99999-9999"
+                  value={formData.phoneOnly}
+                  onChange={e => setFormData({ ...formData, phoneOnly: e.target.value.replace(/\D/g, '') })}
                 />
               </div>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Status</label>
               <select
@@ -445,21 +484,20 @@ export const Patients: React.FC = () => {
                 <option value="Inativo">Inativo</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">E-mail</label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-4 w-4 text-gray-400" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700">E-mail</label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-4 w-4 text-gray-400" />
+                </div>
+                <input
+                  type="email"
+                  className="block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
+                  placeholder="exemplo@email.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                />
               </div>
-              <input
-                type="email"
-                className="block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2 border px-3"
-                placeholder="exemplo@email.com"
-                value={formData.email}
-                onChange={e => setFormData({ ...formData, email: e.target.value })}
-              />
             </div>
           </div>
 

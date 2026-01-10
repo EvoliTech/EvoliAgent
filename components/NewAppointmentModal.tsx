@@ -37,7 +37,8 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [date, setDate] = useState('');
     const [time, setTime] = useState('09:00');
     const [patientName, setPatientName] = useState('');
-    const [patientPhone, setPatientPhone] = useState('');
+    const [ddd, setDdd] = useState('');
+    const [phoneOnly, setPhoneOnly] = useState('');
     const [observations, setObservations] = useState('');
 
     useEffect(() => {
@@ -60,7 +61,22 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 };
 
                 setPatientName(getField(initialData.description, 'Paciente:'));
-                setPatientPhone(getField(initialData.description, 'Telefone:'));
+                const phone = getField(initialData.description, 'Telefone:');
+
+                let dddVal = '';
+                let phoneOnlyVal = '';
+                if (phone) {
+                    const clean = phone.replace(/\D/g, '');
+                    if (clean.startsWith('55')) {
+                        dddVal = clean.substring(2, 4);
+                        phoneOnlyVal = clean.substring(4);
+                    } else {
+                        dddVal = clean.substring(0, 2);
+                        phoneOnlyVal = clean.substring(2);
+                    }
+                }
+                setDdd(dddVal);
+                setPhoneOnly(phoneOnlyVal);
                 setObservations(getField(initialData.description, 'Obs:'));
 
                 // We don't easily know which calendar it belongs to unless passed, defaulting to primary or first available
@@ -78,7 +94,8 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 }
                 setTime('09:00');
                 setPatientName('');
-                setPatientPhone('');
+                setDdd('');
+                setPhoneOnly('');
                 setObservations('');
                 setSearchTerm('');
             }
@@ -129,14 +146,29 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
     const handleSelectPatient = (patient: SupabaseCustomer) => {
         setPatientName(patient.nome || '');
-        setPatientPhone(patient.telefoneWhatsapp || '');
+
+        let dddVal = '';
+        let phoneOnlyVal = '';
+        if (patient.telefoneWhatsapp) {
+            const clean = patient.telefoneWhatsapp.replace(/\D/g, '');
+            if (clean.startsWith('55')) {
+                dddVal = clean.substring(2, 4);
+                phoneOnlyVal = clean.substring(4);
+            } else {
+                dddVal = clean.substring(0, 2);
+                phoneOnlyVal = clean.substring(2);
+            }
+        }
+        setDdd(dddVal);
+        setPhoneOnly(phoneOnlyVal);
+
         setSearchTerm('');
         setShowPatientResults(false);
     };
 
     const handleSubmit = async () => {
-        if (!title || !selectedCalendarId || !date || !time || !patientName) {
-            alert('Por favor, preencha todos os campos obrigatórios.');
+        if (!title || !selectedCalendarId || !date || !time || !patientName || !ddd || !phoneOnly) {
+            alert('Por favor, preencha todos os campos obrigatórios (Título, Agenda, Data, Horário e Paciente completo).');
             return;
         }
 
@@ -191,17 +223,13 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             }
             // ------------------------------------------------
 
-            const normalizePhone = (phone: string) => {
-                return phone.replace(/\D/g, '');
-            };
-
-            const normalizedPhone = normalizePhone(patientPhone);
-            const whatsappLink = `https://wa.me/${normalizedPhone}`;
+            const finalPhone = `55${ddd.replace(/\D/g, '')}${phoneOnly.replace(/\D/g, '')}`;
+            const whatsappLink = `https://wa.me/${finalPhone}`;
 
             const eventData = {
                 summary: title,
                 description: `Paciente: ${patientName}
-Telefone: ${patientPhone}
+Telefone: ${finalPhone}
 WhatsApp: ${whatsappLink}
 Obs: ${observations || '-'}`,
                 start: { dateTime: startDate.toISOString() },
@@ -344,7 +372,9 @@ Obs: ${observations || '-'}`,
                                             className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex flex-col"
                                         >
                                             <span className="font-medium text-gray-900">{p.nome}</span>
-                                            <span className="text-xs text-gray-500">{p.telefoneWhatsapp}</span>
+                                            <span className="text-xs text-gray-500">
+                                                {p.telefoneWhatsapp ? `(${p.telefoneWhatsapp.replace(/\D/g, '').substring(2, 4)}) ${p.telefoneWhatsapp.replace(/\D/g, '').substring(4)}` : 'Sem telefone'}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
@@ -367,19 +397,27 @@ Obs: ${observations || '-'}`,
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-0.5">Telefone (WhatsApp)</label>
-                        <div className="flex gap-2">
-                            <div className="w-24 bg-gray-50 border border-gray-300 rounded-lg flex items-center justify-center text-sm text-gray-500">
-                                BR +55
-                            </div>
-                            <div className="relative flex-1">
-                                <Phone size={16} className="absolute left-3 top-2.5 text-gray-400" />
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-1">
+                            <label className="block text-sm font-medium text-gray-700 mb-0.5">DDD</label>
+                            <input
+                                type="text"
+                                maxLength={2}
+                                value={ddd}
+                                onChange={e => setDdd(e.target.value.replace(/\D/g, ''))}
+                                placeholder="11"
+                                className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-0.5">Telefone (WhatsApp)</label>
+                            <div className="relative">
+                                <Phone size={14} className="absolute left-3 top-2 text-gray-400" />
                                 <input
                                     type="tel"
-                                    value={patientPhone}
-                                    onChange={e => setPatientPhone(e.target.value)}
-                                    placeholder="11 99999-9999"
+                                    value={phoneOnly}
+                                    onChange={e => setPhoneOnly(e.target.value.replace(/\D/g, ''))}
+                                    placeholder="99999-9999"
                                     className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
                             </div>

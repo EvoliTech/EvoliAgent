@@ -326,7 +326,7 @@ export const Settings: React.FC = () => {
                const { error: specError } = await supabase
                   .from('especialistas')
                   .delete()
-                  .eq('specialty', 'Google Calendar')
+                  .eq('created_by', 'Google Calendar')
                   .eq('IDEmpresa', empresaId);
 
                if (specError) console.error('Erro ao remover especialistas:', specError);

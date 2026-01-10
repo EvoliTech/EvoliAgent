@@ -29,13 +29,12 @@ export const MainSidebar: React.FC<MainSidebarProps> = ({ activePage, onNavigate
   return (
     <aside className="w-64 bg-slate-900 text-white flex flex-col h-full flex-shrink-0 transition-all duration-300">
       {/* Brand */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800">
-        <div className="font-bold text-xl tracking-tight flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg">C</span>
-          </div>
-          <span>Clínica<span className="text-blue-400">Sync</span></span>
-        </div>
+      <div className="h-20 flex items-center px-6 border-b border-slate-800">
+        <img
+          src="/logo_sidebar.png"
+          alt="Evolitech Logo"
+          className="h-10 w-auto"
+        />
       </div>
 
       {/* Navigation */}

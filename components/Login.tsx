@@ -51,9 +51,11 @@ export const Login: React.FC = () => {
 
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white mb-4 shadow-lg shadow-blue-200">
-                        <span className="font-bold text-xl">C</span>
-                    </div>
+                    <img
+                        src="/logo_login.png"
+                        alt="Evolitech Logo"
+                        className="h-14 w-auto mx-auto mb-6"
+                    />
                     <h2 className="text-2xl font-bold text-gray-900">
                         {isSignUp ? 'Criar Conta' : 'Bem-vindo de volta'}
                     </h2>

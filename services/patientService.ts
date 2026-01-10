@@ -27,9 +27,39 @@ export const patientService = {
     },
 
     async createPatient(empresaId: number, patient: Omit<Patient, 'id' | 'lastVisit' | 'createdAt'>): Promise<void> {
+        let cleanPhone = patient.phone.replace(/\D/g, '');
+        if (!cleanPhone.startsWith('55') && cleanPhone.length > 0) {
+            cleanPhone = '55' + cleanPhone;
+        }
+
         const phone = patient.phone.includes('@s.whatsapp.net')
             ? patient.phone
-            : `${patient.phone.replace(/\D/g, '')}@s.whatsapp.net`;
+            : `${cleanPhone}@s.whatsapp.net`;
+
+        // 1. Check for duplicates (Name or Phone)
+        const { data: existingPatient, error: checkError } = await supabase
+            .from('Cliente')
+            .select('id, nome, telefoneWhatsapp')
+            .eq('IDEmpresa', empresaId)
+            .or(`nome.eq."${patient.name}",telefoneWhatsapp.eq."${phone}"`)
+            .maybeSingle();
+
+        if (checkError) {
+            console.error('Error checking for duplicates:', checkError);
+        }
+
+        if (existingPatient) {
+            const isNameMatch = existingPatient.nome?.toLowerCase() === patient.name.toLowerCase();
+            const isPhoneMatch = existingPatient.telefoneWhatsapp === phone;
+
+            if (isNameMatch && isPhoneMatch) {
+                throw new Error('Já existe um paciente cadastrado com este nome e telefone.');
+            } else if (isNameMatch) {
+                throw new Error('Já existe um paciente cadastrado com este nome.');
+            } else {
+                throw new Error('Já existe um paciente cadastrado com este telefone.');
+            }
+        }
 
         const newCustomer: any = {
             nome: patient.name,
@@ -61,15 +91,56 @@ export const patientService = {
 
     async updatePatient(empresaId: number, id: string, patient: Partial<Patient>): Promise<void> {
         const updates: any = {};
-        if (patient.name) {
-            updates.nome = patient.name;
-            updates.nome_completo = patient.name;
+
+        if (patient.name || patient.phone) {
+            let phone: string | null = null;
+            if (patient.phone) {
+                let cleanPhone = patient.phone.replace(/\D/g, '');
+                if (!cleanPhone.startsWith('55') && cleanPhone.length > 0) {
+                    cleanPhone = '55' + cleanPhone;
+                }
+                phone = patient.phone.includes('@s.whatsapp.net')
+                    ? patient.phone
+                    : `${cleanPhone}@s.whatsapp.net`;
+            }
+
+            // Check if changes would conflict with another patient
+            const conflictQuery = supabase
+                .from('Cliente')
+                .select('id, nome, telefoneWhatsapp')
+                .eq('IDEmpresa', empresaId)
+                .neq('id', id); // Exclude current patient
+
+            let filter = '';
+            if (patient.name) filter += `nome.eq."${patient.name}"`;
+            if (phone) filter += (filter ? ',' : '') + `telefoneWhatsapp.eq."${phone}"`;
+
+            const { data: conflict, error: checkError } = await conflictQuery.or(filter).maybeSingle();
+
+            if (checkError) console.error('Error checking for update conflicts:', checkError);
+
+            if (conflict) {
+                const isNameMatch = patient.name && conflict.nome?.toLowerCase() === patient.name.toLowerCase();
+                const isPhoneMatch = phone && conflict.telefoneWhatsapp === phone;
+
+                if (isNameMatch && isPhoneMatch) {
+                    throw new Error('Já existe outro paciente cadastrado com este nome e telefone.');
+                } else if (isNameMatch) {
+                    throw new Error('Já existe outro paciente cadastrado com este nome.');
+                } else {
+                    throw new Error('Já existe outro paciente cadastrado com este telefone.');
+                }
+            }
+
+            if (patient.name) {
+                updates.nome = patient.name;
+                updates.nome_completo = patient.name;
+            }
+            if (patient.phone) {
+                updates.telefoneWhatsapp = phone;
+            }
         }
-        if (patient.phone) {
-            updates.telefoneWhatsapp = patient.phone.includes('@s.whatsapp.net')
-                ? patient.phone
-                : `${patient.phone.replace(/\D/g, '')}@s.whatsapp.net`;
-        }
+
         if (patient.email) updates.email = patient.email;
         if (patient.plano) updates.plano = patient.plano;
         if (patient.status) {
