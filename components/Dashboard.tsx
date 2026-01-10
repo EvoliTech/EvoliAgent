@@ -69,12 +69,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       }).length;
 
       const planCounts: Record<string, number> = {
-        'Unimed': 0, 'Amil': 0, 'Bradesco': 0, 'Particular': 0, 'Outros': 0
+        'Unimed': 0, 'Amil': 0, 'Bradesco': 0, 'Particular': 0, 'Uniodonto': 0, 'Outros': 0
       };
 
       patients.forEach(p => {
         const plan = p.plano || 'Outros';
-        if (['Unimed', 'Amil', 'Bradesco', 'Particular'].includes(plan)) {
+        if (['Unimed', 'Amil', 'Bradesco', 'Particular', 'Uniodonto'].includes(plan)) {
           planCounts[plan]++;
         } else {
           planCounts['Outros']++;
@@ -87,7 +87,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         { name: 'Amil', value: Math.round((planCounts['Amil'] / totalWithPlan) * 100), count: planCounts['Amil'], color: '#ec4899' },
         { name: 'Bradesco', value: Math.round((planCounts['Bradesco'] / totalWithPlan) * 100), count: planCounts['Bradesco'], color: '#8b5cf6' },
         { name: 'Particular', value: Math.round((planCounts['Particular'] / totalWithPlan) * 100), count: planCounts['Particular'], color: '#10b981' },
-        { name: 'Outros', value: Math.round((planCounts['Outros'] / totalWithPlan) * 100), count: planCounts['Outros'], color: '#f59e0b' }
+        { name: 'Uniodonto', value: Math.round((planCounts['Uniodonto'] / totalWithPlan) * 100), count: planCounts['Uniodonto'], color: '#f59e0b' },
+        { name: 'Outros', value: Math.round((planCounts['Outros'] / totalWithPlan) * 100), count: planCounts['Outros'], color: '#94a3b8' }
       ].sort((a, b) => b.value - a.value);
 
       setRecentPatientsList(patients.slice(0, 5));
@@ -420,13 +421,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
-              {/* Legend */}
-              <div className="flex-1 space-y-2">
-                {insuranceChartData.slice(0, 4).map(item => (
+              <div className="flex-1 space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                {insuranceChartData.map(item => (
                   <div key={item.name} className="flex items-center justify-between text-sm">
                     <div className="flex items-center">
                       <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: item.color }}></span>
-                      <span className="text-gray-600 truncate max-w-[80px]" title={item.name}>{item.name}</span>
+                      <span className="text-gray-600 truncate max-w-[85px]" title={item.name}>{item.name}</span>
                     </div>
                     <span className="font-semibold text-gray-900">{item.count}</span>
                   </div>

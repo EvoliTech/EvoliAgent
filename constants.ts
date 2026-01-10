@@ -112,8 +112,10 @@ export const CHART_DATA_MONTHLY = [
 ];
 
 export const CHART_DATA_INSURANCE = [
-  { name: 'Unimed', value: 35, color: '#3b82f6' }, // blue-500
-  { name: 'Amil', value: 25, color: '#ec4899' },   // pink-500
-  { name: 'Bradesco', value: 20, color: '#8b5cf6' }, // violet-500
-  { name: 'Particular', value: 20, color: '#10b981' }, // emerald-500
+  { name: 'Unimed', value: 30, color: '#3b82f6' }, // blue-500
+  { name: 'Amil', value: 20, color: '#ec4899' },   // pink-500
+  { name: 'Bradesco', value: 15, color: '#8b5cf6' }, // violet-500
+  { name: 'Particular', value: 15, color: '#10b981' }, // emerald-500
+  { name: 'Uniodonto', value: 10, color: '#f59e0b' }, // orange-500
+  { name: 'Outros', value: 10, color: '#94a3b8' }, // slate-400
 ];
