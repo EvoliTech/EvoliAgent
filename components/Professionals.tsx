@@ -5,6 +5,7 @@ import { specialistService } from '../services/specialistService';
 import { Mail, Phone, Edit2, Plus, BriefcaseMedical, CheckSquare, Square, Trash2, AlertTriangle } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { LoadingModal } from './ui/LoadingModal';
+import { AlertModal } from './ui/AlertModal';
 
 import { useCompany } from '../contexts/CompanyContext';
 
@@ -42,13 +43,29 @@ export const Professionals: React.FC = () => {
   // States para Modais
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTreatmentsModalOpen, setIsTreatmentsModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreatingSpecialist, setIsCreatingSpecialist] = useState(false);
 
   // States de Edição
   const [currentSpecialist, setCurrentSpecialist] = useState<Partial<Specialist>>({});
+  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [selectedSpecialistForTreatments, setSelectedSpecialistForTreatments] = useState<Specialist | null>(null);
-  const [specialistToDelete, setSpecialistToDelete] = useState<Specialist | null>(null);
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    onConfirm?: () => void;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
+    setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+  };
 
   // --- Handlers para Dados Básicos (Novo e Editar) ---
 
@@ -97,30 +114,29 @@ export const Professionals: React.FC = () => {
     } catch (error) {
       console.error('Error saving specialist', error);
       setIsCreatingSpecialist(false);
-      alert('Erro ao salvar especialista');
+      showAlert('Erro', 'Erro ao salvar especialista', 'error');
     }
   };
 
   const handleOpenDelete = (spec: Specialist) => {
-    setSpecialistToDelete(spec);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!specialistToDelete || !empresaId) return;
-
-    try {
-      await specialistService.deleteSpecialist(empresaId, specialistToDelete.id);
-      setIsDeleteModalOpen(false);
-      setIsEditModalOpen(false); // If called from edit modal
-      setSpecialistToDelete(null);
-
-      // Force refresh to update UI immediately
-      await loadSpecialists();
-    } catch (error) {
-      console.error('Error deleting specialist', error);
-      alert('Erro ao deletar especialista');
-    }
+    showAlert(
+      'Excluir Especialista',
+      `Tem certeza que deseja excluir o especialista ${spec.name}? Esta ação não pode ser desfeita.`,
+      'confirm',
+      async () => {
+        if (!empresaId) return;
+        try {
+          await specialistService.deleteSpecialist(empresaId, spec.id);
+          setIsEditModalOpen(false);
+          await loadSpecialists();
+          showAlert('Sucesso', 'Especialista excluído com sucesso!', 'success');
+        } catch (error) {
+          console.error('Error deleting specialist', error);
+          showAlert('Erro', 'Erro ao deletar especialista', 'error');
+        }
+      },
+      'Excluir'
+    );
   };
 
   // --- Handlers para Tratamentos ---
@@ -156,9 +172,10 @@ export const Professionals: React.FC = () => {
       await specialistService.updateSpecialist(empresaId, selectedSpecialistForTreatments);
       await loadSpecialists();
       setIsTreatmentsModalOpen(false);
+      showAlert('Sucesso', 'Tratamentos atualizados com sucesso!', 'success');
     } catch (error) {
       console.error('Error saving treatments', error);
-      alert('Erro ao salvar tratamentos');
+      showAlert('Erro', 'Erro ao salvar tratamentos', 'error');
     }
   };
 
@@ -395,41 +412,18 @@ export const Professionals: React.FC = () => {
         </div>
       </Modal>
 
-      {/* --- Modal de Deletar (Confirmação) --- */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="Excluir Especialista"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-center p-4 bg-red-50 rounded-full w-12 h-12 mx-auto mb-2 text-red-600">
-            <AlertTriangle size={24} />
-          </div>
-
-          <div className="text-center">
-            <h3 className="text-lg font-medium text-gray-900">Tem certeza?</h3>
-            <p className="text-sm text-gray-500 mt-2">
-              Você está prestes a excluir <strong>{specialistToDelete?.name}</strong>.
-              Esta ação não pode ser desfeita e removerá o especialista da lista.
-            </p>
-          </div>
-
-          <div className="flex justify-center gap-3 pt-4">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 w-full"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleDeleteConfirm}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 shadow-sm w-full flex items-center justify-center gap-2"
-            >
-              <Trash2 size={16} /> Confirmar Exclusão
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        confirmLabel={alertConfig.confirmLabel}
+        onConfirm={() => {
+          if (alertConfig.onConfirm) alertConfig.onConfirm();
+          setAlertConfig(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
 
       {/* --- Modal de Loading --- */}
       <LoadingModal

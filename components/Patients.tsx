@@ -4,6 +4,7 @@ import { patientService } from '../services/patientService';
 import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
+import { AlertModal } from './ui/AlertModal';
 
 import { useCompany } from '../contexts/CompanyContext';
 
@@ -30,6 +31,23 @@ export const Patients: React.FC = () => {
   const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [customPlano, setCustomPlano] = useState('');
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    onConfirm?: () => void;
+    confirmLabel?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
+    setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+  };
 
   // Fetch Patients on Mount & Realtime Subscription
   useEffect(() => {
@@ -54,7 +72,7 @@ export const Patients: React.FC = () => {
       setPatients(data);
     } catch (error) {
       console.error('Failed to load patients', error);
-      alert('Erro ao carregar pacientes do Supabase.');
+      showAlert('Erro', 'Erro ao carregar pacientes do Supabase.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -112,23 +130,29 @@ export const Patients: React.FC = () => {
 
   const handleDeletePatient = async (patient: Patient) => {
     setActiveMenuId(null);
-    if (confirm(`Tem certeza que deseja excluir o paciente ${patient.name}?`)) {
-      try {
-        if (empresaId) {
-          await patientService.deletePatient(empresaId, patient.id);
-          await loadPatients();
+    showAlert(
+      'Confirmar Exclusão',
+      `Tem certeza que deseja excluir o paciente ${patient.name}?`,
+      'confirm',
+      async () => {
+        try {
+          if (empresaId) {
+            await patientService.deletePatient(empresaId, patient.id);
+            await loadPatients();
+            showAlert('Sucesso', 'Paciente excluído com sucesso!', 'success');
+          }
+        } catch (error) {
+          showAlert('Erro', 'Erro ao excluir paciente.', 'error');
         }
-      } catch (error) {
-        alert("Erro ao excluir paciente.");
       }
-    }
+    );
   };
 
   const handleSavePatient = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name || !formData.phone) {
-      alert("Nome e telefone são obrigatórios.");
+      showAlert('Campo Obrigatório', 'Nome e telefone são obrigatórios.', 'warning');
       return;
     }
 
@@ -145,8 +169,9 @@ export const Patients: React.FC = () => {
 
       await loadPatients(); // Reload list
       setIsModalOpen(false);
+      showAlert('Sucesso', 'Paciente salvo com sucesso!', 'success');
     } catch (error) {
-      alert("Erro ao salvar paciente.");
+      showAlert('Erro', 'Erro ao salvar paciente.', 'error');
     }
   };
 
@@ -462,6 +487,18 @@ export const Patients: React.FC = () => {
         </form>
       </Modal>
 
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        confirmLabel={alertConfig.confirmLabel}
+        onConfirm={() => {
+          if (alertConfig.onConfirm) alertConfig.onConfirm();
+          setAlertConfig(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
     </div>
   );
 };

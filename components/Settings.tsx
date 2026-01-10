@@ -12,7 +12,9 @@ import {
    Clock,
    Trash2,
    Plus,
-   AlertCircle
+   AlertCircle,
+   Lock,
+   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService } from '../services/googleCalendarService';
@@ -22,6 +24,7 @@ import { Modal } from './ui/Modal';
 import { useCompany } from '../contexts/CompanyContext';
 import { companyService, CompanySettings } from '../services/companyService';
 import { formatWhatsApp } from '../utils';
+import { AlertModal } from './ui/AlertModal';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
@@ -61,6 +64,23 @@ export const Settings: React.FC = () => {
       can_delete: false
    });
    const [isAdminLoading, setIsAdminLoading] = useState(true);
+   const [alertConfig, setAlertConfig] = useState<{
+      isOpen: boolean;
+      title: string;
+      message: string;
+      type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+      onConfirm?: () => void;
+      confirmLabel?: string;
+   }>({
+      isOpen: false,
+      title: '',
+      message: '',
+      type: 'info'
+   });
+
+   const showAlert = (title: string, message: string, type: any = 'info', onConfirm?: () => void, confirmLabel?: string) => {
+      setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
+   };
 
    React.useEffect(() => {
       if (empresaId) {
@@ -162,123 +182,165 @@ export const Settings: React.FC = () => {
    };
 
    const handleSaveUser = async () => {
-      if (!currentUser.name && currentUser.role !== 'admin') {
-         alert('Por favor, insira o título/nome do usuário.');
-         return;
-      }
-
       if (!empresaId) return;
 
       try {
          if (currentUser.id) {
-            await userService.updateUser(empresaId, currentUser.id, currentUser);
+            await userService.updateUser(empresaId, currentUser.id, {
+               ...currentUser,
+               name: currentUser.name
+            });
          } else {
+            if (!currentUser.name) {
+               showAlert('Campo Obrigatório', 'Por favor, insira o título/nome do usuário.', 'warning');
+               return;
+            }
             await userService.createUser(empresaId, currentUser);
          }
          setIsUserModalOpen(false);
          loadUsers();
+         showAlert('Sucesso', 'Usuário salvo com sucesso!', 'success');
       } catch (error: any) {
-         alert('Erro ao salvar usuário: ' + error.message);
+         showAlert('Erro', 'Erro ao salvar usuário: ' + error.message, 'error');
       }
    };
 
    const handleDeleteUser = async (id: string) => {
-      if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
-      if (!empresaId) return;
-      try {
-         await userService.deleteUser(empresaId, id);
-         loadUsers();
-      } catch (error: any) {
-         alert(error.message);
+      showAlert(
+         'Confirmar Exclusão',
+         'Tem certeza que deseja excluir este usuário?',
+         'confirm',
+         async () => {
+            if (!empresaId) return;
+            try {
+               await userService.deleteUser(empresaId, id);
+               loadUsers();
+               showAlert('Excluído', 'Usuário removido com sucesso!', 'success');
+            } catch (error: any) {
+               showAlert('Erro', error.message, 'error');
+            }
+         }
+      );
+   };
+
+   const handleResetPassword = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+         showAlert(
+            'Alterar Senha',
+            `Deseja enviar um e-mail de redefinição de senha para ${user.email}?`,
+            'confirm',
+            async () => {
+               const { error } = await supabase.auth.resetPasswordForEmail(user.email!, {
+                  redirectTo: window.location.origin + '/settings',
+               });
+
+               if (error) {
+                  showAlert('Erro', 'Erro ao enviar e-mail: ' + error.message, 'error');
+               } else {
+                  showAlert('E-mail Enviado', 'E-mail de redefinição enviado! Verifique sua caixa de entrada para alterar a senha com segurança.', 'success');
+               }
+            }
+         );
       }
    };
 
    const saveIntegrationConfig = async () => {
-      if (!clientId || !clientSecret || !empresaId) return alert('Preencha ID e Secret');
+      if (!clientId || !clientSecret || !empresaId) {
+         showAlert('Campos Faltando', 'Por favor, preencha o Client ID e Client Secret.', 'warning');
+         return;
+      }
       const { error } = await supabase.from('integrations_config').upsert({
+         IDEmpresa: empresaId,
          service: 'google_calendar',
          client_id: clientId,
          client_secret: clientSecret,
-         updated_at: new Date().toISOString(),
-         IDEmpresa: empresaId
-      });
-      if (error) alert('Erro ao salvar credenciais: ' + error.message);
-      else {
+         updated_at: new Date().toISOString()
+      }, { onConflict: 'IDEmpresa,service' });
+
+      if (error) {
+         showAlert('Erro', 'Erro ao salvar credenciais: ' + error.message, 'error');
+      } else {
          setClientSecret('');
          setIsConfigLoaded(true);
-         alert('Credenciais salvas!');
+         showAlert('Sucesso', 'Credenciais salvas com sucesso!', 'success');
       }
    };
 
-   const connectGoogleAccount = async () => {
-      if (!empresaId) return alert('Empresa não identificada');
+   const handleConnectGoogle = async () => {
+      if (!empresaId) return showAlert('Erro', 'Empresa não identificada', 'error');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return alert('Faça login');
+      if (!user) return showAlert('Erro', 'Sessão expirada. Faça login novamente.', 'error');
+
       const redirectUri = window.location.origin + '/settings/callback';
       const { data, error } = await supabase.functions.invoke('google-auth', {
          body: { action: 'auth-url', redirectUri, empresaId }
       });
-      if (error) alert('Erro ao conectar: ' + error.message);
-      else if (data?.url) window.location.href = data.url;
+
+      if (error) {
+         showAlert('Erro', 'Erro ao conectar: ' + error.message, 'error');
+      } else if (data?.url) {
+         window.location.href = data.url;
+      }
    };
 
-   const disconnectGoogle = async () => {
-      if (!confirm('Tem certeza que deseja desconectar sua conta do Google? Esta ação removerá a integração da agenda, os especialistas importados e os agendamentos sincronizados.')) return;
+   const handleDisconnectGoogle = async () => {
+      showAlert(
+         'Desconectar Google',
+         'Tem certeza que deseja desconectar sua conta do Google? Esta ação removerá a integração da agenda, os especialistas importados e os agendamentos sincronizados.',
+         'confirm',
+         async () => {
+            if (!empresaId) return;
+            setIsSyncing(true);
+            try {
+               const { data: { user } } = await supabase.auth.getUser();
+               if (!user) throw new Error('Usuário não autenticado');
 
-      if (!empresaId) return;
+               const { data: adminUser } = await supabase
+                  .from('users')
+                  .select('id')
+                  .eq('email', user.email)
+                  .eq('IDEmpresa', empresaId)
+                  .eq('role', 'admin')
+                  .single();
 
-      try {
-         // Find the admin user to disconnect
-         const { data: admin } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('role', 'admin')
-            .eq('IDEmpresa', empresaId)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
+               if (!adminUser) throw new Error('Administrador não encontrado no banco de dados.');
 
-         if (!admin) {
-            alert('Erro: Administrador não encontrado no banco de dados.');
-            return;
-         }
+               // 1. Invoke Edge Function to clear tokens
+               const { error: fnError } = await supabase.functions.invoke('google-auth', {
+                  body: { action: 'disconnect', empresaId }
+               });
 
-         // 1. Invoke Edge Function to clear tokens (bypasses RLS issues)
-         const { error: fnError } = await supabase.functions.invoke('google-auth', {
-            body: { action: 'disconnect', empresaId }
-         });
+               if (fnError) throw fnError;
 
-         if (fnError) throw fnError;
+               // 2. Remove specialists imported from Google
+               const { error: specError } = await supabase
+                  .from('especialistas')
+                  .delete()
+                  .eq('specialty', 'Google Calendar')
+                  .eq('IDEmpresa', empresaId);
 
-         // 2. Remove specialists imported from Google
-         const { error: specError } = await supabase
-            .from('especialistas')
-            .delete()
-            .eq('specialty', 'Google Calendar')
-            .eq('IDEmpresa', empresaId);
+               if (specError) console.error('Erro ao remover especialistas:', specError);
 
-         if (specError) {
-            console.error('Erro ao remover especialistas importados:', specError);
-         }
+               // 3. Remove mirrored appointments
+               const { error: apptError } = await supabase
+                  .from('agendamentos')
+                  .delete()
+                  .not('google_event_id', 'is', null)
+                  .eq('IDEmpresa', empresaId);
 
-         // 3. Remove mirrored appointments
-         const { error: apptError } = await supabase
-            .from('agendamentos')
-            .delete()
-            .not('google_event_id', 'is', null)
-            .eq('IDEmpresa', empresaId);
+               if (apptError) console.error('Erro ao remover agendamentos:', apptError);
 
-         if (apptError) {
-            console.error('Erro ao remover agendamentos sincronizados:', apptError);
-         }
-
-         setGoogleAccount(null);
-         alert('Google Calendar desconectado com sucesso!');
-         window.location.reload();
-      } catch (error: any) {
-         console.error('Erro detalhado ao desconectar:', error);
-         alert('Erro ao desconectar: ' + error.message);
-      }
+               setGoogleAccount(null);
+               showAlert('Sucesso', 'Google Calendar desconectado com sucesso!', 'success');
+            } catch (error: any) {
+               showAlert('Erro', 'Erro ao desconectar: ' + error.message, 'error');
+            } finally {
+               setIsSyncing(false);
+            }
+         },
+         'Desconectar'
+      );
    };
 
    const handleSyncCalendars = async () => {
@@ -304,9 +366,9 @@ export const Settings: React.FC = () => {
                addedCount++;
             }
          }
-         alert(`Sincronização concluída! ${addedCount} novos calendários adicionados.`);
+         showAlert('Sincronização', `Sincronização concluída! ${addedCount} novos especialistas/calendários adicionados.`, 'success');
       } catch (error: any) {
-         alert('Erro na sincronização: ' + error.message);
+         showAlert('Erro', 'Erro na sincronização: ' + error.message, 'error');
       } finally {
          setIsSyncing(false);
       }
@@ -317,9 +379,9 @@ export const Settings: React.FC = () => {
       setIsSaving(true);
       try {
          await companyService.updateCompany(empresaId, company);
-         alert('Configurações salvas com sucesso!');
+         showAlert('Sucesso', 'Configurações salvas com sucesso!', 'success');
       } catch (error: any) {
-         alert('Erro ao salvar as configurações: ' + error.message);
+         showAlert('Erro', 'Erro ao salvar as configurações: ' + error.message, 'error');
       } finally {
          setIsSaving(false);
       }
@@ -459,9 +521,9 @@ export const Settings: React.FC = () => {
                            </div>
                         </div>
                         {googleAccount ? (
-                           <button onClick={disconnectGoogle} className="text-red-600 font-medium hover:underline">Desconectar</button>
+                           <button onClick={handleDisconnectGoogle} className="text-red-600 font-medium hover:underline">Desconectar</button>
                         ) : (
-                           <button onClick={connectGoogleAccount} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-all">Conectar</button>
+                           <button onClick={handleConnectGoogle} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-all">Conectar</button>
                         )}
                      </div>
                      {googleAccount && (
@@ -558,6 +620,25 @@ export const Settings: React.FC = () => {
                         </tbody>
                      </table>
                   </div>
+
+                  {/* Password Security Section */}
+                  <div className="mt-12 bg-gray-50 rounded-3xl p-8 border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6">
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                           <Lock size={24} />
+                        </div>
+                        <div>
+                           <h3 className="text-lg font-bold text-gray-900">Segurança da Conta</h3>
+                           <p className="text-sm text-gray-500">Deseja alterar sua senha? Enviaremos um link de confirmação para o seu e-mail.</p>
+                        </div>
+                     </div>
+                     <button
+                        onClick={handleResetPassword}
+                        className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold shadow-sm border border-gray-200 hover:bg-gray-50 transition-all flex items-center gap-2"
+                     >
+                        <Mail size={18} /> Alterar Minha Senha
+                     </button>
+                  </div>
                </div>
             );
          default:
@@ -596,7 +677,7 @@ export const Settings: React.FC = () => {
             <div className="space-y-6">
                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Título/Nome <span className="text-red-500">*</span></label>
-                  <input type="text" disabled={currentUser.role === 'admin'} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500" value={currentUser.name || ''} onChange={e => setCurrentUser({ ...currentUser, name: e.target.value })} />
+                  <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500" value={currentUser.name || ''} onChange={e => setCurrentUser({ ...currentUser, name: e.target.value })} />
                </div>
                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-4">
                   <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest"><Shield size={16} className="text-blue-600" /> Permissões</h4>
@@ -622,13 +703,25 @@ export const Settings: React.FC = () => {
                </div>
             </div>
          </Modal>
+
+         <AlertModal
+            isOpen={alertConfig.isOpen}
+            onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            type={alertConfig.type}
+            confirmLabel={alertConfig.confirmLabel}
+            onConfirm={() => {
+               if (alertConfig.onConfirm) alertConfig.onConfirm();
+               setAlertConfig(prev => ({ ...prev, isOpen: false }));
+            }}
+         />
       </div>
    );
 };
 
 const tabs = [
    { id: 'general', label: 'Dados da Clínica', icon: Building },
-   { id: 'rules', label: 'Agenda & Regras', icon: Calendar },
    { id: 'integrations', label: 'Integrações', icon: LinkIcon },
    { id: 'security', label: 'Segurança & Acesso', icon: Shield },
 ];
