@@ -136,7 +136,7 @@ serve(async (req) => {
                     email: userEmail,
                     google_access_token: tokens.access_token,
                     google_refresh_token: tokens.refresh_token,
-                    google_token_expires_at: expiresAt,
+                    google_token_expires_at: new Date(expiresAt).toISOString(),
                     google_email: userEmail,
                     role: 'admin',
                     IDEmpresa: empresaId
@@ -147,7 +147,7 @@ serve(async (req) => {
                 // Update existing user
                 const updatePayload: any = {
                     google_access_token: tokens.access_token,
-                    google_token_expires_at: expiresAt,
+                    google_token_expires_at: new Date(expiresAt).toISOString(),
                     google_email: userEmail
                 };
                 if (tokens.refresh_token) updatePayload.google_refresh_token = tokens.refresh_token;
@@ -321,7 +321,8 @@ async function getGoogleAccessToken(supabase: any, userEmail: string, empresaId:
     }
 
     let accessToken = user.google_access_token;
-    const expiresAt = user.google_token_expires_at || 0;
+    const expiresAtStr = user.google_token_expires_at;
+    const expiresAt = expiresAtStr ? new Date(expiresAtStr).getTime() : 0;
 
     // Refresh if expiring in < 5 mins
     if (Date.now() > expiresAt - 300000) {
@@ -350,7 +351,7 @@ async function getGoogleAccessToken(supabase: any, userEmail: string, empresaId:
 
         await supabase.from('users').update({
             google_access_token: accessToken,
-            google_token_expires_at: newExpiresAt
+            google_token_expires_at: new Date(newExpiresAt).toISOString()
         }).eq('email', userEmail).eq('IDEmpresa', empresaId);
 
         console.log("Token refreshed successfully.");
