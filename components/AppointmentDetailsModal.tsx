@@ -6,6 +6,7 @@ interface AppointmentDetailsModalProps {
     isOpen: boolean;
     onClose: () => void;
     event: GoogleEvent | null;
+    specialistName?: string;
     onEdit: (event: GoogleEvent) => void;
     onDelete: (event: GoogleEvent) => void;
 }
@@ -14,6 +15,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
     isOpen,
     onClose,
     event,
+    specialistName = 'Clínica',
     onEdit,
     onDelete
 }) => {
@@ -22,11 +24,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
     const startDate = event.start.dateTime ? new Date(event.start.dateTime) : new Date();
     const endDate = event.end.dateTime ? new Date(event.end.dateTime) : new Date();
 
-    // Helper to extract patient info from description if structured
-    // Expected format in description:
-    // Paciente: Name
-    // Telefone: Number
-    // Obs: Text
+    // Helper to extract patient info
     const getField = (text: string | undefined, label: string) => {
         if (!text) return '';
         const lines = text.split('\n');
@@ -37,6 +35,13 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
     const patientName = getField(event.description, 'Paciente:') || 'Paciente não identificado';
     const patientPhone = getField(event.description, 'Telefone:') || '';
     const observations = getField(event.description, 'Obs:') || event.description || 'Sem observações';
+
+    // Determinar o título display
+    // Se o summary já contém o formato (vem do Google), usamos como está
+    // Caso contrário (app), formatamos conforme pedido
+    const displayTitle = event.summary.includes(' - Paciente:')
+        ? event.summary
+        : `${specialistName} - Paciente: ${patientName}`;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -53,9 +58,6 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                     <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors" title="Enviar Email">
                         <Mail size={18} />
                     </button>
-                    <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
-                        <MoreVertical size={18} />
-                    </button>
                     <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full hover:text-gray-600 transition-colors ml-1">
                         <X size={20} />
                     </button>
@@ -66,7 +68,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                     <div className="flex gap-4">
                         <div className="w-3 h-3 mt-2 rounded bg-green-500 shrink-0 shadow-sm"></div>
                         <div>
-                            <h2 className="text-xl font-medium text-gray-900 leading-tight mb-1">{event.summary}</h2>
+                            <h2 className="text-xl font-bold text-gray-900 leading-tight mb-1">{displayTitle}</h2>
                             <p className="text-sm text-gray-500 flex flex-wrap gap-1">
                                 {startDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
                                 <span>⋅</span>
@@ -75,16 +77,22 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                         </div>
                     </div>
 
-                    {/* Patient Details Section */}
+                    {/* Content Section */}
                     <div className="space-y-4">
-
-                        {/* Patient */}
+                        {/* Procedure (Replacing old Patient field) */}
                         <div className="flex gap-4 items-start">
-                            <div className="w-5 flex justify-center mt-0.5 text-gray-400"><User size={18} /></div>
+                            <div className="w-5 flex justify-center mt-0.5 text-gray-400">
+                                <FileText size={18} />
+                            </div>
                             <div>
-                                <p className="text-sm text-gray-900 font-medium">Paciente: {patientName}</p>
-                                {patientPhone && <p className="text-sm text-gray-500">Telefone: {patientPhone}</p>}
-                                <p className="text-sm text-gray-500 mt-1">Obs: {observations}</p>
+                                {!(event.summary.includes(' - Paciente:')) && (
+                                    <>
+                                        <p className="text-sm text-gray-900 font-medium">Procedimento:</p>
+                                        <p className="text-sm text-gray-600">{event.summary}</p>
+                                    </>
+                                )}
+                                {patientPhone && <p className="text-sm text-gray-500 mt-1">Contato: {patientPhone}</p>}
+                                <p className="text-sm text-gray-500 mt-1 italic">Obs: {observations}</p>
                             </div>
                         </div>
 
@@ -92,7 +100,7 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                         <div className="flex gap-4 items-center">
                             <div className="w-5 flex justify-center text-gray-400"><CalendarIcon size={18} /></div>
                             <div>
-                                <p className="text-sm text-gray-700">Agenda Principal</p>
+                                <p className="text-sm text-gray-700">Agenda: {specialistName}</p>
                                 <p className="text-xs text-gray-400">Criado via EvoliAgent</p>
                             </div>
                         </div>

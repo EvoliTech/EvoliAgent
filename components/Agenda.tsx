@@ -370,6 +370,9 @@ export const Agenda: React.FC = () => {
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         event={selectedEvent}
+        specialistName={
+          specialists.find(s => s.calendarId === selectedEvent?.calendarId || s.id === selectedEvent?.calendarId)?.name || 'Clínica'
+        }
         onEdit={handleEditEvent}
         onDelete={handleDeleteEvent}
       />
