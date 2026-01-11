@@ -5,7 +5,8 @@ import {
   Users,
   Stethoscope,
   Settings,
-  LogOut
+  LogOut,
+  List
 } from 'lucide-react';
 import { PageType } from '../../types';
 
@@ -20,6 +21,7 @@ export const MainSidebar: React.FC<MainSidebarProps> = ({ activePage, onNavigate
   const menuItems = [
     { id: 'dashboard', label: 'Início', icon: LayoutDashboard },
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
+    { id: 'appointments', label: 'Agendamentos', icon: List },
     { id: 'patients', label: 'Pacientes', icon: Users },
     { id: 'professionals', label: 'Especialistas', icon: Stethoscope },
   ];

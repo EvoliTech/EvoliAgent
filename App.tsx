@@ -7,6 +7,7 @@ import { Professionals } from './components/Professionals';
 import { Patients } from './components/Patients';
 import { Settings } from './components/Settings';
 import { GoogleCallback } from './components/GoogleCallback';
+import { AppointmentsList } from './components/AppointmentsList';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -58,6 +59,8 @@ export default function App() {
         return <Dashboard onNavigate={setCurrentPage} />;
       case 'agenda':
         return <Agenda />;
+      case 'appointments':
+        return <AppointmentsList />;
       case 'patients':
         return <Patients />;
       case 'professionals':
