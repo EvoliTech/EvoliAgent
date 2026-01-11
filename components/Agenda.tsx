@@ -54,16 +54,10 @@ export const Agenda: React.FC = () => {
       const specialistList = await specialistService.fetchSpecialists(empresaId!);
       setSpecialists(specialistList);
 
-      // 3. Selection logic
+      // 3. Selection logic: Select ALL calendars by default
       if (selectedCalendarIds.length === 0 && specialistList.length > 0) {
-        // Find the first specialist that has a calendar linked
-        const firstWithCalendar = specialistList.find(s => s.calendarId);
-        if (firstWithCalendar?.calendarId) {
-          setSelectedCalendarIds([firstWithCalendar.calendarId]);
-        } else {
-          // Fallback to the first one even if no calendarId (for local view if supported later)
-          setSelectedCalendarIds([specialistList[0].id]);
-        }
+        const allIds = specialistList.map(s => s.calendarId || s.id).filter(Boolean) as string[];
+        setSelectedCalendarIds(allIds);
       }
     } catch (error) {
       console.error('Error loading agenda data:', error);

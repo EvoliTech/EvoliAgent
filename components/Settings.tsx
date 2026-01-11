@@ -83,7 +83,7 @@ export const Settings: React.FC = () => {
       setAlertConfig({ isOpen: true, title, message, type, onConfirm, confirmLabel });
       if (type === 'error') {
          logService.logError({
-            empresaId,
+            empresaId: empresaId || 0,
             message: `${title}: ${message}`,
             component: 'Settings.tsx',
             functionName: 'showAlert'
@@ -102,7 +102,7 @@ export const Settings: React.FC = () => {
 
    const loadCompanyData = async () => {
       try {
-         const data = await companyService.fetchCompany(empresaId);
+         const data = await companyService.fetchCompany(empresaId!);
          if (data) {
             const configuracoes = data.configuracoes || { dias_funcionamento: [] };
             if (!configuracoes.dias_funcionamento || configuracoes.dias_funcionamento.length === 0) {
