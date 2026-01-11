@@ -40,6 +40,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [ddd, setDdd] = useState('');
     const [phoneOnly, setPhoneOnly] = useState('');
     const [observations, setObservations] = useState('');
+    const [consultationType, setConsultationType] = useState<string>('');
 
     useEffect(() => {
         if (isOpen) {
@@ -78,6 +79,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 setDdd(dddVal);
                 setPhoneOnly(phoneOnlyVal);
                 setObservations(getField(initialData.description, 'Obs:'));
+                setConsultationType(getField(initialData.description, 'Tipo:'));
 
                 // We don't easily know which calendar it belongs to unless passed, defaulting to primary or first available
                 if (initialData.calendarId) setSelectedCalendarId(initialData.calendarId);
@@ -97,6 +99,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 setDdd('');
                 setPhoneOnly('');
                 setObservations('');
+                setConsultationType('');
                 setSearchTerm('');
             }
         }
@@ -231,6 +234,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 description: `Paciente: ${patientName}
 Telefone: ${finalPhone}
 WhatsApp: ${whatsappLink}
+Tipo: ${consultationType || '-'}
 Obs: ${observations || '-'}`,
                 start: { dateTime: startDate.toISOString() },
                 end: { dateTime: endDate.toISOString() },
@@ -434,6 +438,26 @@ Obs: ${observations || '-'}`,
                             rows={3}
                             className="w-full rounded-lg border-gray-300 border px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
                         />
+                    </div>
+
+                    {/* Consultation Type */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de consulta:</label>
+                        <div className="flex flex-wrap gap-3">
+                            {['Avaliação Geral', 'Retorno', 'Emergência'].map((type) => (
+                                <label key={type} className="flex items-center gap-2 cursor-pointer group">
+                                    <div
+                                        onClick={() => setConsultationType(consultationType === type ? '' : type)}
+                                        className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${consultationType === type ? 'bg-blue-600 border-blue-600 shadow-sm shadow-blue-200' : 'border-gray-300 group-hover:border-blue-400'}`}
+                                    >
+                                        {consultationType === type && <Check size={12} className="text-white" />}
+                                    </div>
+                                    <span className={`text-sm font-medium transition-colors ${consultationType === type ? 'text-blue-700' : 'text-gray-600'}`}>
+                                        {type}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
                     </div>
 
                 </div>

@@ -328,6 +328,7 @@ export const AppointmentsList: React.FC = () => {
                         const patientName = getField(event.description, 'Paciente:') || event.summary.split(' - Paciente:')[1] || event.summary;
                         const patientRaw = event.summary.includes(' - Paciente:') ? event.summary.split(' - Paciente:')[1].trim() : event.summary;
                         const specialist = specialists.find(s => s.calendarId === event.calendarId || s.id === event.calendarId);
+                        const type = getField(event.description, 'Tipo:');
 
                         return (
                             <div
@@ -374,10 +375,12 @@ export const AppointmentsList: React.FC = () => {
                                             <span className="text-sm font-bold text-slate-600">{specialist?.name || 'Clínica'}</span>
                                         </div>
 
-                                        <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
-                                            <Clock size={14} />
-                                            <span className="text-xs font-bold">Retorno</span>
-                                        </div>
+                                        {type && type !== '-' && (
+                                            <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                                                <Clock size={14} />
+                                                <span className="text-xs font-bold">{type}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
