@@ -13,7 +13,9 @@ import {
     Search,
     CheckCircle2,
     Clock3,
-    AlertCircle
+    AlertCircle,
+    Pencil,
+    Trash2
 } from 'lucide-react';
 import { useCompany } from '../contexts/CompanyContext';
 import { userService } from '../services/userService';
@@ -37,6 +39,7 @@ export const AppointmentsList: React.FC = () => {
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<GoogleEvent | null>(null);
     const [editingEvent, setEditingEvent] = useState<GoogleEvent | undefined>(undefined);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -162,6 +165,33 @@ export const AppointmentsList: React.FC = () => {
         days.push(d);
     }
 
+    const handleStatusUpdate = async (event: GoogleEvent, newStatus: string) => {
+        if (!adminEmail || !empresaId || !event.id) return;
+
+        setLoading(true);
+        try {
+            // Clean tags
+            const tags = ['[PENDENTE]', '[CONFIRMADO]', '[CONCLUIDO]', '[CONCLUÍDO]', '[CANCELADO]'];
+            let cleanSummary = event.summary;
+            tags.forEach(tag => {
+                cleanSummary = cleanSummary.replace(tag, '').trim();
+            });
+
+            const updatedSummary = `[${newStatus.toUpperCase()}] ${cleanSummary}`;
+
+            await googleCalendarService.updateEvent(empresaId, adminEmail, event.id, {
+                ...event,
+                summary: updatedSummary,
+            }, event.calendarId);
+
+            await loadEvents();
+        } catch (error: any) {
+            alert('Erro ao atualizar status: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const isToday = (date: Date) => date.toDateString() === today.toDateString();
     const isSelected = (date: Date) => date.toDateString() === currentDate.toDateString();
 
@@ -170,10 +200,11 @@ export const AppointmentsList: React.FC = () => {
     };
 
     const getStatusInfo = (summary: string) => {
-        if (summary.toLowerCase().includes('confirmado')) return { label: 'CONFIRMADO', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 };
-        if (summary.toLowerCase().includes('concluido') || summary.toLowerCase().includes('concluído')) return { label: 'CONCLUÍDO', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 };
-        if (summary.toLowerCase().includes('cancelado')) return { label: 'CANCELADO', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle };
-        return { label: 'PENDENTE', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: Clock3 };
+        const s = summary.toLowerCase();
+        if (s.includes('confirmado')) return { id: 'confirmado', label: 'CONFIRMADO', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 };
+        if (s.includes('concluido') || s.includes('concluído')) return { id: 'concluido', label: 'CONCLUÍDO', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 };
+        if (s.includes('cancelado')) return { id: 'cancelado', label: 'CANCELADO', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle };
+        return { id: 'pendente', label: 'PENDENTE', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: Clock3 };
     };
 
     const scrollToSelected = () => {
@@ -309,12 +340,26 @@ export const AppointmentsList: React.FC = () => {
                                     <span className="text-2xl font-black text-slate-800">
                                         {startTime ? startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Dia'}
                                     </span>
-                                    <span className="text-xs font-bold text-slate-400 mb-3">
+                                    <span className="text-xs font-bold text-slate-400 mb-2">
                                         {endTime ? endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Todo'}
                                     </span>
-                                    <div className={`px-2 py-1 rounded-lg text-[9px] font-black border flex items-center gap-1 ${status.color}`}>
-                                        <StatusIcon size={10} />
-                                        {status.label}
+                                    <div className="relative group/status">
+                                        <select
+                                            value={status.id}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => handleStatusUpdate(event, e.target.value)}
+                                            className={`
+                        appearance-none pl-6 pr-2 py-1 rounded-lg text-[9px] font-black border outline-none cursor-pointer transition-all
+                        ${status.color} hover:shadow-sm
+                      `}
+                                        >
+                                            <option value="pendente">PENDENTE</option>
+                                            <option value="confirmado">CONFIRMADO</option>
+                                            <option value="concluido">CONCLUÍDO</option>
+                                        </select>
+                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <StatusIcon size={10} />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -337,12 +382,57 @@ export const AppointmentsList: React.FC = () => {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex items-center gap-2">
-                                    <button className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all">
+                                <div className="relative">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveMenuId(activeMenuId === event.id ? null : (event.id || null));
+                                        }}
+                                        className={`p-2 rounded-full transition-all ${activeMenuId === event.id ? 'bg-slate-100 text-slate-800' : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100'}`}
+                                    >
                                         <MoreVertical size={20} />
                                     </button>
-                                </div>
 
+                                    {activeMenuId === event.id && (
+                                        <>
+                                            {/* Overlay invisível para fechar o menu ao clicar fora */}
+                                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}></div>
+
+                                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 py-2 animate-in fade-in zoom-in-95 duration-200">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveMenuId(null);
+                                                        setEditingEvent(event);
+                                                        setIsModalOpen(true);
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                                                        <Pencil size={16} />
+                                                    </div>
+                                                    <span className="font-bold">Editar agendamento</span>
+                                                </button>
+
+                                                <div className="h-px bg-gray-100 mx-2 my-1"></div>
+
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveMenuId(null);
+                                                        handleDeleteEvent(event);
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
+                                                        <Trash2 size={16} />
+                                                    </div>
+                                                    <span className="font-bold">Excluir agendamento</span>
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                                 {/* Decorative Pill */}
                                 <div className={`w-1.5 h-16 rounded-full ${specialist?.color.split(' ')[0] || 'bg-blue-100'} opacity-30 shadow-sm`}></div>
                             </div>
