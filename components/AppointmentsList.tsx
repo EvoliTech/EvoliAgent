@@ -53,7 +53,7 @@ export const AppointmentsList: React.FC = () => {
         if (adminEmail) {
             loadEvents();
         }
-    }, [currentDate, adminEmail, selectedSpecialistId]);
+    }, [currentDate, adminEmail, selectedSpecialistId, specialists]);
 
     const loadInitialData = async () => {
         try {
