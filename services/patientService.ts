@@ -148,6 +148,26 @@ export const patientService = {
             updates.status_lead_no_crm = patient.status === 'Ativo' ? 'novo' : 'arquivado';
         }
 
+        // New registration fields
+        if (patient.cpf !== undefined) updates.cpf = patient.cpf;
+        if (patient.rg !== undefined) updates.rg = patient.rg;
+        if (patient.dataNascimento !== undefined) updates.data_nascimento = patient.dataNascimento;
+        if (patient.genero !== undefined) updates.genero = patient.genero;
+        if (patient.estadoCivil !== undefined) updates.estado_civil = patient.estadoCivil;
+        if (patient.contatoEmergenciaNome !== undefined) updates.contato_emergencia_nome = patient.contatoEmergenciaNome;
+        if (patient.contatoEmergenciaTelefone !== undefined) updates.contato_emergencia_telefone = patient.contatoEmergenciaTelefone;
+        if (patient.cep !== undefined) updates.cep = patient.cep;
+        if (patient.enderecoRua !== undefined) updates.endereco_rua = patient.enderecoRua;
+        if (patient.enderecoNumero !== undefined) updates.endereco_numero = patient.enderecoNumero;
+        if (patient.enderecoBairro !== undefined) updates.endereco_bairro = patient.enderecoBairro;
+        if (patient.enderecoCidade !== undefined) updates.endereco_cidade = patient.enderecoCidade;
+        if (patient.enderecoEstado !== undefined) updates.endereco_estado = patient.enderecoEstado;
+        if (patient.enderecoComplemento !== undefined) updates.endereco_complemento = patient.enderecoComplemento;
+        if (patient.carteirinhaNumero !== undefined) updates.carteirinha_numero = patient.carteirinhaNumero;
+        if (patient.carteirinhaValidade !== undefined) updates.carteirinha_validade = patient.carteirinhaValidade;
+        if (patient.possuiAlergias !== undefined) updates.possui_alergias = patient.possuiAlergias;
+        if (patient.alergiasObservacoes !== undefined) updates.alergias_observacoes = patient.alergiasObservacoes;
+
         const { error } = await supabase
             .from('Cliente')
             .update(updates)
@@ -218,6 +238,25 @@ function mapCustomerToPatient(customer: SupabaseCustomer): Patient {
         plano: customer.plano,
         status: isActive ? 'Ativo' : 'Ativo', // Defaulting to Ativo for visibility for now
         lastVisit: customer.created_at ? new Date(customer.created_at).toLocaleDateString('pt-BR') : '-',
-        createdAt: customer.created_at ? new Date(customer.created_at) : undefined
+        createdAt: customer.created_at ? new Date(customer.created_at) : undefined,
+        // New registration fields mapping
+        cpf: customer.cpf,
+        rg: customer.rg,
+        dataNascimento: customer.data_nascimento,
+        genero: customer.genero,
+        estadoCivil: customer.estado_civil,
+        contatoEmergenciaNome: customer.contato_emergencia_nome,
+        contatoEmergenciaTelefone: customer.contato_emergencia_telefone,
+        cep: customer.cep,
+        enderecoRua: customer.endereco_rua,
+        enderecoNumero: customer.endereco_numero,
+        enderecoBairro: customer.endereco_bairro,
+        enderecoCidade: customer.endereco_cidade,
+        enderecoEstado: customer.endereco_estado,
+        enderecoComplemento: customer.endereco_complemento,
+        carteirinhaNumero: customer.carteirinha_numero,
+        carteirinhaValidade: customer.carteirinha_validade,
+        possuiAlergias: customer.possui_alergias,
+        alergiasObservacoes: customer.alergias_observacoes
     };
 }

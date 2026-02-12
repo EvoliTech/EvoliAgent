@@ -8,6 +8,7 @@ import { Patients } from './components/Patients';
 import { Settings } from './components/Settings';
 import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
+import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -16,6 +17,7 @@ import { useCompany } from './contexts/CompanyContext';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { empresaId, loading: companyLoading } = useCompany();
@@ -62,7 +64,23 @@ export default function App() {
       case 'appointments':
         return <AppointmentsList />;
       case 'patients':
-        return <Patients />;
+        return (
+          <Patients
+            onUpdateRegistration={(id) => {
+              setSelectedPatientId(id);
+              setCurrentPage('patient-registration-update');
+            }}
+          />
+        );
+      case 'patient-registration-update':
+        return selectedPatientId ? (
+          <PatientRegistrationUpdate
+            patientId={selectedPatientId}
+            onBack={() => setCurrentPage('patients')}
+          />
+        ) : (
+          <Patients />
+        );
       case 'professionals':
         return <Professionals />;
       case 'settings':

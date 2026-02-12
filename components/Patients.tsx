@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Patient } from '../types';
 import { patientService } from '../services/patientService';
-import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2, ClipboardList } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
 import { AlertModal } from './ui/AlertModal';
@@ -9,7 +9,11 @@ import { logService } from '../services/logService';
 
 import { useCompany } from '../contexts/CompanyContext';
 
-export const Patients: React.FC = () => {
+interface PatientsProps {
+  onUpdateRegistration?: (id: string) => void;
+}
+
+export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
   const { empresaId } = useCompany();
   // Estado principal dos pacientes
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -398,6 +402,18 @@ export const Patients: React.FC = () => {
                             <Trash2 className="w-4 h-4 mr-2 text-red-400" />
                             Excluir
                           </button>
+                          {onUpdateRegistration && (
+                            <button
+                              onClick={() => {
+                                onUpdateRegistration(patient.id);
+                                setActiveMenuId(null);
+                              }}
+                              className="flex items-center w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-50 mt-1"
+                            >
+                              <ClipboardList className="w-4 h-4 mr-2 text-blue-400" />
+                              Atualização Cadastral
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
