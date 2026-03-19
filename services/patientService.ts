@@ -27,14 +27,7 @@ export const patientService = {
     },
 
     async createPatient(empresaId: number, patient: Omit<Patient, 'id' | 'lastVisit' | 'createdAt'>): Promise<void> {
-        let cleanPhone = patient.phone.replace(/\D/g, '');
-        if (!cleanPhone.startsWith('55') && cleanPhone.length > 0) {
-            cleanPhone = '55' + cleanPhone;
-        }
-
-        const phone = patient.phone.includes('@s.whatsapp.net')
-            ? patient.phone
-            : `${cleanPhone}@s.whatsapp.net`;
+        const phone = patient.phone.replace(/\D/g, '');
 
         // 1. Check for duplicates (Name or Phone)
         const { data: existingPatient, error: checkError } = await supabase
@@ -95,13 +88,7 @@ export const patientService = {
         if (patient.name || patient.phone) {
             let phone: string | null = null;
             if (patient.phone) {
-                let cleanPhone = patient.phone.replace(/\D/g, '');
-                if (!cleanPhone.startsWith('55') && cleanPhone.length > 0) {
-                    cleanPhone = '55' + cleanPhone;
-                }
-                phone = patient.phone.includes('@s.whatsapp.net')
-                    ? patient.phone
-                    : `${cleanPhone}@s.whatsapp.net`;
+                phone = patient.phone.replace(/\D/g, '');
             }
 
             // Check if changes would conflict with another patient

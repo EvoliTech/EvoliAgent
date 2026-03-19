@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PageType } from './types';
-import { MainSidebar } from './components/Layout/MainSidebar';
+import { TopHeader } from './components/Layout/TopHeader';
 import { Dashboard } from './components/Dashboard';
 import { Agenda } from './components/Agenda';
 import { Professionals } from './components/Professionals';
@@ -9,6 +9,7 @@ import { Settings } from './components/Settings';
 import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
+import { Inventory } from './components/Inventory';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -81,6 +82,8 @@ export default function App() {
         ) : (
           <Patients />
         );
+      case 'inventory':
+        return <Inventory />;
       case 'professionals':
         return <Professionals />;
       case 'settings':
@@ -127,9 +130,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
+    <div className="flex flex-col h-screen bg-gray-50 font-sans">
       {/* Global Navigation */}
-      <MainSidebar
+      <TopHeader
         activePage={currentPage}
         onNavigate={setCurrentPage}
         onLogout={handleLogout}
@@ -137,8 +140,8 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto bg-gray-50 relative">
-        {renderContent()}
+      <div className="flex-1 overflow-auto bg-gray-50 relative flex flex-col">
+          {renderContent()}
       </div>
     </div>
   );
