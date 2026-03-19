@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Info, MoreVertical, FileDown, ArrowDownSquare, Loader2 } from 'lucide-react';
 import { ManageInventoryModal } from './ManageInventoryModal';
+import { StockOutModal } from './StockOutModal';
+import { EditProductModal } from './EditProductModal';
+import { DeleteProductModal } from './DeleteProductModal';
 import { useCompany } from '../contexts/CompanyContext';
 import { inventoryService, InventoryProduct } from '../services/inventoryService';
 
@@ -13,6 +16,23 @@ export const Inventory: React.FC = () => {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // History State
+  const [movements, setMovements] = useState<any[]>([]);
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+
+  // Stock Out State
+  const [selectedProductForOut, setSelectedProductForOut] = useState<InventoryProduct | null>(null);
+  const [isStockOutOpen, setIsStockOutOpen] = useState(false);
+
+  // Edit / Dropdown State
+  const [selectedProductForEdit, setSelectedProductForEdit] = useState<InventoryProduct | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+
+  // Delete Modal State
+  const [selectedProductForDelete, setSelectedProductForDelete] = useState<InventoryProduct | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const fetchProducts = async () => {
     if (!empresaId) return;
@@ -31,6 +51,25 @@ export const Inventory: React.FC = () => {
     fetchProducts();
   }, [empresaId]);
 
+  const fetchMovements = async () => {
+    if (!empresaId) return;
+    try {
+      setIsFetchingHistory(true);
+      const data = await inventoryService.getMovements(empresaId);
+      setMovements(data);
+    } catch (error) {
+       console.error(error);
+    } finally {
+      setIsFetchingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'historico') {
+      fetchMovements();
+    }
+  }, [activeTab, empresaId]);
+
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -38,9 +77,9 @@ export const Inventory: React.FC = () => {
   const hasLowStock = products.some(p => p.stock <= p.min_stock);
 
   return (
-    <div className="flex-1 w-full max-w-[1920px] mx-auto p-6 md:p-8 font-sans bg-gray-50 flex flex-col h-full overflow-hidden">
+    <div className="w-full max-w-[1920px] mx-auto p-6 md:p-8 font-sans bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6 shrink-0">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Estoque</h1>
         <button 
           onClick={() => setIsManageModalOpen(true)}
@@ -52,10 +91,10 @@ export const Inventory: React.FC = () => {
       </div>
 
       {/* Main Content Card */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col flex-1 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col">
         
         {/* Tabs */}
-        <div className="flex px-6 border-b border-gray-200 shrink-0 mt-2">
+        <div className="flex px-6 border-b border-gray-200 mt-2">
           <button
             onClick={() => setActiveTab('produtos')}
             className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
@@ -79,10 +118,10 @@ export const Inventory: React.FC = () => {
         </div>
 
         {/* Tab Content */}
-        <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-6">
+        <div className="p-6 flex flex-col gap-6">
           {activeTab === 'produtos' ? (
             isLoading ? (
-              <div className="flex-1 flex items-center justify-center">
+              <div className="flex items-center justify-center py-10">
                 <Loader2 className="animate-spin text-blue-600" size={32} />
               </div>
             ) : products.length > 0 ? (
@@ -149,14 +188,51 @@ export const Inventory: React.FC = () => {
                               {product.min_stock}
                             </td>
                             <td className="py-4 px-4 text-right">
-                              <button className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium py-1.5 px-3 rounded-md transition-colors shadow-sm w-full">
+                              <button 
+                                onClick={() => {
+                                  setSelectedProductForOut(product);
+                                  setIsStockOutOpen(true);
+                                }}
+                                className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium py-1.5 px-3 rounded-md transition-colors shadow-sm w-full"
+                              >
                                 Realizar baixa
                               </button>
                             </td>
-                            <td className="py-4 px-2 text-center text-gray-400 hover:text-gray-600">
-                              <button className="p-1 rounded-full hover:bg-gray-200 transition-colors">
+                            <td className="py-4 px-2 text-center relative">
+                              <button 
+                                onClick={() => setOpenDropdownId(openDropdownId === product.id ? null : product.id)}
+                                className="p-1 rounded-full hover:bg-gray-200 transition-colors text-gray-400 hover:text-gray-600"
+                              >
                                 <MoreVertical size={18} />
                               </button>
+                              
+                              {openDropdownId === product.id && (
+                                <>
+                                  <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)} />
+                                  <div className="absolute right-8 top-10 mt-1 w-36 bg-white rounded-lg shadow-lg border border-gray-100 z-20 overflow-hidden fade-in animate-in">
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedProductForEdit(product);
+                                        setIsEditModalOpen(true);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center transition-colors"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedProductForDelete(product);
+                                        setIsDeleteModalOpen(true);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors border-t border-gray-50"
+                                    >
+                                      Excluir
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </td>
                           </tr>
                         );
@@ -196,8 +272,56 @@ export const Inventory: React.FC = () => {
               </div>
             )
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              <p>O Histórico de movimentação aparecerá aqui.</p>
+            <div className="flex-1 overflow-x-auto min-h-[200px]">
+              {isFetchingHistory ? (
+                <div className="flex-1 flex items-center justify-center p-10">
+                  <Loader2 className="animate-spin text-blue-600" size={32} />
+                </div>
+              ) : movements.length > 0 ? (
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Produto</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase text-center">Tipo</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase text-center">Quantidade</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Responsável</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Observações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {movements.map((mov) => {
+                      const dateObj = new Date(mov.date);
+                      const formattedDate = dateObj.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                      return (
+                        <tr key={mov.id || Math.random()} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-4 px-4 text-sm font-medium text-gray-600 whitespace-nowrap">{formattedDate}</td>
+                          <td className="py-4 px-4 text-sm font-medium text-gray-900">{mov.inventory_products?.name || 'Produto excluído'}</td>
+                          <td className="py-4 px-4 text-sm text-center">
+                            <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                              mov.type === 'in' ? 'bg-green-100 text-green-700' : 
+                              mov.type === 'delete' ? 'bg-red-100 text-red-700' : 
+                              mov.type === 'adjust' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-orange-100 text-orange-700'
+                            }`}>
+                              {mov.type === 'in' ? 'Entrada' : mov.type === 'delete' ? 'Exclusão' : mov.type === 'adjust' ? 'Reajuste' : 'Baixa'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-sm text-center font-bold text-gray-800">
+                            {mov.type === 'in' ? '+' : mov.type === 'delete' ? '0' : mov.type === 'adjust' ? (mov.quantity > 0 ? '+' : '') : '-'}{mov.quantity}
+                          </td>
+                          <td className="py-4 px-4 text-sm text-gray-800">{mov.responsible_name}</td>
+                          <td className="py-4 px-4 text-sm text-gray-500 max-w-[200px] truncate" title={mov.notes || '-'}>{mov.notes || '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="flex-1 flex items-center justify-center p-10 text-gray-500">
+                  Nenhuma movimentação registrada ainda.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -206,7 +330,37 @@ export const Inventory: React.FC = () => {
       <ManageInventoryModal 
         isOpen={isManageModalOpen} 
         onClose={() => setIsManageModalOpen(false)} 
-        hasProducts={products.length > 0} 
+        products={products} 
+        onSuccess={fetchProducts}
+      />
+
+      <StockOutModal 
+        isOpen={isStockOutOpen}
+        onClose={() => {
+          setIsStockOutOpen(false);
+          setSelectedProductForOut(null);
+        }}
+        product={selectedProductForOut}
+        onSuccess={fetchProducts}
+      />
+
+      <EditProductModal 
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedProductForEdit(null);
+        }}
+        product={selectedProductForEdit}
+        onSuccess={fetchProducts}
+      />
+
+      <DeleteProductModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedProductForDelete(null);
+        }}
+        product={selectedProductForDelete}
         onSuccess={fetchProducts}
       />
     </div>
