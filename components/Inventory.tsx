@@ -6,6 +6,7 @@ import { EditProductModal } from './EditProductModal';
 import { DeleteProductModal } from './DeleteProductModal';
 import { useCompany } from '../contexts/CompanyContext';
 import { inventoryService, InventoryProduct } from '../services/inventoryService';
+import * as XLSX from 'xlsx';
 
 
 
@@ -33,6 +34,37 @@ export const Inventory: React.FC = () => {
   // Delete Modal State
   const [selectedProductForDelete, setSelectedProductForDelete] = useState<InventoryProduct | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const handleExportExcel = () => {
+    if (products.length === 0) {
+      alert("Não há produtos para exportar.");
+      return;
+    }
+
+    const dataForExport = products.map(product => {
+      const isLowStock = product.stock <= product.min_stock;
+      return {
+        'Nome do Produto': product.name,
+        'Qtde em Estoque': product.stock,
+        'Quantidade Mínima': product.min_stock,
+        'Situação': isLowStock ? 'Alerta - Estoque Baixo' : 'Normal'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataForExport);
+    const workbook = XLSX.utils.book_new();
+
+    worksheet['!cols'] = [
+      { wch: 40 }, // Nome do Produto
+      { wch: 18 }, // Qtde em Estoque
+      { wch: 18 }, // Quantidade Mínima
+      { wch: 25 }  // Situação
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Estoque');
+
+    XLSX.writeFile(workbook, `Relatorio_Estoque_${new Date().toLocaleDateString('pt-BR', { timeZone: 'UTC' }).replace(/\//g, '-')}.xlsx`);
+  };
 
   const fetchProducts = async () => {
     if (!empresaId) return;
@@ -242,8 +274,8 @@ export const Inventory: React.FC = () => {
                 </div>
 
                 {/* Footer Links */}
-                <div className="flex justify-end pt-4 border-t border-gray-100 shrink-0">
-                  <button className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors gap-1.5 p-1">
+                <div className="flex justify-end pt-4 border-t border-gray-100 mt-2 shrink-0">
+                  <button onClick={handleExportExcel} className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors gap-1.5 p-2 rounded-md hover:bg-blue-50">
                     <span className="text-gray-500 font-normal mr-1">Baixar lista de produtos</span>
                     <FileDown size={16} /> Exportar
                   </button>

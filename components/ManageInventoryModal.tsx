@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Trash2, Plus, Loader2, Search } from 'lucide-react';
 import { useCompany } from '../contexts/CompanyContext';
 import { inventoryService, InventoryProduct } from '../services/inventoryService';
@@ -30,6 +30,16 @@ export const ManageInventoryModal: React.FC<ManageInventoryModalProps> = ({
   const [alterSearch, setAlterSearch] = useState('');
   const [showAlertOnly, setShowAlertOnly] = useState(false);
   const [stockChanges, setStockChanges] = useState<Record<string, number>>({});
+  const [historicalNames, setHistoricalNames] = useState<string[]>([]);
+  const [focusedNameIndex, setFocusedNameIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'cadastrar' && empresaId) {
+      inventoryService.getAllProductNames(empresaId)
+        .then(setHistoricalNames)
+        .catch(console.error);
+    }
+  }, [isOpen, activeTab, empresaId]);
 
   const [confirmModalState, setConfirmModalState] = useState<{
     isOpen: boolean;
@@ -301,20 +311,48 @@ export const ManageInventoryModal: React.FC<ManageInventoryModalProps> = ({
               </div>
             )
           ) : (
-            <div className="w-full flex-1 flex flex-col fade-in animate-in overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-2 flex flex-col custom-scrollbar pb-4 mt-2">
+            <div className="w-full flex-1 flex flex-col fade-in animate-in overflow-visible">
+              <div className="flex-1 overflow-y-auto overflow-x-visible pr-2 flex flex-col custom-scrollbar pb-4 mt-2">
                 
                 {newProducts.map((prod, index) => (
                   <div key={prod.id} className="flex items-end gap-4 w-full text-left mb-4">
-                    <div className="flex-1">
+                    <div className="flex-1 relative">
                       {index === 0 && <label className="block text-xs font-semibold text-gray-800 mb-2">Nome do produto</label>}
                       <input 
                         type="text" 
+                        autoComplete="off"
                         placeholder="Ex: Resina Fotopolimerizável A2" 
                         value={prod.name}
                         onChange={(e) => updateProductRow(prod.id, 'name', e.target.value)}
+                        onFocus={() => setFocusedNameIndex(index)}
+                        onBlur={() => setFocusedNameIndex(null)}
                         className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
+                      
+                      {focusedNameIndex === index && historicalNames.length > 0 && (
+                        <div className="absolute top-[100%] left-0 w-full mt-1 bg-white border border-gray-100 rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] z-50 max-h-56 overflow-y-auto custom-scrollbar overflow-x-hidden">
+                          {(() => {
+                            const filtered = historicalNames.filter(name => 
+                              name.toLowerCase().includes(prod.name.toLowerCase()) && 
+                              name.toLowerCase() !== prod.name.toLowerCase()
+                            );
+                            if (filtered.length === 0) return null;
+                            return filtered.map((name, i) => (
+                              <div 
+                                key={i}
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); // Evita que o input perca o foco antes de registrar o clique
+                                  updateProductRow(prod.id, 'name', name);
+                                  setFocusedNameIndex(null);
+                                }}
+                                className="px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
+                              >
+                                {name}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      )}
                     </div>
                     <div className="w-40">
                       {index === 0 && <label className="block text-xs font-semibold text-gray-800 mb-2">Quantidade em estoque</label>}

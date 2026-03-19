@@ -57,6 +57,23 @@ export const inventoryService = {
     return data || [];
   },
 
+  async getAllProductNames(empresaId: number): Promise<string[]> {
+    const { data, error } = await supabase
+      .from('inventory_products')
+      .select('name')
+      .eq('IDEmpresa', empresaId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching all product names:', error);
+      return [];
+    }
+
+    // Return unique names
+    const names = data.map(item => item.name);
+    return Array.from(new Set(names));
+  },
+
   async addProducts(products: Omit<InventoryProduct, 'id' | 'created_at'>[]): Promise<InventoryProduct[]> {
     const { data, error } = await supabase
       .from('inventory_products')
