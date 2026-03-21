@@ -17,7 +17,8 @@ import {
   Globe,
   MessageSquare as MessageSquareIcon,
   Video,
-  MessageCircle
+  MessageCircle,
+  CircleDollarSign
 } from 'lucide-react';
 import { PageType } from '../../types';
 
@@ -37,6 +38,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
     { id: 'patients', label: 'Pacientes', icon: User },
+    { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
   ];
 
   return (
@@ -137,13 +139,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
       {/* Right Side Icons & Account */}
       <div className="flex items-center space-x-4">
         {/* Placeholder Button */}
-        <button className="hidden lg:flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors">
+        <a 
+          href="https://api.whatsapp.com/send/?phone=5547996777572&text=Ol%C3%A1%21+Estava+usando+o+EvoliSync+e+preciso+de+ajuda." 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hidden lg:flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
+        >
           <span>👋 Chamar especialista</span>
-        </button>
+        </a>
 
         {/* Action Icons */}
         <div className="flex items-center space-x-2 text-gray-500">
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><Search size={20} /></button>
+          <button onClick={() => onNavigate('patients')} className={`p-2 rounded-full transition-colors ${activePage === 'patients' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`} title="Buscar Pacientes"><Search size={20} /></button>
           <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><Bell size={20} /></button>
           <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><MessageSquare size={20} /></button>
           <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><CheckSquare size={20} /></button>

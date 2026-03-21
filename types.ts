@@ -1,5 +1,15 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro';
+
+export interface CommissionRule {
+  id: string;
+  quandoRecebe: string;
+  tipoComissao: string;
+  valor: string;
+  convenio: string;
+  especialidade: string;
+  treatments?: Record<string, string>; // Map of treatment id to commission value
+}
 
 export interface Specialist {
   id: string;

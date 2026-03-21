@@ -4,6 +4,7 @@ import { patientService } from '../services/patientService';
 import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2, ClipboardList } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
+import { PatientDetails } from './PatientDetails';
 import { AlertModal } from './ui/AlertModal';
 import { logService } from '../services/logService';
 
@@ -20,6 +21,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Estados de controle da interface
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -212,6 +214,16 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
     }
   };
 
+  if (selectedPatient) {
+    return (
+      <PatientDetails 
+        patient={selectedPatient} 
+        onBack={() => setSelectedPatient(null)} 
+        onEdit={() => handleEditPatient(selectedPatient)} 
+      />
+    );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
 
@@ -317,7 +329,11 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
               </tr>
             ) : filteredPatients.length > 0 ? (
               filteredPatients.map((patient) => (
-                <tr key={patient.id} className="hover:bg-gray-50 transition-colors">
+                <tr 
+                  key={patient.id} 
+                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedPatient(patient)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
@@ -383,7 +399,8 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
                       {activeMenuId === patient.id && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-xl z-50 border border-gray-100 py-1 animate-in fade-in zoom-in-95 duration-200">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleEditPatient(patient);
                               setActiveMenuId(null);
                             }}
@@ -393,7 +410,8 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
                             Editar
                           </button>
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleDeletePatient(patient);
                               setActiveMenuId(null);
                             }}
@@ -404,7 +422,8 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
                           </button>
                           {onUpdateRegistration && (
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 onUpdateRegistration(patient.id);
                                 setActiveMenuId(null);
                               }}

@@ -10,6 +10,7 @@ import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
 import { Inventory } from './components/Inventory';
+import { Financial } from './components/Financial';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -84,6 +85,8 @@ export default function App() {
         );
       case 'inventory':
         return <Inventory />;
+      case 'financeiro':
+        return <Financial />;
       case 'professionals':
         return <Professionals />;
       case 'settings':

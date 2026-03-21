@@ -39,7 +39,9 @@ export const specialistService = {
             throw error;
         }
 
-        return (data || []).map(mapSupabaseToSpecialist);
+        return (data || [])
+            .map(mapSupabaseToSpecialist)
+            .filter(specialist => !specialist.name.includes('@'));
     },
 
     async createSpecialist(empresaId: number, specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
