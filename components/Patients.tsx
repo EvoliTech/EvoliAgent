@@ -21,7 +21,21 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Estados de controle da interface
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(() => {
+    try {
+      const saved = localStorage.getItem('appState_patients_selectedPatient');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    if (selectedPatient) {
+      localStorage.setItem('appState_patients_selectedPatient', JSON.stringify(selectedPatient));
+    } else {
+      localStorage.removeItem('appState_patients_selectedPatient');
+    }
+  }, [selectedPatient]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -219,7 +233,11 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
       <PatientDetails 
         patient={selectedPatient} 
         onBack={() => setSelectedPatient(null)} 
-        onEdit={() => handleEditPatient(selectedPatient)} 
+        onEdit={() => {
+          if (onUpdateRegistration) {
+            onUpdateRegistration(selectedPatient.id);
+          }
+        }} 
       />
     );
   }

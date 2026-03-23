@@ -7,23 +7,29 @@ const lowerPermanent = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 
 const upperDeciduous = [55, 54, 53, 52, 51, 61, 62, 63, 64, 65];
 const lowerDeciduous = [85, 84, 83, 82, 81, 71, 72, 73, 74, 75];
 
-interface OdontogramProcedure {
+export interface OdontogramProcedure {
   id: string;
   treatmentName: string;
   isExtraction: boolean;
   notes: string;
 }
 
-export function Odontogram({ patientName }: { patientName: string }) {
+interface OdontogramProps {
+  patientName: string;
+  procedures: Record<number, OdontogramProcedure[]>;
+  setProcedures: React.Dispatch<React.SetStateAction<Record<number, OdontogramProcedure[]>>>;
+  onAppendToBudget?: (treatments: any[]) => void;
+}
+
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
-  const [procedures, setProcedures] = useState<Record<number, OdontogramProcedure[]>>({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTreatment, setSelectedTreatment] = useState('');
+  const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
 
   const handleToothClick = (tooth: number) => {
     setSelectedTooth(tooth);
-    setSelectedTreatment('');
+    setSelectedTreatments([]);
     setNotes('');
     setSearchTerm('');
   };
@@ -35,23 +41,37 @@ export function Odontogram({ patientName }: { patientName: string }) {
   const [archMode, setArchMode] = useState<'permanentes' | 'deciduos'>('permanentes');
 
   const handleSaveBudget = () => {
-    if (!selectedTreatment) return;
+    if (selectedTreatments.length === 0) return;
     
-    // Simple heuristic to check if it's an extraction
-    const isExtraction = selectedTreatment.toLowerCase().includes('exodontia') || selectedTreatment.toLowerCase().includes('extração');
-    
+    // Auto-create budget item payloads for Orçamentos sync
+    const budgetTreatments = selectedTreatments.map(t => ({
+      id: Math.random().toString(36).substr(2, 9),
+      treatmentName: t,
+      valor: '',
+      dente: selectedTooth!.toString(),
+      faces: '',
+      profissional: 'N/A',
+      convenio: 'N/A',
+      status: 'Pendente'
+    }));
+
+    if (onAppendToBudget) {
+      onAppendToBudget(budgetTreatments);
+    }
+
     setProcedures(prev => {
       const toothProcedures = prev[selectedTooth!] || [];
+      const newProcedures = selectedTreatments.map(t => ({
+        id: Math.random().toString(36).substr(2, 9),
+        treatmentName: t,
+        isExtraction: t.toLowerCase().includes('exodontia') || t.toLowerCase().includes('extração'),
+        notes
+      }));
       return {
         ...prev,
         [selectedTooth!]: [
           ...toothProcedures,
-          {
-            id: Math.random().toString(36).substr(2, 9),
-            treatmentName: selectedTreatment,
-            isExtraction,
-            notes
-          }
+          ...newProcedures
         ]
       };
     });
@@ -171,59 +191,71 @@ export function Odontogram({ patientName }: { patientName: string }) {
             <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-5">
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
-                  Procedimento
+                  Procedimentos
                 </label>
-                {!selectedTreatment ? (
-                  <div className="flex flex-col gap-2">
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input 
-                        type="text"
-                        autoFocus
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        placeholder="Buscar (ex: Exodontia)..."
-                        className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
-                      />
-                    </div>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden flex flex-col h-48 bg-gray-50 shadow-inner">
-                       <div className="overflow-y-auto flex-1 p-2 flex flex-col gap-1">
-                         {filteredTreatments.map(t => (
-                           <button
-                             key={t.id}
-                             onClick={() => setSelectedTreatment(t.name)}
-                             className="text-left px-3 py-2 rounded-md hover:bg-blue-600 hover:text-white text-sm truncate bg-white border border-gray-100 shadow-sm transition-colors"
-                           >
-                             {t.name}
-                           </button>
-                         ))}
-                         {filteredTreatments.length === 0 && (
-                            <div className="text-center py-6 text-sm text-gray-500">Nenhum procedimento encontrado</div>
-                         )}
-                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-start justify-between gap-3 shadow-sm">
-                     <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Selecionado</span>
-                        <span className="font-semibold text-green-900 text-sm leading-tight">{selectedTreatment}</span>
-                     </div>
-                     <button onClick={() => setSelectedTreatment('')} className="text-green-600 hover:text-green-800 text-xs font-semibold underline shrink-0 mt-0.5 bg-green-100/50 px-2 py-1 rounded">
-                       Trocar
-                     </button>
+                
+                {/* Selected Pills */}
+                {selectedTreatments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {selectedTreatments.map(t => (
+                      <div key={t} className="bg-green-50 border border-green-200 text-green-800 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
+                        <span className="truncate max-w-[200px] font-medium">{t}</span>
+                        <button onClick={() => setSelectedTreatments(prev => prev.filter(x => x !== t))} className="text-green-600 hover:text-green-900 ml-1">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
+
+                <div className="flex flex-col gap-2">
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text"
+                      autoFocus
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      placeholder="Buscar procedural (ex: Exodontia)..."
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+                    />
+                  </div>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden flex flex-col h-48 bg-gray-50 shadow-inner">
+                     <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                       {filteredTreatments.map(t => {
+                         const isSelected = selectedTreatments.includes(t.name);
+                         return (
+                           <button
+                             key={t.id}
+                             onClick={() => {
+                               if (!isSelected) {
+                                  setSelectedTreatments(prev => [...prev, t.name]);
+                                  setSearchTerm('');
+                               }
+                             }}
+                             disabled={isSelected}
+                             className={`w-full text-left px-3 py-2.5 rounded-md text-[13px] leading-tight border shadow-sm transition-colors ${isSelected ? 'bg-gray-100 text-gray-400 border-transparent cursor-not-allowed' : 'bg-white hover:bg-blue-600 hover:text-white border-gray-100'}`}
+                           >
+                             <span className="line-clamp-2">{t.name}</span>
+                           </button>
+                         );
+                       })}
+                       {filteredTreatments.length === 0 && (
+                          <div className="text-center py-6 text-sm text-gray-500">Nenhum procedimento encontrado</div>
+                       )}
+                     </div>
+                  </div>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
-                  Observações <span className="text-gray-400 font-normal">(Opcional)</span>
+                  Observações <span className="text-gray-400 font-normal">(Aplicado a todos os procedimentos)</span>
                 </label>
                 <textarea 
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  placeholder="Detalhes adicionais sobre o procedimento..."
+                  placeholder="Detalhes adicionais sobre o dente..."
                   className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none h-24 shadow-sm"
                 />
               </div>
@@ -237,11 +269,11 @@ export function Odontogram({ patientName }: { patientName: string }) {
                 Cancelar
               </button>
               <button 
-                disabled={!selectedTreatment}
+                disabled={selectedTreatments.length === 0}
                 onClick={handleSaveBudget}
                 className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md disabled:opacity-50 disabled:shadow-none"
               >
-                Enviar para Orçamento
+                Enviar {selectedTreatments.length > 0 ? `(${selectedTreatments.length})` : ''} para Orçamento
               </button>
             </div>
           </div>

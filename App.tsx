@@ -18,8 +18,32 @@ import { Loader2 } from 'lucide-react';
 import { useCompany } from './contexts/CompanyContext';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<PageType>(() => {
+    try {
+      const saved = localStorage.getItem('appState_currentPage');
+      if (saved) return saved as PageType;
+    } catch {}
+    return 'dashboard';
+  });
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('appState_selectedPatientId');
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('appState_currentPage', currentPage);
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (selectedPatientId) {
+      localStorage.setItem('appState_selectedPatientId', selectedPatientId);
+    } else {
+      localStorage.removeItem('appState_selectedPatientId');
+    }
+  }, [selectedPatientId]);
+
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { empresaId, loading: companyLoading } = useCompany();
@@ -58,44 +82,50 @@ export default function App() {
   };
 
   const renderContent = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard onNavigate={setCurrentPage} />;
-      case 'agenda':
-        return <Agenda />;
-      case 'appointments':
-        return <AppointmentsList />;
-      case 'patients':
-        return (
-          <Patients
-            onUpdateRegistration={(id) => {
-              setSelectedPatientId(id);
-              setCurrentPage('patient-registration-update');
-            }}
-          />
-        );
-      case 'patient-registration-update':
-        return selectedPatientId ? (
-          <PatientRegistrationUpdate
-            patientId={selectedPatientId}
-            onBack={() => setCurrentPage('patients')}
-          />
-        ) : (
-          <Patients />
-        );
-      case 'inventory':
-        return <Inventory />;
-      case 'financeiro':
-        return <Financial />;
-      case 'professionals':
-        return <Professionals />;
-      case 'settings':
-        return <Settings />;
-      case 'google-callback':
-        return <GoogleCallback onNavigate={setCurrentPage} />;
-      default:
-        return <div className="p-8 text-gray-500">Página em construção.</div>;
-    }
+    return (
+      <div className="w-full h-full relative">
+        <div className={currentPage === 'dashboard' ? 'block' : 'hidden'}>
+           <Dashboard onNavigate={setCurrentPage} />
+        </div>
+        <div className={currentPage === 'agenda' ? 'block' : 'hidden'}>
+           <Agenda />
+        </div>
+        <div className={currentPage === 'appointments' ? 'block' : 'hidden'}>
+           <AppointmentsList />
+        </div>
+        <div className={currentPage === 'patients' ? 'block w-full h-full' : 'hidden'}>
+           <Patients
+             onUpdateRegistration={(id) => {
+               setSelectedPatientId(id);
+               setCurrentPage('patient-registration-update');
+             }}
+           />
+        </div>
+        <div className={currentPage === 'patient-registration-update' ? 'block w-full h-full' : 'hidden'}>
+           {selectedPatientId ? (
+             <PatientRegistrationUpdate
+               patientId={selectedPatientId}
+               onBack={() => setCurrentPage('patients')}
+             />
+           ) : null}
+        </div>
+        <div className={currentPage === 'inventory' ? 'block' : 'hidden'}>
+           <Inventory />
+        </div>
+        <div className={currentPage === 'financeiro' ? 'block' : 'hidden'}>
+           <Financial />
+        </div>
+        <div className={currentPage === 'professionals' ? 'block' : 'hidden'}>
+           <Professionals />
+        </div>
+        <div className={currentPage === 'settings' ? 'block' : 'hidden'}>
+           <Settings />
+        </div>
+        <div className={currentPage === 'google-callback' ? 'block' : 'hidden'}>
+           <GoogleCallback onNavigate={setCurrentPage} />
+        </div>
+      </div>
+    );
   };
 
   if (loading || (session && companyLoading)) {
