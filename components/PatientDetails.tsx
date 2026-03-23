@@ -17,6 +17,9 @@ interface PatientDetailsProps {
 
 type TabType = 'Visão Geral' | 'Anamneses' | 'Orçamentos' | 'Tratamentos' | 'Pagamentos' | 'Evoluções' | 'Documentos' | 'Arquivos';
 
+import { useCompany } from '../contexts/CompanyContext';
+import { budgetService } from '../services/budgetService';
+
 export interface Category {
   id: string;
   name: string;
@@ -34,39 +37,45 @@ export interface Budget {
 
 export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack, onEdit }) => {
   const [activeTab, setActiveTab] = React.useState<TabType>('Visão Geral');
+  const { empresaId } = useCompany();
 
-  // Shared Procedures State (Persisted)
-  const [procedures, setProcedures] = React.useState<Record<number, OdontogramProcedure[]>>(() => {
-    try {
-      const saved = localStorage.getItem(`v3_procedures_${patient.id}`);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {};
-  });
+  // Shared Procedures State (DB Sync)
+  const [procedures, setProcedures] = React.useState<Record<number, OdontogramProcedure[]>>({});
+  // Budgets State (DB Sync)
+  const [budgets, setBudgets] = React.useState<Budget[]>([]);
+  const [isLoaded, setIsLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    localStorage.setItem(`v3_procedures_${patient.id}`, JSON.stringify(procedures));
-  }, [procedures, patient.id]);
+    if (empresaId && patient?.id) {
+       const load = async () => {
+         const patientIdNum = Number(patient.id);
+         const procs = await budgetService.fetchOdontogram(patientIdNum);
+         setProcedures(procs);
+         const fetchedBudgets = await budgetService.fetchBudgets(empresaId, patientIdNum);
+         setBudgets(fetchedBudgets as Budget[]);
+         setIsLoaded(true);
+       };
+       load();
+    }
+  }, [empresaId, patient?.id]);
 
-  // Budgets State (Persisted)
-  const [budgets, setBudgets] = React.useState<Budget[]>(() => {
-    try {
-      const saved = localStorage.getItem(`v3_budgets_list_${patient.id}`);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
   React.useEffect(() => {
-    localStorage.setItem(`v3_budgets_list_${patient.id}`, JSON.stringify(budgets));
-  }, [budgets, patient.id]);
+    if (isLoaded && patient?.id) {
+      budgetService.saveOdontogram(Number(patient.id), procedures);
+    }
+  }, [procedures, patient?.id, isLoaded]);
 
   const [openBudgetMenuId, setOpenBudgetMenuId] = React.useState<string | null>(null);
+  const [expandedBudgets, setExpandedBudgets] = React.useState<Record<string, boolean>>({});
 
   // Budget Modal State
   const [isNewBudgetModalOpen, setIsNewBudgetModalOpen] = React.useState(false);
   const [budgetToEdit, setBudgetToEdit] = React.useState<Budget | null>(null);
 
-  const handleAppendToBudgetFromOdontogram = (newTreatments: any[]) => {
+  const handleAppendToBudgetFromOdontogram = async (newTreatments: any[]) => {
+    let targetBudget: Budget | undefined;
+    let isNew = false;
+    
     setBudgets(prev => {
       const existingIdx = prev.findIndex(b => b.name === `Plano de tratamento de ${patient.name}` && b.status === 'Pendente');
       
@@ -74,13 +83,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
          const draft = prev[existingIdx];
          const mergedTreatments = [...draft.treatments, ...newTreatments];
          const total = mergedTreatments.reduce((sum, t) => sum + (parseFloat(t.valor) || 0), 0);
-         const updated = { ...draft, treatments: mergedTreatments, total };
-         const copy = [...prev];
-         copy[existingIdx] = updated;
-         return copy;
+         targetBudget = { ...draft, treatments: mergedTreatments, total };
+         return prev; // We will update after DB call
       } else {
          const total = newTreatments.reduce((sum, t) => sum + (parseFloat(t.valor) || 0), 0);
-         const brandNew: Budget = {
+         targetBudget = {
             id: Math.floor(Math.random() * 10000000).toString(),
             name: `Plano de tratamento de ${patient.name}`,
             date: new Date().toLocaleDateString('pt-BR'),
@@ -88,10 +95,23 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             status: 'Pendente',
             treatments: newTreatments
          };
-         return [brandNew, ...prev];
+         isNew = true;
+         return prev; // We will update after DB call
       }
     });
-    alert(`Procedimentos enviados para a aba Orçamentos com sucesso!`);
+
+    if (targetBudget && empresaId && patient?.id) {
+       const saved = await budgetService.saveBudget(empresaId, Number(patient.id), targetBudget);
+       if (saved) {
+          setBudgets(prev => {
+             if (isNew) return [saved, ...prev];
+             return prev.map(b => b.id === saved.id || b.id === targetBudget!.id ? saved : b);
+          });
+          alert(`Procedimentos enviados para a aba Orçamentos com sucesso!`);
+       } else {
+          alert('Erro ao sincronizar orçamento no banco de dados.');
+       }
+    }
   };
 
   // Categories state (Persisted)
@@ -433,14 +453,26 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   <div key={budget.id} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 hover:shadow-md transition-shadow">
                     <div className="flex items-center justify-between">
                       <div className="flex items-start gap-4">
-                        <button className="text-gray-400 hover:text-gray-600 mt-0.5"><ChevronDown size={20} /></button>
+                        <button 
+                          className="text-gray-400 hover:text-gray-600 mt-0.5"
+                          onClick={() => setExpandedBudgets(prev => ({ ...prev, [budget.id]: !prev[budget.id] }))}
+                        >
+                          <ChevronDown size={20} className={`transition-transform duration-200 ${expandedBudgets[budget.id] ? 'rotate-180' : ''}`} />
+                        </button>
                         <div 
                           className="flex flex-col cursor-pointer group/title"
                           onClick={() => { setBudgetToEdit(budget); setIsNewBudgetModalOpen(true); }}
                         >
-                          <h4 className="font-bold text-gray-800 tracking-tight text-[15px] group-hover/title:text-blue-600 transition-colors">{budget.name}</h4>
-                          <span className="text-sm text-gray-500 font-medium">
-                            {budget.date} <span className="mx-1 text-gray-300">|</span> #{budget.id}
+                          <div className="flex items-center gap-3">
+                            <h4 className="font-bold text-gray-800 tracking-tight text-[15px] group-hover/title:text-blue-600 transition-colors">{budget.name}</h4>
+                            {budget.treatments?.filter((t: any) => t.status === 'Pendente').length > 0 && (
+                               <span className="bg-orange-100/80 text-orange-700 text-[11px] px-2 py-0.5 rounded shadow-sm font-bold tracking-wide border border-orange-200/60">
+                                  {budget.treatments.filter((t: any) => t.status === 'Pendente').length} {budget.treatments.filter((t: any) => t.status === 'Pendente').length === 1 ? 'Pendência' : 'Pendências'}
+                               </span>
+                            )}
+                          </div>
+                          <span className="text-sm text-gray-500 font-medium mt-0.5">
+                            {budget.date} <span className="mx-1 text-gray-300">|</span> #{budget.numero || '-'}
                           </span>
                         </div>
                       </div>
@@ -452,7 +484,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                          
                          {budget.status === 'Pendente' ? (
                            <button 
-                             onClick={() => setBudgets(prev => prev.map(b => b.id === budget.id ? { ...b, status: 'Aprovado' } : b))}
+                             onClick={async () => {
+    if (!empresaId || !patient?.id) return;
+    const upd = { ...budget, status: 'Aprovado' };
+    const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
+    if (saved) setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+}}
                              className="border border-gray-200 rounded-lg px-4 py-1.5 font-bold text-gray-700 hover:bg-gray-50 text-[13px] shadow-sm transition-all"
                            >
                              Aprovar
@@ -488,7 +525,44 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                    <Printer size={14} className="text-gray-400" /> Imprimir
                                  </button>
                                  <button 
-                                   onClick={() => setBudgets(prev => prev.filter(b => b.id !== budget.id))}
+                                   onClick={async () => {
+    if (!window.confirm("Você tem certeza que deseja excluir esse orçamento permanentemente? (Isso limpará os dentes vinculados a ele)")) return;
+    const success = await budgetService.deleteBudget(budget.id);
+    if (success) {
+      setBudgets(prev => prev.filter(b => b.id !== budget.id));
+      // Clean up linked odontogram entries robustly (handles old data without matching IDs as well)
+      setProcedures(prev => {
+         const idsToRemove = new Set(budget.treatments?.map((t: any) => t.id));
+         
+         // Build a map of tooth -> names to remove (fallback for old unlinked data)
+         const namesToRemoveByTooth: Record<number, Set<string>> = {};
+         budget.treatments?.forEach((t: any) => {
+            const num = parseInt(t.dente);
+            if (!isNaN(num)) {
+               if (!namesToRemoveByTooth[num]) namesToRemoveByTooth[num] = new Set();
+               namesToRemoveByTooth[num].add(t.treatmentName || t.tratamento);
+            }
+         });
+
+         const newState = { ...prev };
+         let changed = false;
+         for (const toothStr in newState) {
+            const tooth = Number(toothStr);
+            const procs = newState[tooth] || [];
+            const fallbackNames = namesToRemoveByTooth[tooth] || new Set();
+
+            const filtered = procs.filter(p => !idsToRemove.has(p.id) && !fallbackNames.has(p.treatmentName));
+            if (filtered.length !== procs.length) {
+                if (filtered.length === 0) delete newState[tooth];
+                else newState[tooth] = filtered;
+                changed = true;
+            }
+         }
+         return changed ? newState : prev;
+      });
+    }
+    else alert("Erro ao excluir orçamento!");
+}}
                                    className="w-full text-left px-4 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 mt-1 border-t border-gray-50 pt-2"
                                  >
                                    <Trash2 size={14} className="text-red-400" /> Excluir
@@ -499,6 +573,43 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                          </div>
                       </div>
                     </div>
+
+                    {expandedBudgets[budget.id] && budget.treatments && budget.treatments.length > 0 && (
+                      <div className="mt-4 border-t border-gray-100 pt-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="bg-slate-50/50 rounded-lg overflow-hidden border border-slate-100">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-100/50 border-b border-slate-200">
+                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tratamento</th>
+                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Dente/Face</th>
+                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Profissional/Convênio</th>
+                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                               {budget.treatments.map((t: any, i: number) => (
+                                 <tr key={i} className="hover:bg-white transition-colors">
+                                   <td className="px-4 py-2.5 text-sm font-semibold text-slate-700">{t?.treatmentName || 'Desconhecido'}</td>
+                                   <td className="px-4 py-2.5 text-sm text-slate-500">
+                                     Dente {t?.dente || '-'} {t?.faces ? `- ${t.faces}` : ''}
+                                   </td>
+                                   <td className="px-4 py-2.5 text-sm text-slate-500">
+                                     <div className="flex flex-col">
+                                       <span className="font-medium text-slate-600">{t?.profissional || '-'}</span>
+                                       <span className="text-[10px] uppercase text-slate-400">{t?.convenio || '-'}</span>
+                                     </div>
+                                   </td>
+                                   <td className="px-4 py-2.5 text-sm font-bold text-slate-700 text-right">
+                                      {t?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(t.valor)) : '--'}
+                                   </td>
+                                 </tr>
+                               ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 ))}
               </div>
@@ -609,16 +720,23 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         proceduresSync={procedures}
         setProceduresSync={setProcedures}
         initialData={budgetToEdit}
-        onSave={(budget) => {
-          setBudgets(prev => {
-             const existIdx = prev.findIndex(b => b.id === budget.id);
-             if (existIdx >= 0) {
-                const copy = [...prev];
-                copy[existIdx] = budget;
-                return copy;
+        onSave={async (budget) => {
+          if (empresaId && patient?.id) {
+             const saved = await budgetService.saveBudget(empresaId, Number(patient.id), budget);
+             if (saved) {
+                setBudgets(prev => {
+                   const existIdx = prev.findIndex(b => b.id === saved.id || b.id === budget.id);
+                   if (existIdx >= 0) {
+                      const copy = [...prev];
+                      copy[existIdx] = saved;
+                      return copy;
+                   }
+                   return [saved, ...prev];
+                });
+             } else {
+                alert('Erro ao salvar o orçamento no banco de dados!');
              }
-             return [budget, ...prev];
-          });
+          }
         }}
       />
       </ErrorBoundary>

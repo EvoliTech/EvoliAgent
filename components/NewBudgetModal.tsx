@@ -26,6 +26,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [denteId, setDenteId] = useState('');
   const [faces, setFaces] = useState('');
   const [multiplicarPorDente, setMultiplicarPorDente] = useState(false);
+  const [observacoes, setObservacoes] = useState('');
 
   // Added treatments array
   const [addedTreatments, setAddedTreatments] = useState<any[]>([]);
@@ -68,7 +69,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
          faces,
          profissional,
          convenio,
-         status: 'Adicionado'
+         status: 'Adicionado',
+         observacoes
       } : t));
       setEditingPendingId(null);
     } else {
@@ -80,7 +82,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         faces,
         profissional,
         convenio,
-        status: 'Adicionado'
+        status: 'Adicionado',
+        observacoes
       };
 
       setAddedTreatments([...safeTreatments, t]);
@@ -109,6 +112,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setValor('');
     setDenteId('');
     setFaces('');
+    setObservacoes('');
   };
 
   const handleEditPending = (t: any) => {
@@ -119,6 +123,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setProfissional('Everton Oliveira'); // pre-fill or keep existing
     setConvenio('Particular'); // pre-fill or keep existing
     setValor(t.valor || '');
+    setObservacoes(t.observacoes || '');
   };
 
   const handleRemoveAddedTreatment = (tId: string, denteOrig: string) => {
@@ -279,6 +284,19 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                 </div>
               </div>
 
+              <div className="flex gap-4">
+                 <div className="w-full">
+                   <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Observações</label>
+                   <input 
+                     type="text" 
+                     value={observacoes} 
+                     onChange={e => setObservacoes(e.target.value)}
+                     placeholder="Notas importadas do odontograma ou anotações..."
+                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                   />
+                 </div>
+              </div>
+
               <div className="flex items-center justify-between pt-2">
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
                   <div className={`w-10 h-5 rounded-full shadow-inner transition-colors flex items-center relative ${multiplicarPorDente ? 'bg-blue-600' : 'bg-gray-300'}`} onClick={() => setMultiplicarPorDente(!multiplicarPorDente)}>
@@ -319,7 +337,12 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                            className={`hover:bg-orange-100/60 cursor-pointer transition-colors ${editingPendingId === t.id ? 'bg-orange-100' : ''}`}
                            onClick={() => handleEditPending(t)}
                         >
-                          <td className="px-5 py-3 text-sm font-semibold text-orange-900">{t.treatmentName}</td>
+                          <td className="px-5 py-3 text-sm font-semibold text-orange-900">
+                             <div className="flex flex-col">
+                               <span>{t.treatmentName}</span>
+                               {t.observacoes && <span className="text-xs text-orange-700/70 font-normal truncate max-w-xs">{t.observacoes}</span>}
+                             </div>
+                          </td>
                           <td className="px-5 py-3 text-sm text-orange-800">Dente {t.dente} {t.faces && `- ${t.faces}`}</td>
                           <td className="px-5 py-3 text-right">
                             <span className="text-orange-600 font-bold text-[11px] uppercase tracking-wider bg-white px-3 py-1.5 rounded shadow-sm border border-orange-100">Atualizar</span>
@@ -356,7 +379,12 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                    <tbody className="divide-y divide-gray-100">
                       {confirmedTreatments.map((t) => (
                         <tr key={t.id} className="hover:bg-slate-50/50">
-                          <td className="px-5 py-3 text-sm font-semibold text-slate-800">{t.treatmentName}</td>
+                          <td className="px-5 py-3 text-sm font-semibold text-slate-800">
+                             <div className="flex flex-col">
+                               <span>{t.treatmentName}</span>
+                               {t.observacoes && <span className="text-[11px] font-normal text-slate-500 mt-0.5 truncate max-w-[200px]">{t.observacoes}</span>}
+                             </div>
+                          </td>
                           <td className="px-5 py-3 text-sm text-slate-600">Dente {t.dente} {t.faces && `- ${t.faces}`}</td>
                           <td className="px-5 py-3 text-sm text-slate-600">
                              <div className="flex flex-col">

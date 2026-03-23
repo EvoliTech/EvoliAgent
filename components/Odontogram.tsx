@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search } from 'lucide-react';
+import { X, Search, Trash2 } from 'lucide-react';
 import { DEFAULT_TREATMENTS } from '../constants/treatments';
 
 const upperPermanent = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -44,15 +44,18 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
     if (selectedTreatments.length === 0) return;
     
     // Auto-create budget item payloads for Orçamentos sync
-    const budgetTreatments = selectedTreatments.map(t => ({
-      id: Math.random().toString(36).substr(2, 9),
+    const sharedIds = selectedTreatments.map(() => Math.random().toString(36).substr(2, 9));
+    
+    const budgetTreatments = selectedTreatments.map((t, idx) => ({
+      id: sharedIds[idx],
       treatmentName: t,
       valor: '',
       dente: selectedTooth!.toString(),
       faces: '',
       profissional: 'N/A',
       convenio: 'N/A',
-      status: 'Pendente'
+      status: 'Pendente',
+      observacoes: notes
     }));
 
     if (onAppendToBudget) {
@@ -61,8 +64,8 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
 
     setProcedures(prev => {
       const toothProcedures = prev[selectedTooth!] || [];
-      const newProcedures = selectedTreatments.map(t => ({
-        id: Math.random().toString(36).substr(2, 9),
+      const newProcedures = selectedTreatments.map((t, idx) => ({
+        id: sharedIds[idx],
         treatmentName: t,
         isExtraction: t.toLowerCase().includes('exodontia') || t.toLowerCase().includes('extração'),
         notes
@@ -189,6 +192,34 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
             </div>
             
             <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-5">
+                {/* Registros Anteriores (Manual Unmark Cleanup) */}
+                {selectedTooth && procedures[selectedTooth] && procedures[selectedTooth].length > 0 && (
+                   <div className="mb-6 bg-orange-50/70 p-4 rounded-xl border border-orange-100/50 shadow-sm animate-in fade-in">
+                     <label className="block text-[13px] font-bold text-orange-900 mb-3">
+                       Procedimentos Já Registrados
+                     </label>
+                     <div className="flex flex-col gap-2.5">
+                       {procedures[selectedTooth].map(p => (
+                         <div key={p.id} className="flex items-center justify-between text-[13px] bg-white border border-orange-100/50 px-3 py-2.5 rounded-lg shadow-sm">
+                           <span className="font-semibold text-gray-800 line-clamp-1">{p.treatmentName}</span>
+                           <button 
+                             onClick={() => setProcedures(prev => {
+                                 const updated = prev[selectedTooth].filter(x => x.id !== p.id);
+                                 const state = { ...prev };
+                                 if (updated.length === 0) delete state[selectedTooth];
+                                 else state[selectedTooth] = updated;
+                                 return state;
+                             })}
+                             className="text-gray-400 hover:text-red-500 rounded-md p-1.5 hover:bg-red-50 flex-shrink-0 transition-colors"
+                             title="Limpar marcação"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                )}
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
                   Procedimentos
