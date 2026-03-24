@@ -37,6 +37,9 @@ export const Settings: React.FC = () => {
    const [googleAccount, setGoogleAccount] = useState<string | null>(null);
    const [clientId, setClientId] = useState('');
    const [clientSecret, setClientSecret] = useState('');
+   const [openaiApiKey, setOpenaiApiKey] = useState('');
+   const [isGoogleConfigSaved, setIsGoogleConfigSaved] = useState(false);
+   const [isOpenAiConfigSaved, setIsOpenAiConfigSaved] = useState(false);
    const [isConfigLoaded, setIsConfigLoaded] = useState(false);
    const [company, setCompany] = useState<Partial<CompanySettings>>({
       nome: '',
@@ -129,10 +132,36 @@ export const Settings: React.FC = () => {
 
    const checkConfigs = async () => {
       if (!empresaId) return;
-      const { data } = await supabase.from('integrations_config').select('client_id').eq('service', 'google_calendar').eq('IDEmpresa', empresaId).maybeSingle();
+      const { data, error } = await supabase.from('integrations_config').select('service, client_id, client_secret, is_active').eq('IDEmpresa', empresaId);
       if (data) {
-         setClientId(data.client_id);
+         const google = data.find(d => d.service === 'google_calendar');
+         if (google && google.client_id) {
+            setClientId(google.client_id || '');
+            // se a coluna não existir ainda (null/undefined) ou for true, consideramos conectada
+            setIsGoogleConfigSaved(google.is_active !== false);
+         }
+         const openaiConfig = data.find(d => d.service === 'openai' || d.service === 'OpenAi');
+         if (openaiConfig && (openaiConfig.client_secret || openaiConfig.client_id)) {
+            setOpenaiApiKey(openaiConfig.client_secret || openaiConfig.client_id || '');
+            setIsOpenAiConfigSaved(openaiConfig.is_active !== false);
+         }
          setIsConfigLoaded(true);
+      } else if (error && error.code === '42703') {
+          // caso a coluna is_active ainda não tenha sido criada, faz um fallback pra manter o app rodando sem erro na tela
+          const { data: fbData } = await supabase.from('integrations_config').select('service, client_id, client_secret').eq('IDEmpresa', empresaId);
+          if (fbData) {
+              const google = fbData.find(d => d.service === 'google_calendar');
+              if (google && google.client_id) {
+                  setClientId(google.client_id || '');
+                  setIsGoogleConfigSaved(true);
+              }
+              const openaiConfig = fbData.find(d => d.service === 'openai' || d.service === 'OpenAi');
+              if (openaiConfig && (openaiConfig.client_secret || openaiConfig.client_id)) {
+                  setOpenaiApiKey(openaiConfig.client_secret || openaiConfig.client_id || '');
+                  setIsOpenAiConfigSaved(true);
+              }
+              setIsConfigLoaded(true);
+          }
       }
    };
 
@@ -254,25 +283,112 @@ export const Settings: React.FC = () => {
       }
    };
 
-   const saveIntegrationConfig = async () => {
-      if (!clientId || !clientSecret || !empresaId) {
-         showAlert('Campos Faltando', 'Por favor, preencha o Client ID e Client Secret.', 'warning');
+   const saveGoogleConfig = async () => {
+      if (!empresaId) return;
+      if (!clientId || !clientSecret) {
+         showAlert('Campos Faltando', 'Por favor, preencha o Client ID e Client Secret do Google.', 'warning');
          return;
       }
-      const { error } = await supabase.from('integrations_config').upsert({
-         IDEmpresa: empresaId,
-         service: 'google_calendar',
-         client_id: clientId,
-         client_secret: clientSecret,
-         updated_at: new Date().toISOString()
-      }, { onConflict: 'IDEmpresa,service' });
 
-      if (error) {
-         showAlert('Erro', 'Erro ao salvar credenciais: ' + error.message, 'error');
-      } else {
-         setClientSecret('');
-         setIsConfigLoaded(true);
-         showAlert('Sucesso', 'Credenciais salvas com sucesso!', 'success');
+      try {
+          const { data, error: selError } = await supabase
+              .from('integrations_config')
+              .select('service')
+              .eq('IDEmpresa', empresaId)
+              .eq('service', 'google_calendar')
+              .maybeSingle();
+
+          if (selError) throw selError;
+
+          const payload = {
+              IDEmpresa: empresaId,
+              service: 'google_calendar',
+              client_id: clientId,
+              client_secret: clientSecret,
+              is_active: true,
+              updated_at: new Date().toISOString()
+          };
+
+          if (data) {
+              const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
+              if (upError) throw upError;
+          } else {
+              const { error: inError } = await supabase.from('integrations_config').insert([payload]);
+              if (inError) throw inError;
+          }
+
+          setClientSecret('');
+          setIsGoogleConfigSaved(true);
+          showAlert('Sucesso', 'Credenciais do Google salvas com sucesso!', 'success');
+      } catch (err: any) {
+          showAlert('Erro', `Erro ao salvar credenciais do Google: ${err.message}`, 'error');
+      }
+   };
+
+   const saveOpenAIConfig = async () => {
+      if (!empresaId) return;
+      if (!openaiApiKey) {
+         showAlert('Campos Faltando', 'Por favor, preencha a OpenAI API Key (começa com sk-...).', 'warning');
+         return;
+      }
+
+      try {
+          const { data, error: selError } = await supabase
+              .from('integrations_config')
+              .select('service')
+              .eq('IDEmpresa', empresaId)
+              .eq('service', 'OpenAi')
+              .maybeSingle();
+
+          if (selError) throw selError;
+
+          const payload = {
+              IDEmpresa: empresaId,
+              service: 'OpenAi',
+              client_id: openaiApiKey,
+              client_secret: openaiApiKey,
+              is_active: true,
+              updated_at: new Date().toISOString()
+          };
+
+          if (data) {
+              const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'OpenAi');
+              if (upError) throw upError;
+          } else {
+              const { error: inError } = await supabase.from('integrations_config').insert([payload]);
+              if (inError) throw inError;
+          }
+
+          setIsOpenAiConfigSaved(true);
+          showAlert('Sucesso', 'Credencial da IA salva com sucesso!', 'success');
+      } catch (err: any) {
+          showAlert('Erro', `Erro ao salvar credenciais da IA: ${err.message}`, 'error');
+      }
+   };
+
+   const disconnectGoogleConfig = async () => {
+      if (!empresaId) return;
+      try {
+          const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
+          if (error) throw error;
+          
+          setIsGoogleConfigSaved(false);
+          showAlert('Sucesso', 'Credencial do Google foi desconectada!', 'success');
+      } catch (err: any) {
+          showAlert('Erro', `Erro ao desconectar credencial Google: ${err.message}`, 'error');
+      }
+   };
+
+   const disconnectOpenAIConfig = async () => {
+      if (!empresaId) return;
+      try {
+          const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).in('service', ['openai', 'OpenAi']);
+          if (error) throw error;
+          
+          setIsOpenAiConfigSaved(false);
+          showAlert('Sucesso', 'Credencial da IA foi desconectada!', 'success');
+      } catch (err: any) {
+          showAlert('Erro', `Erro ao desconectar credencial OpenAI: ${err.message}`, 'error');
       }
    };
 
@@ -548,8 +664,18 @@ export const Settings: React.FC = () => {
                         </div>
                      )}
                   </div>
-                  <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
-                     <h3 className="font-bold">Credenciais do Google (API)</h3>
+                   <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
+                     <div className="flex items-center justify-between">
+                        <h3 className="font-bold flex items-center gap-2">
+                           <img className="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" />
+                           Credenciais do Google (API)
+                        </h3>
+                        {isGoogleConfigSaved ? (
+                           <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">Conectado</span>
+                        ) : (
+                           <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">Desconectado</span>
+                        )}
+                     </div>
                      <div className="space-y-4">
                         <div>
                            <label className="block text-sm font-medium text-gray-700">Client ID</label>
@@ -559,7 +685,43 @@ export const Settings: React.FC = () => {
                            <label className="block text-sm font-medium text-gray-700">Client Secret</label>
                            <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Oculto" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm" />
                         </div>
-                        <button onClick={saveIntegrationConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200">Salvar Credenciais</button>
+                        <div className="pt-2 flex items-center justify-between">
+                           <button onClick={saveGoogleConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200">Salvar Credenciais do Google</button>
+                           {isGoogleConfigSaved ? (
+                              <button onClick={disconnectGoogleConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
+                           ) : clientId ? (
+                               <p className="text-gray-400 text-xs text-right pr-2">Preserva chaves (Desconectado)</p>
+                           ) : null}
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
+                     <div className="flex items-center justify-between">
+                        <h3 className="font-bold flex items-center gap-2">
+                           <span className="text-xl">✨</span>
+                           Inteligência Artificial (OpenAI)
+                        </h3>
+                        {isOpenAiConfigSaved ? (
+                           <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-medium">Conectado</span>
+                        ) : (
+                           <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">Desconectado</span>
+                        )}
+                     </div>
+                     <p className="text-sm text-gray-500">Defina sua Chave de API da OpenAI para utilizar recursos de melhoria de texto por inteligência artificial.</p>
+                     <div className="space-y-4">
+                        <div>
+                           <label className="block text-sm font-medium text-gray-700">OpenAI API Key (sk-...)</label>
+                           <input type="password" value={openaiApiKey} onChange={e => setOpenaiApiKey(e.target.value)} placeholder="Oculto" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm" />
+                        </div>
+                        <div className="pt-2 flex items-center justify-between">
+                           <button onClick={saveOpenAIConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 shadow-sm transition-all border border-gray-200">Salvar Credencial da IA</button>
+                           {isOpenAiConfigSaved ? (
+                              <button onClick={disconnectOpenAIConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
+                           ) : openaiApiKey ? (
+                               <p className="text-gray-400 text-xs text-right pr-2">Preserva chave (Desconectado)</p>
+                           ) : null}
+                        </div>
                      </div>
                   </div>
                </div>
