@@ -69,7 +69,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
          faces,
          profissional,
          convenio,
-         status: 'Adicionado',
+         status: 'Aguardando',
          observacoes
       } : t));
       setEditingPendingId(null);
@@ -82,7 +82,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         faces,
         profissional,
         convenio,
-        status: 'Adicionado',
+        status: 'Aguardando',
         observacoes
       };
 
@@ -409,15 +409,21 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
 
         <div className="p-6 border-t border-gray-200 bg-white flex justify-end gap-3 flex-shrink-0 relative z-20">
              <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold text-gray-600 hover:bg-gray-100 transition-colors text-sm">Cancelar</button>
-             <button 
+              <button 
                onClick={() => { 
                  const total = safeTreatments.reduce((sum, t) => sum + (parseFloat(t?.valor) || 0), 0);
+                 const hasPending = safeTreatments.some(t => t.status === 'Pendente');
+                 
+                 let finalStatus = 'Pendente';
+                 if (initialData?.status === 'Aprovado') finalStatus = 'Aprovado';
+                 else if (safeTreatments.length > 0 && !hasPending) finalStatus = 'Aguardando';
+
                  const budget = {
                    id: initialData ? initialData.id : Math.floor(Math.random() * 10000000).toString(),
                    name: budgetName,
                    date: date.split('-').reverse().join('/'),
                    total: total,
-                   status: initialData ? initialData.status : 'Pendente',
+                   status: finalStatus,
                    treatments: safeTreatments
                  };
                  onSave(budget); 

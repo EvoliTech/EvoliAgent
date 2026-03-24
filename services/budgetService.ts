@@ -6,7 +6,7 @@ export interface Budget {
   name: string;
   date: string;
   total: number;
-  status: 'Pendente' | 'Aprovado';
+  status: 'Pendente' | 'Aguardando' | 'Aprovado';
   treatments: any[];
 }
 
@@ -30,7 +30,7 @@ export const budgetService = {
       name: dbBudget.nome,
       date: dbBudget.data_orcamento,
       total: Number(dbBudget.total),
-      status: dbBudget.status as 'Pendente' | 'Aprovado',
+      status: dbBudget.status as 'Pendente' | 'Aguardando' | 'Aprovado',
       treatments: dbBudget.tratamentos || []
     }));
   },

@@ -3,7 +3,7 @@ import { Patient } from '../types';
 import { 
   ChevronLeft, Edit2, MessageCircle, Tag, CheckSquare, Plus, 
   MapPin, Phone, Calendar, User, FileText, ChevronRight, X,
-  ChevronDown, MoreVertical, Copy, Printer, Trash2
+  ChevronDown, MoreVertical, Copy, Printer, Trash2, Mic, Smile, Frown, Sparkles, Undo2
 } from 'lucide-react';
 import { Odontogram, OdontogramProcedure } from './Odontogram';
 import { NewBudgetModal } from './NewBudgetModal';
@@ -19,6 +19,7 @@ type TabType = 'Visão Geral' | 'Anamneses' | 'Orçamentos' | 'Tratamentos' | 'P
 
 import { useCompany } from '../contexts/CompanyContext';
 import { budgetService } from '../services/budgetService';
+import { evolutionService, Evolucao } from '../services/evolutionService';
 
 export interface Category {
   id: string;
@@ -43,6 +44,15 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [procedures, setProcedures] = React.useState<Record<number, OdontogramProcedure[]>>({});
   // Budgets State (DB Sync)
   const [budgets, setBudgets] = React.useState<Budget[]>([]);
+  
+  // Evolutions State
+  const [evolutions, setEvolutions] = React.useState<Evolucao[]>([]);
+  const [newEvoTratamentoId, setNewEvoTratamentoId] = React.useState<string>('');
+  const [newEvoData, setNewEvoData] = React.useState(new Date().toISOString().split('T')[0]);
+  const [newEvoProfissional, setNewEvoProfissional] = React.useState('Everton Oliveira');
+  const [newEvoTexto, setNewEvoTexto] = React.useState('');
+  const [isRecording, setIsRecording] = React.useState(false);
+
   const [isLoaded, setIsLoaded] = React.useState(false);
 
   React.useEffect(() => {
@@ -53,6 +63,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
          setProcedures(procs);
          const fetchedBudgets = await budgetService.fetchBudgets(empresaId, patientIdNum);
          setBudgets(fetchedBudgets as Budget[]);
+         
+         const evos = await evolutionService.fetchEvolutions(empresaId, patientIdNum);
+         setEvolutions(evos);
+
          setIsLoaded(true);
        };
        load();
@@ -66,6 +80,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   }, [procedures, patient?.id, isLoaded]);
 
   const [openBudgetMenuId, setOpenBudgetMenuId] = React.useState<string | null>(null);
+  const [openTreatmentMenuId, setOpenTreatmentMenuId] = React.useState<string | null>(null);
   const [expandedBudgets, setExpandedBudgets] = React.useState<Record<string, boolean>>({});
 
   // Budget Modal State
@@ -482,13 +497,29 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(budget.total)}
                          </span>
                          
-                         {budget.status === 'Pendente' ? (
+                         {budget.status !== 'Aprovado' ? (
                            <button 
                              onClick={async () => {
     if (!empresaId || !patient?.id) return;
-    const upd = { ...budget, status: 'Aprovado' };
+    const pendingCount = budget.treatments?.filter((t: any) => t.status === 'Pendente').length || 0;
+    if (pendingCount > 0) {
+       alert("Não é possível aprovar um orçamento com tratamentos pendentes de preenchimento.");
+       return;
+    }
+
+    const upd = { 
+       ...budget, 
+       status: 'Aprovado',
+       treatments: budget.treatments.map((t: any) => ({
+           ...t,
+           status: t.status === 'Aguardando' || t.status === 'Adicionado' ? 'Em andamento' : t.status
+       }))
+    };
     const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
-    if (saved) setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+    if (saved) {
+       setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+       setActiveTab('Tratamentos');
+    }
 }}
                              className="border border-gray-200 rounded-lg px-4 py-1.5 font-bold text-gray-700 hover:bg-gray-50 text-[13px] shadow-sm transition-all"
                            >
@@ -617,8 +648,361 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           </div>
         )}
 
+        {activeTab === 'Tratamentos' && (
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 animate-in fade-in">
+            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center justify-between">
+               Tratamentos em Andamento/Concluídos
+               <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{budgets.filter(b => b.status === 'Aprovado').length} Orçamentos Aprovados</span>
+            </h3>
+            
+            <Odontogram 
+               patientName={patient.name}
+               procedures={(() => {
+                  const result: Record<number, OdontogramProcedure[]> = {};
+                  budgets.filter(b => b.status === 'Aprovado').forEach(b => {
+                      b.treatments?.forEach(t => {
+                          const num = parseInt(t.dente);
+                          if (!isNaN(num)) {
+                              if (!result[num]) result[num] = [];
+                              
+                              // Carry over specific extraction state from main procedures if exists
+                              const originalProcs = procedures[num] || [];
+                              const matchedProc = originalProcs.find(op => op.id === t.id);
+                              
+                              result[num].push({
+                                 id: t.id,
+                                 treatmentName: t.treatmentName || t.tratamento,
+                                 isExtraction: matchedProc ? matchedProc.isExtraction : false,
+                                 notes: t.observacoes || '',
+                                 sourceTreatment: t,
+                                 sourceBudget: b
+                              } as any);
+                          }
+                      });
+                  });
+                  return result;
+               })()}
+               setProcedures={setProcedures}
+               viewMode={true}
+               onUpdateTreatment={async (budget, treatmentId, updates) => {
+                  if (!empresaId || !patient?.id) return;
+                  const upd = { 
+                     ...budget, 
+                     treatments: budget.treatments.map((t: any) => t.id === treatmentId ? { ...t, ...updates } : t)
+                  };
+                  const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
+                  if (saved) {
+                     setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+                  }
+               }}
+            />
+            
+            <div className="mt-12 pt-8 border-t border-gray-100">
+               <div className="grid grid-cols-[100px_1fr_60px_60px_120px_150px] gap-6 px-6 border-b border-gray-100 pb-3 mb-4 text-[14px] font-semibold text-slate-700">
+                  <div>Data</div>
+                  <div>Tratamento</div>
+                  <div className="text-center">Dente</div>
+                  <div className="text-center">Faces</div>
+                  <div>Valor</div>
+                  <div></div>
+               </div>
+               
+               <div className="flex flex-col gap-3">
+                  {budgets.filter(b => b.status === 'Aprovado').flatMap(b => b.treatments.map((t: any) => ({ ...t, budget: b}))).map((t: any) => (
+                      <div key={t.id} className="grid grid-cols-[100px_1fr_60px_60px_120px_150px] gap-6 items-center bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                         <div className="flex flex-col items-start gap-1">
+                            <span className="text-[14px] text-gray-600 font-medium">{t.budget.date}</span>
+                            <span className="text-[11px] text-gray-500 bg-gray-100/80 px-2 py-0.5 rounded-md font-semibold font-mono border border-gray-200/50">Orç. #{t.budget.numero || '-'}</span>
+                         </div>
+                         <div className="flex flex-col gap-1">
+                            <span className="text-[15px] text-[#2c3e50] font-semibold">{t.treatmentName || t.tratamento}</span>
+                            <span className="text-[13px] text-gray-500 flex items-center gap-2">
+                               {t.convenio || 'Particular'} 
+                               <span className="w-px h-3 bg-gray-300"></span>
+                               {t.valor ? `R$ ${t.valor}` : '--'}
+                               {t.profissional && <span className="w-px h-3 bg-gray-300"></span>}
+                               {t.profissional && `Dr(a) ${t.profissional.replace('Dr. ', '').replace('Dra. ', '')}`}
+                            </span>
+                         </div>
+                         <div className="text-center text-[14px] text-gray-500 font-medium">{t.dente || '-'}</div>
+                         <div className="text-center text-[14px] text-gray-500 font-medium">{t.faces || '-'}</div>
+                         <div className="text-[14px] text-slate-700 font-semibold">{t.valor ? `R$ ${t.valor}` : '--'}</div>
+                         
+                         <div className="flex items-center justify-end gap-1 relative">
+                             {t.status === 'Finalizado' || t.status === 'Concluído' ? (
+                                <span className="px-5 py-2 text-[13px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm">Finalizado</span>
+                             ) : (
+                                <button className="px-5 py-2 border border-gray-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-colors" onClick={async () => {
+                                      const upd = { ...t.budget, treatments: t.budget.treatments.map((x: any) => x.id === t.id ? {...x, status: 'Finalizado'} : x) };
+                                      const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), upd);
+                                      if (saved) setBudgets(prev => prev.map(b => b.id === t.budget.id ? saved : b));
+                                }}>Finalizar</button>
+                             )}
+                             
+                             <button className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors ml-1" onClick={() => setOpenTreatmentMenuId(openTreatmentMenuId === t.id ? null : t.id)}>
+                                <MoreVertical size={20} />
+                             </button>
+                             
+                             {openTreatmentMenuId === t.id && (
+                                <div className="absolute top-[110%] right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                   <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+                                     onClick={async () => {
+                                        const newName = window.prompt("Editar nome do tratamento:", t.treatmentName || t.tratamento);
+                                        if (newName) {
+                                            const upd = { ...t.budget, treatments: t.budget.treatments.map((x: any) => x.id === t.id ? {...x, treatmentName: newName} : x) };
+                                            const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), upd);
+                                            if (saved) setBudgets(prev => prev.map(b => b.id === t.budget.id ? saved : b));
+                                        }
+                                        setOpenTreatmentMenuId(null);
+                                     }}
+                                   >
+                                      <Edit2 size={16} className="text-gray-400" /> Editar
+                                   </button>
+                                   <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
+                                     onClick={async () => {
+                                        const newCost = window.prompt("Alterar custo (apenas número):", t.valor);
+                                        if (newCost !== null) {
+                                            const upd = { ...t.budget, treatments: t.budget.treatments.map((x: any) => x.id === t.id ? {...x, valor: newCost} : x) };
+                                            const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), upd);
+                                            if (saved) setBudgets(prev => prev.map(b => b.id === t.budget.id ? saved : b));
+                                        }
+                                        setOpenTreatmentMenuId(null);
+                                     }}
+                                   >
+                                      <span className="text-gray-400 font-bold px-1">$</span> Alterar custo
+                                   </button>
+                                   <div className="h-px bg-gray-100 my-1"></div>
+                                   <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                                     onClick={async () => {
+                                        if (!window.confirm("Deseja realmente cancelar este tratamento e enviá-lo de volta ao orçamento pendente?")) return;
+                                        setOpenTreatmentMenuId(null);
+                                        
+                                        const remainingTreatments = t.budget.treatments.filter((x: any) => x.id !== t.id);
+                                        const updOriginal = { ...t.budget, treatments: remainingTreatments };
+                                        
+                                        let success = false;
+                                        if (remainingTreatments.length === 0) {
+                                            success = await budgetService.deleteBudget(t.budget.id);
+                                        } else {
+                                            const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updOriginal);
+                                            success = !!saved;
+                                        }
+                                        
+                                        if (success) {
+                                           if (remainingTreatments.length === 0) {
+                                               setBudgets(prev => prev.filter(b => b.id !== t.budget.id));
+                                           } else {
+                                              const saved = await budgetService.fetchBudgets(empresaId!, Number(patient.id));
+                                              setBudgets(saved as Budget[]);
+                                           }
+
+                                           const restoredTreatment = { ...t, status: 'Pendente' };
+                                           delete restoredTreatment.budget;
+                                           await handleAppendToBudgetFromOdontogram([restoredTreatment]);
+                                        }
+                                     }}
+                                   >
+                                      <span className="rotate-180 text-red-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></span> Cancelar tratamento
+                                   </button>
+                                </div>
+                             )}
+                         </div>
+                      </div>
+                  ))}
+                  {budgets.filter(b => b.status === 'Aprovado').flatMap(b => b.treatments).length === 0 && (
+                     <div className="text-center py-12 text-sm text-gray-500 bg-gray-50/50 rounded-xl border border-gray-100">Nenhum tratamento aprovado ainda.</div>
+                  )}
+               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'Evoluções' && (
+          <div className="flex flex-col gap-6 animate-in fade-in">
+             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+                <h3 className="text-xl font-bold text-gray-800 mb-6">Evoluções</h3>
+                
+                {/* Form fields */}
+                <div className="flex gap-4 mb-4">
+                   <div className="w-1/3">
+                      <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newEvoProfissional} onChange={e => setNewEvoProfissional(e.target.value)}>
+                         <option>Everton Oliveira</option>
+                         <option>Outro Profissional</option>
+                      </select>
+                   </div>
+                   <div className="w-1/4">
+                      <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newEvoData} onChange={e => setNewEvoData(e.target.value)} />
+                   </div>
+                   <div className="flex-1">
+                      <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={newEvoTratamentoId} onChange={e => setNewEvoTratamentoId(e.target.value)}>
+                         <option value="">Vincular a um tratamento...</option>
+                         {budgets.filter(b => b.status === "Aprovado").map(b => (
+                             <optgroup label={`Orçamento #${b.numero || b.id.substring(0,4)}`} key={b.id}>
+                                {b.treatments.map((t:any) => (
+                                    <option key={t.id} value={`${b.id}|||${t.id}`}>
+                                       {t.treatmentName || t.tratamento} - Dente {t.dente} {t.faces ? `(${t.faces})` : ''}
+                                    </option>
+                                ))}
+                             </optgroup>
+                         ))}
+                      </select>
+                   </div>
+                </div>
+
+                {/* Text editor mock */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden flex flex-col focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                   <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center gap-2 overflow-x-auto">
+                      <button className="p-1.5 hover:bg-gray-200 rounded text-gray-600 font-bold font-serif w-8 h-8 flex items-center justify-center">B</button>
+                      <button className="p-1.5 hover:bg-gray-200 rounded text-gray-600 italic font-serif w-8 h-8 flex items-center justify-center">I</button>
+                      <button className="p-1.5 hover:bg-gray-200 rounded text-gray-600 line-through font-serif w-8 h-8 flex items-center justify-center">S</button>
+                      <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                      <button className="p-1.5 hover:bg-gray-200 rounded text-gray-600 font-bold w-8 h-8 flex items-center justify-center">🔗</button>
+                   </div>
+                   <textarea 
+                      className="w-full h-48 p-4 text-[14px] text-gray-700 outline-none resize-y" 
+                      placeholder="Descreva a evolução do tratamento aqui..."
+                      value={newEvoTexto}
+                      onChange={e => setNewEvoTexto(e.target.value)}
+                   />
+                </div>
+
+                <div className="flex items-center justify-between mt-4">
+                   <div className="flex items-center gap-4">
+                      <button 
+                         className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-[13px] font-semibold transition-colors shadow-sm ${isRecording ? 'border-red-400 text-red-600 bg-red-50 animate-pulse' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                         onClick={() => {
+                            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                               alert("Seu navegador não suporta reconhecimento de voz.");
+                               return;
+                            }
+                            if (isRecording) {
+                               setIsRecording(false);
+                               return;
+                            }
+                            setIsRecording(true);
+                            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                            const recognition = new SpeechRecognition();
+                            recognition.lang = 'pt-BR';
+                            recognition.continuous = true;
+                            recognition.interimResults = true;
+                            
+                            recognition.onresult = (event: any) => {
+                               let finalMsg = '';
+                               for (let i = event.resultIndex; i < event.results.length; ++i) {
+                                   if (event.results[i].isFinal) finalMsg += event.results[i][0].transcript;
+                               }
+                               if (finalMsg) setNewEvoTexto(prev => prev + (prev.endsWith(' ') || prev.length === 0 ? '' : ' ') + finalMsg);
+                            };
+                            recognition.onerror = () => setIsRecording(false);
+                            recognition.onend = () => setIsRecording(false);
+                            recognition.start();
+                         }}
+                      >
+                         <Mic size={16} /> {isRecording ? 'Gravando...' : 'Transcrever com IA'}
+                      </button>
+                      
+                      {newEvoTexto.length > 5 && !isRecording && (
+                         <div className="flex items-center gap-2 text-[13px] font-semibold text-gray-500 animate-in fade-in zoom-in slide-in-from-left-4">
+                            A transcrição ficou boa? 
+                            <button className="text-emerald-500 hover:scale-110 transition-transform"><Smile size={18} /></button>
+                            <button className="text-red-400 hover:scale-110 transition-transform"><Frown size={18} /></button>
+                         </div>
+                      )}
+                   </div>
+
+                   <button 
+                     onClick={async () => {
+                        if (!newEvoTratamentoId) { alert('Selecione um tratamento para vincular a evolução.'); return; }
+                        if (!newEvoTexto.trim()) { alert('Digite o texto da evolução.'); return; }
+                        
+                        const [bId, tId] = newEvoTratamentoId.split('|||');
+                        const b = budgets.find(x => x.id === bId);
+                        const t = b?.treatments.find((x:any) => x.id === tId);
+
+                        const novo: Evolucao = {
+                           empresa_id: empresaId!,
+                           paciente_id: Number(patient.id),
+                           orcamento_id: bId,
+                           tratamento_id: tId,
+                           tratamento_nome: t?.treatmentName || t?.tratamento || 'Desconhecido',
+                           dente: t?.dente || '',
+                           faces: t?.faces || '',
+                           orcamento_numero: b?.numero ? `#${b.numero}` : `#${bId.substring(0,4)}`,
+                           texto: newEvoTexto,
+                           data_evolucao: newEvoData.split('-').reverse().join('/'),
+                           profissional: newEvoProfissional
+                        };
+
+                        const salvou = await evolutionService.saveEvolution(novo);
+                        if (salvou) {
+                           setEvolutions(prev => [salvou, ...prev]);
+                           setNewEvoTexto('');
+                           setNewEvoTratamentoId('');
+                        } else {
+                           alert('Falha ao salvar a evolução.');
+                        }
+                     }}
+                     className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm cursor-pointer"
+                   >
+                     Salvar evolução
+                   </button>
+                </div>
+             </div>
+
+             {/* Histórico Section */}
+             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+                <div className="flex items-center justify-between mb-6">
+                   <h3 className="text-xl font-bold text-gray-800">Histórico</h3>
+                   <div className="flex gap-3">
+                      <button className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 bg-blue-50/50 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
+                         <FileText size={16} /> Assinar digitalmente
+                      </button>
+                      <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
+                         <Printer size={16} /> Imprimir
+                      </button>
+                   </div>
+                </div>
+
+                <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-4 mb-6 flex items-start gap-3">
+                   <Sparkles className="text-blue-500 mt-0.5" size={18} />
+                   <p className="text-[13px] text-blue-800 font-medium">Você tem 10 assinaturas digitais grátis para testar o novo recurso. Para assinar quantos documentos quiser, assine um plano.</p>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                   {evolutions.map(evo => (
+                      <div key={evo.id} className="border border-gray-200 rounded-xl p-5 hover:shadow-sm transition-shadow bg-white flex flex-col gap-3 relative group">
+                         <p className="text-[15px] text-gray-800 whitespace-pre-wrap leading-relaxed">{evo.texto}</p>
+                         <div className="flex flex-col gap-0.5 mt-1">
+                            <span className="text-[13px] font-semibold text-gray-500">
+                               {evo.tratamento_nome} - Dente {evo.dente || '-'} {evo.faces ? `- ${evo.faces}` : ''} - Orç. {evo.orcamento_numero}
+                            </span>
+                            <span className="text-[12px] text-gray-400">
+                               {evo.data_evolucao} <span className="mx-1">|</span> Dr(a) {evo.profissional.replace('Dr. ', '').replace('Dra. ', '')}
+                            </span>
+                         </div>
+                         <button 
+                           onClick={async () => {
+                               if(window.confirm("Deseja deletar esta evolução?")) {
+                                   if(evo.id && await evolutionService.deleteEvolution(evo.id)) {
+                                       setEvolutions(prev => prev.filter(e => e.id !== evo.id));
+                                   }
+                               }
+                           }}
+                           className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all">
+                            <Trash2 size={16} />
+                         </button>
+                      </div>
+                   ))}
+                   {evolutions.length === 0 && (
+                      <div className="text-center py-8 text-sm text-gray-500 bg-gray-50/50 rounded-xl border border-gray-100">Nenhuma evolução registrada ainda.</div>
+                   )}
+                </div>
+             </div>
+          </div>
+        )}
+
         {/* Other Tabs content placeholder */}
-        {activeTab !== 'Visão Geral' && activeTab !== 'Orçamentos' && (
+        {activeTab !== 'Visão Geral' && activeTab !== 'Orçamentos' && activeTab !== 'Tratamentos' && activeTab !== 'Evoluções' && (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 text-center min-h-[400px] flex flex-col justify-center items-center h-full">
             <span className="text-gray-400 mb-2"><FileText size={48} /></span>
             <h3 className="text-lg font-medium text-gray-700">Aba em desenvolvimento</h3>

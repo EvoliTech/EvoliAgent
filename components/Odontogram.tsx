@@ -12,6 +12,8 @@ export interface OdontogramProcedure {
   treatmentName: string;
   isExtraction: boolean;
   notes: string;
+  sourceTreatment?: any;
+  sourceBudget?: any;
 }
 
 interface OdontogramProps {
@@ -19,19 +21,39 @@ interface OdontogramProps {
   procedures: Record<number, OdontogramProcedure[]>;
   setProcedures: React.Dispatch<React.SetStateAction<Record<number, OdontogramProcedure[]>>>;
   onAppendToBudget?: (treatments: any[]) => void;
+  viewMode?: boolean;
+  onUpdateTreatment?: (budget: any, treatmentId: string, updates: any) => Promise<void>;
 }
 
-export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget }: OdontogramProps) {
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  
+  // View mode local state for toggles and inputs
+  const [viewNotes, setViewNotes] = useState<Record<string, string>>({});
+  const [viewExtracted, setViewExtracted] = useState(false);
 
   const handleToothClick = (tooth: number) => {
     setSelectedTooth(tooth);
     setSelectedTreatments([]);
     setNotes('');
     setSearchTerm('');
+    
+    // Setup initial view state for viewMode
+    if (viewMode && procedures[tooth]) {
+       const initialNotes: Record<string, string> = {};
+       procedures[tooth].forEach(p => {
+          if (p.sourceTreatment) {
+              initialNotes[p.id] = p.sourceTreatment.observacoes || '';
+          }
+       });
+       setViewNotes(initialNotes);
+       setViewExtracted(procedures[tooth].some(p => p.isExtraction));
+    } else {
+       setViewExtracted(false);
+    }
   };
 
   const filteredTreatments = useMemo(() => {
@@ -183,7 +205,7 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Dente {selectedTooth}</h3>
-                  <p className="text-xs text-gray-500">Adicionar procedimento</p>
+                  <p className="text-xs text-gray-500">{viewMode ? 'Visualizar tratamento' : 'Adicionar procedimento'}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedTooth(null)} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-200 rounded-full transition-colors">
@@ -191,6 +213,83 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
               </button>
             </div>
             
+            {viewMode ? (
+               <>
+                 <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-5">
+                    <div className="flex items-center gap-3 w-full bg-gray-50 border border-gray-200 p-3 rounded-xl shadow-sm">
+                       <div className="w-10 h-5 bg-gray-200 rounded-full flex items-center p-0.5 cursor-pointer transition-colors shadow-inner" onClick={() => setViewExtracted(!viewExtracted)} style={{ backgroundColor: viewExtracted ? '#ef4444' : '#e5e7eb' }}>
+                           <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${viewExtracted ? 'translate-x-5' : 'translate-x-0'}`} />
+                       </div>
+                       <span className="text-sm font-semibold text-gray-700">Marcar como removido</span>
+                    </div>
+
+                    {procedures[selectedTooth] && procedures[selectedTooth].length > 0 ? procedures[selectedTooth].map(p => (
+                       <div key={p.id} className="flex flex-col p-4 border border-gray-200 rounded-xl shadow-sm bg-white hover:border-blue-200 transition-colors duration-200">
+                          <h4 className="font-bold text-[14px] text-gray-800 leading-tight mb-2">
+                             {p.treatmentName} {p.sourceTreatment?.faces ? `(${p.sourceTreatment.faces})` : ''}
+                          </h4>
+                          <span className="text-[12px] text-gray-500 mb-0.5">
+                             {p.sourceBudget?.date || 'Data Desconhecida'} | {p.sourceTreatment?.profissional || p.sourceBudget?.name}
+                          </span>
+                          <span className="text-[12px] text-gray-500 mb-0.5">
+                             Convênio {p.sourceTreatment?.convenio || 'Particular'}
+                          </span>
+                          <span className="text-[12px] font-bold text-[#e85c13] mt-2 mb-3">
+                             {p.sourceTreatment?.status || 'Em andamento'}
+                          </span>
+
+                          <textarea 
+                             className="w-full border border-gray-200 rounded-lg p-3 text-[13px] outline-none focus:ring-2 focus:ring-blue-500 transition-shadow bg-gray-50 focus:bg-white resize-none"
+                             placeholder="Adicione observações"
+                             rows={3}
+                             value={viewNotes[p.id] || ''}
+                             onChange={e => setViewNotes(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          />
+                       </div>
+                    )) : (
+                       <div className="flex flex-col items-center justify-center p-8 text-gray-400">
+                          <span>Nenhum tratamento adicionado.</span>
+                       </div>
+                    )}
+                 </div>
+                 <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                    <button 
+                       onClick={async () => {
+                           if (onUpdateTreatment && procedures[selectedTooth]) {
+                              const promises = procedures[selectedTooth].map(p => {
+                                 let shouldUpdate = false;
+                                 const updates: any = {};
+                                 if (viewNotes[p.id] !== (p.sourceTreatment?.observacoes || '')) {
+                                     updates.observacoes = viewNotes[p.id];
+                                     shouldUpdate = true;
+                                 }
+                                 if (shouldUpdate && p.sourceBudget && p.id) {
+                                     return onUpdateTreatment(p.sourceBudget, p.id, updates);
+                                 }
+                                 return Promise.resolve();
+                              });
+                              await Promise.all(promises);
+                           }
+                              
+                           if (procedures[selectedTooth] && viewExtracted !== procedures[selectedTooth].some(x => x.isExtraction)) {
+                              setProcedures(prev => {
+                                  const st = { ...prev };
+                                  if (st[selectedTooth]) {
+                                      st[selectedTooth] = st[selectedTooth].map(x => ({ ...x, isExtraction: viewExtracted }));
+                                  }
+                                  return st;
+                              });
+                           }
+                           setSelectedTooth(null);
+                       }}
+                       className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md"
+                    >
+                       Salvar
+                    </button>
+                 </div>
+               </>
+            ) : (
+             <>
             <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-5">
                 {/* Registros Anteriores (Manual Unmark Cleanup) */}
                 {selectedTooth && procedures[selectedTooth] && procedures[selectedTooth].length > 0 && (
@@ -307,6 +406,8 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
                 Enviar {selectedTreatments.length > 0 ? `(${selectedTreatments.length})` : ''} para Orçamento
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
