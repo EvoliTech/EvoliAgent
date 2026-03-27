@@ -3,11 +3,16 @@ import { Patient } from '../types';
 import { 
   ChevronLeft, Edit2, MessageCircle, Tag, CheckSquare, Plus, 
   MapPin, Phone, Calendar, User, FileText, ChevronRight, X,
-  ChevronDown, MoreVertical, Copy, Printer, Trash2, Mic, Smile, Frown, Sparkles, Undo2, Square
+  ChevronDown, MoreVertical, Copy, Printer, Trash2, Mic, Smile, Frown, Sparkles, Undo2, Square,
+  Check, ArrowDownRight, ArrowDown, CreditCard
 } from 'lucide-react';
 import { Odontogram, OdontogramProcedure } from './Odontogram';
 import { NewBudgetModal } from './NewBudgetModal';
 import { ErrorBoundary } from './ErrorBoundary';
+import { PaymentModal, PaymentData } from './PaymentModal';
+import { PaymentDetailsModal } from './PaymentDetailsModal';
+import { AnamneseTab } from './AnamneseTab';
+import { DocumentosTab } from './DocumentosTab';
 
 interface PatientDetailsProps {
   patient: any; // Using any for Patient to avoid circular dependency complaints here
@@ -54,6 +59,92 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [newEvoTexto, setNewEvoTexto] = React.useState('');
   const [isRecording, setIsRecording] = React.useState(false);
   const [isImproving, setIsImproving] = React.useState(false);
+
+  // Payments State
+  const [payingTreatments, setPayingTreatments] = React.useState<any[]>([]);
+  const [pagamentosFilter, setPagamentosFilter] = React.useState('Todos');
+  const [selectedPayments, setSelectedPayments] = React.useState<string[]>([]);
+  const [dateFilter, setDateFilter] = React.useState<{start: string, end: string} | null>(null);
+  const [showDatePicker, setShowDatePicker] = React.useState(false);
+  const [cancelingPayments, setCancelingPayments] = React.useState<any[]>([]);
+  const [cancelJustification, setCancelJustification] = React.useState('');
+  const [openPaymentMenuId, setOpenPaymentMenuId] = React.useState<string | null>(null);
+  const [editingPaymentBudget, setEditingPaymentBudget] = React.useState<any | null>(null);
+
+  const printReceipt = (treatments: any[], payment: PaymentData | null) => {
+      const w = window.open('', '_blank');
+      if (!w) return;
+      
+      const treatmentNames = treatments.map(t => `${t.treatmentName || t.tratamento} ${t.dente ? `(Dente ${t.dente})` : ''}`).join('<br/>');
+      const amount = payment ? payment.amount : treatments.reduce((sum, t) => sum + parseFloat(t.valor || '0'), 0);
+
+      const html = `
+      <html>
+      <head>
+          <title>Comprovante de Pagamento</title>
+          <style>
+              body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #333; max-width: 600px; margin: 0 auto; }
+              .header { text-align: center; border-bottom: 2px dashed #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
+              .title { font-size: 22px; font-weight: bold; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+              .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; }
+              .row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #f8fafc; padding-bottom: 8px; }
+              .label { font-weight: 600; color: #475569; font-size: 14px; min-width: 120px; }
+              .value { font-weight: 500; color: #0f172a; font-size: 14px; text-align: right; max-width: 60%; }
+              .total { font-size: 20px; font-weight: bold; margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 20px; text-align: right; color: #0f172a; }
+              .total span { color: #10b981; }
+              .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #94a3b8; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <h1 class="title">Recibo de Pagamento</h1>
+              <p class="subtitle">Documento Auxiliar</p>
+          </div>
+          
+          <div class="row">
+              <span class="label">Paciente</span>
+              <span class="value">${patient.name}</span>
+          </div>
+          <div class="row">
+              <span class="label">CPF</span>
+              <span class="value">${patient.cpf || 'Não informado'}</span>
+          </div>
+          <div class="row">
+              <span class="label">Procedimentos</span>
+              <span class="value" style="text-align: right;">${treatmentNames}</span>
+          </div>
+          <div class="row">
+              <span class="label">Data Lançamento</span>
+              <span class="value">${payment ? new Date(payment.date).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+          <div class="row">
+              <span class="label">Forma de Pagto.</span>
+              <span class="value">${payment ? payment.method : 'Diversos'}</span>
+          </div>
+          ${payment && payment.observations ? `
+          <div class="row">
+              <span class="label">Observações</span>
+              <span class="value">${payment.observations}</span>
+          </div>` : ''}
+          
+          <div class="total">
+              Valor Recebido: <span>R$ ${amount.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+          </div>
+
+          <div class="footer">
+              <p>Este recibo é válido como comprovante do pagamento referente ao procedimento acima descrito.</p>
+              <p>Emitido de forma digital em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          </div>
+          
+          <script>
+              window.onload = function() { window.print(); }
+          </script>
+      </body>
+      </html>
+      `;
+      w.document.write(html);
+      w.document.close();
+  };
 
   const handleImproveWithAI = async () => {
     if (!newEvoTexto.trim() || !empresaId) return;
@@ -283,6 +374,13 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
     return phone;
   };
 
+  const pendingPaymentsCount = React.useMemo(() => {
+    return budgets.filter(b => b.status === "Aprovado")
+      .flatMap(b => b.treatments)
+      .filter((t:any) => (t.status === 'Em andamento' || t.status === 'Finalizado') && t.paymentStatus !== 'Pago')
+      .length;
+  }, [budgets]);
+
   const ageText = getAgeText(patient.dataNascimento);
   const displayPhone = getFormattedPhone(patient.phone);
 
@@ -381,7 +479,14 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   : 'text-[#64748b] hover:text-[#475569]'
               }`}
             >
-              {tab}
+              <div className="flex items-center gap-2">
+                {tab}
+                {tab === 'Pagamentos' && pendingPaymentsCount > 0 && (
+                  <span className="flex items-center justify-center bg-red-100 text-red-600 font-bold text-[11px] h-5 min-w-[20px] px-1.5 rounded-full">
+                    {pendingPaymentsCount}
+                  </span>
+                )}
+              </div>
               {activeTab === tab && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2563eb] rounded-t-full" />
               )}
@@ -392,6 +497,22 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
       {/* Main Content Area */}
       <div className="p-6">
+        {activeTab === 'Anamneses' && (
+           <AnamneseTab 
+               empresaId={empresaId!}
+               patient={patient}
+               onBack={() => setActiveTab('Visão Geral')}
+           />
+        )}
+
+        {activeTab === 'Documentos' && (
+           <DocumentosTab 
+               empresaId={empresaId!}
+               patient={patient}
+               budgets={budgets}
+           />
+        )}
+
         {activeTab === 'Visão Geral' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 w-full max-w-[1400px] mx-auto">
             {/* Left Column */}
@@ -722,20 +843,16 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                patientName={patient.name}
                procedures={(() => {
                   const result: Record<number, OdontogramProcedure[]> = {};
-                  budgets.filter(b => b.status === 'Aprovado').forEach(b => {
+                  budgets.filter(b => b.status === 'Aprovado' || (b.status as any) === 'Odontograma').forEach(b => {
                       b.treatments?.forEach(t => {
                           const num = parseInt(t.dente);
                           if (!isNaN(num)) {
                               if (!result[num]) result[num] = [];
                               
-                              // Carry over specific extraction state from main procedures if exists
-                              const originalProcs = procedures[num] || [];
-                              const matchedProc = originalProcs.find(op => op.id === t.id);
-                              
                               result[num].push({
                                  id: t.id,
                                  treatmentName: t.treatmentName || t.tratamento,
-                                 isExtraction: matchedProc ? matchedProc.isExtraction : false,
+                                 isExtraction: !!t.isExtraction,
                                  notes: t.observacoes || '',
                                  sourceTreatment: t,
                                  sourceBudget: b
@@ -754,11 +871,61 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                      treatments: budget.treatments.map((t: any) => t.id === treatmentId ? { ...t, ...updates } : t)
                   };
                   const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
-                  if (saved) {
-                     setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
-                  }
-               }}
-            />
+                   if (saved) {
+                      setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+                   }
+                }}
+                onToggleExtraction={async (tooth, extracted) => {
+                   if (!empresaId || !patient?.id) return;
+                   
+                   let odontogramaBudget: any = budgets.find(b => (b.status as any) === 'Odontograma');
+                   if (!odontogramaBudget) {
+                       if (!extracted) return;
+                       odontogramaBudget = {
+                           name: 'Paciente Odontograma Base',
+                           date: new Date().toISOString(),
+                           status: 'Odontograma',
+                           total: 0,
+                           treatments: []
+                       };
+                   }
+                   
+                   let treatments = [...(odontogramaBudget.treatments || [])];
+                   const existingIdx = treatments.findIndex((t: any) => t.dente === String(tooth) && t.isExtraction);
+                   
+                   let changed = false;
+                   if (extracted && existingIdx === -1) {
+                       treatments.push({
+                           id: Math.random().toString(36).substring(2, 9),
+                           treatmentName: 'Remoção / Ausente',
+                           dente: String(tooth),
+                           isExtraction: true,
+                           status: 'Concluído',
+                           valor: '',
+                           convenio: 'N/A',
+                           profissional: 'N/A'
+                       });
+                       changed = true;
+                   } else if (!extracted && existingIdx >= 0) {
+                       treatments.splice(existingIdx, 1);
+                       changed = true;
+                   }
+                   
+                   if (changed) {
+                       const upd = { ...odontogramaBudget, treatments };
+                       const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
+                       if (saved) {
+                           setBudgets(prev => {
+                               const out = [...prev];
+                               const i = out.findIndex(b => b.id === saved.id);
+                               if (i >= 0) out[i] = saved;
+                               else out.push(saved);
+                               return out;
+                           });
+                       }
+                   }
+                }}
+             />
             
             <div className="mt-12 pt-8 border-t border-gray-100">
                <div className="grid grid-cols-[100px_1fr_60px_60px_120px_150px] gap-6 px-6 border-b border-gray-100 pb-3 mb-4 text-[14px] font-semibold text-slate-700">
@@ -808,6 +975,16 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                              
                              {openTreatmentMenuId === t.id && (
                                 <div className="absolute top-[110%] right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                   {t.paymentStatus !== 'Pago' && (
+                                       <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-blue-600 hover:bg-blue-50 flex items-center gap-2.5 transition-colors border-b border-gray-50 bg-blue-50/30"
+                                         onClick={() => {
+                                             setPayingTreatments([t]);
+                                             setOpenTreatmentMenuId(null);
+                                         }}
+                                       >
+                                          <CreditCard size={16} /> Realizar pagamento
+                                       </button>
+                                   )}
                                    <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 transition-colors"
                                      onClick={async () => {
                                         const newName = window.prompt("Editar nome do tratamento:", t.treatmentName || t.tratamento);
@@ -876,9 +1053,299 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                      <div className="text-center py-12 text-sm text-gray-500 bg-gray-50/50 rounded-xl border border-gray-100">Nenhum tratamento aprovado ainda.</div>
                   )}
                </div>
+               
+               {/* Nova Camada: Dentes Ausentes */}
+               {(() => {
+                   const ausentes = budgets.filter(b => b.status === 'Aprovado' || (b.status as any) === 'Odontograma').flatMap(b => b.treatments).filter(t => t && t.isExtraction);
+                   if (ausentes.length === 0) return null;
+                   return (
+                       <div className="mt-8 pt-8 border-t border-gray-100 animate-in fade-in">
+                           <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                              <X size={20} className="text-red-500" />
+                              Dentes Ausentes / Removidos
+                              <span className="text-xs text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full font-bold">
+                                 {ausentes.length} identificados
+                              </span>
+                           </h4>
+                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                               {ausentes.map((t: any, i: number) => (
+                                   <div key={t.id || i} className="bg-red-50/40 border border-red-100 rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-sm relative group overflow-hidden">
+                                       <div className="absolute -right-4 -top-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-24 h-24 text-red-500">
+                                              <path d="M7,2 C5,2 4,3 4,5 L4,10 C4,13 6,15 8,16 L8,21 C8,22 9,23 10,23 C11,23 12,22 12,21 L12,18 L12,21 C12,22 13,23 14,23 C15,23 16,22 16,21 L16,16 C18,15 20,13 20,10 L20,5 C20,3 19,2 17,2 C15,2 14,3 13,4 L12,6 L11,4 C10,3 9,2 7,2 Z" />
+                                            </svg>
+                                       </div>
+                                       <span className="text-sm font-bold text-gray-800 mb-1 z-10">Dente {t.dente}</span>
+                                       <span className="text-xs text-red-600 font-semibold uppercase z-10">{t.treatmentName || 'Removido/Ausente'}</span>
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+                   );
+               })()}
             </div>
           </div>
         )}
+
+        {activeTab === 'Pagamentos' && (() => {
+           const paymentTreatments = budgets.filter(b => b.status === "Aprovado")
+              .flatMap(b => b.treatments.map((t:any) => ({ ...t, budget: b })))
+              .filter(t => t.status === 'Em andamento' || t.status === 'Finalizado');
+
+           // total paid would be where paymentStatus === 'Pago'
+           const totalPago = paymentTreatments.filter(t => t.paymentStatus === 'Pago').reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
+           const aReceber = paymentTreatments.filter(t => t.paymentStatus !== 'Pago').reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
+
+           return (
+             <div className="flex flex-col gap-6 animate-in fade-in max-w-[1200px] mx-auto w-full">
+                <h2 className="text-2xl font-bold text-gray-800">Pagamentos</h2>
+                
+                {/* Top Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   <div className="bg-white border text-gray-800 border-gray-200 rounded-xl p-6 shadow-sm flex items-start justify-between">
+                      <div>
+                         <p className="text-[#10b981] font-semibold text-lg mb-2">Total pago</p>
+                         <p className="text-2xl font-bold">R$ {totalPago.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                      </div>
+                      <div className="bg-green-100 p-2 rounded-full text-green-600">
+                         <Check size={20} strokeWidth={3} />
+                      </div>
+                   </div>
+
+                   <div className="bg-white border text-gray-800 border-gray-200 rounded-xl p-6 shadow-sm flex items-start justify-between">
+                      <div>
+                         <p className="text-[#ef4444] font-semibold text-lg mb-2">A receber</p>
+                         <p className="text-2xl font-bold">R$ {aReceber.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                      </div>
+                      <div className="bg-orange-100 p-2 rounded-full text-orange-500">
+                         <ArrowDownRight size={20} strokeWidth={3} />
+                      </div>
+                   </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex items-center gap-2 mt-4 flex-wrap">
+                   <div className="relative">
+                       <button onClick={() => setShowDatePicker(!showDatePicker)} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm transition-colors cursor-pointer">
+                          <Calendar size={16} /> {dateFilter ? `${new Date(dateFilter.start).toLocaleDateString('pt-BR')} até ${new Date(dateFilter.end).toLocaleDateString('pt-BR')}` : 'Selecionar período'}
+                       </button>
+                       {showDatePicker && (
+                          <div className="absolute top-[110%] left-0 bg-white border border-gray-200 shadow-xl rounded-xl p-4 z-50 flex items-end gap-3 animate-in fade-in zoom-in-95">
+                              <div className="flex flex-col gap-1">
+                                  <label className="text-xs font-semibold text-gray-600">Início</label>
+                                  <input type="date" className="border px-2 py-1.5 rounded-lg text-sm" onChange={e => setDateFilter(prev => ({...prev, start: e.target.value} as any))} value={dateFilter?.start || ''}/>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                  <label className="text-xs font-semibold text-gray-600">Fim</label>
+                                  <input type="date" className="border px-2 py-1.5 rounded-lg text-sm" onChange={e => setDateFilter(prev => ({...prev, end: e.target.value} as any))} value={dateFilter?.end || ''}/>
+                              </div>
+                              <button onClick={() => setShowDatePicker(false)} className="px-3 py-1.5 bg-blue-600 text-white font-semibold text-sm rounded-lg hover:bg-blue-700 cursor-pointer">OK</button>
+                              {dateFilter && <button onClick={() => { setDateFilter(null); setShowDatePicker(false); }} className="px-3 py-1.5 bg-gray-100 text-gray-700 font-semibold text-sm rounded-lg hover:bg-gray-200 cursor-pointer">Limpar</button>}
+                          </div>
+                       )}
+                   </div>
+                   {['Todos', 'Pagos', 'Aguardando', 'Em aberto', 'Em atraso'].map(f => (
+                       <button 
+                           key={f}
+                           onClick={() => setPagamentosFilter(f)}
+                           className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${pagamentosFilter === f ? 'bg-[#64748b] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                       >
+                           {f}
+                       </button>
+                   ))}
+                </div>
+
+                {/* Table Header */}
+                <div className="grid grid-cols-12 gap-4 px-6 text-sm font-semibold text-gray-600 mt-2">
+                   <div className="col-span-1 flex items-center">
+                      <input type="checkbox" 
+                         checked={paymentTreatments.length > 0 && selectedPayments.length === paymentTreatments.length}
+                         onChange={(e) => {
+                             if (e.target.checked) {
+                                 const allIds = paymentTreatments.map(t => t.id);
+                                 setSelectedPayments(allIds);
+                             } else {
+                                 setSelectedPayments([]);
+                             }
+                         }}
+                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                      />
+                   </div>
+                   <div className="col-span-5 flex items-center gap-2">Descrição <ArrowDown size={14} /></div>
+                   <div className="col-span-1 text-center text-[13px]">Aprovado em</div>
+                   <div className="col-span-2 text-center">Status</div>
+                   <div className="col-span-3 text-right pr-12">Valor</div>
+                </div>
+
+                {/* List */}
+                <div className="flex flex-col gap-3">
+                   {(() => {
+                       const mappedTreatments = paymentTreatments.map(t => {
+                           const isPaid = t.paymentStatus === 'Pago';
+                           let dueDate: Date | null = null;
+                           let approvalDate: Date | null = null;
+                           let paymentDate: Date | null = null;
+                           let isLate = false;
+                           const bDate = t.budget.date || t.budget.created_at;
+                           
+                           if (bDate) {
+                               let parsedStr = bDate;
+                               if (typeof bDate === 'string' && bDate.includes('/') && bDate.split('/')[0].length === 2) {
+                                   const parts = bDate.split(' ')[0].split('/');
+                                   if (parts.length === 3) parsedStr = `${parts[2]}-${parts[1]}-${parts[0]}T12:00:00`;
+                               }
+                               const parsed = new Date(parsedStr);
+                               if (!isNaN(parsed.getTime())) {
+                                   approvalDate = parsed;
+                                   const dueDateObj = new Date(parsed.getTime() + 30*24*60*60*1000);
+                                   if (!isPaid && dueDateObj.getTime() < new Date().getTime()) {
+                                       isLate = true;
+                                   }
+                               }
+                           }
+                           
+                           if (t.payments && t.payments.length > 0) {
+                               const payStr = t.payments[t.payments.length - 1].date;
+                               const parsedPay = new Date(payStr.includes('T') ? payStr : payStr + 'T12:00:00');
+                               if (!isNaN(parsedPay.getTime())) paymentDate = parsedPay;
+                           }
+                           
+                           return { ...t, isPaid, isLate, approvalDate, paymentDate };
+                       }).filter(t => {
+                           if (dateFilter) {
+                               if (!t.approvalDate) return false;
+                               const dStr = t.approvalDate.toISOString().split('T')[0];
+                               if (dStr < dateFilter.start || dStr > dateFilter.end) return false;
+                           }
+                           if (pagamentosFilter === 'Todos') return true;
+                           if (pagamentosFilter === 'Pagos') return t.isPaid;
+                           if (pagamentosFilter === 'Aguardando' || pagamentosFilter === 'Em aberto') return !t.isPaid && !t.isLate;
+                           if (pagamentosFilter === 'Em atraso') return t.isLate;
+                           return true;
+                       });
+                       
+                       const selectedObjs = mappedTreatments.filter(t => selectedPayments.includes(t.id));
+                       const canPay = selectedObjs.every(t => !t.isPaid); // Cannot pay if any are already paid
+                       const canCancel = selectedObjs.every(t => (t.payments && t.payments.length > 0) || t.paymentStatus === 'Pago' || t.paymentStatus === 'Pago parcialmente'); 
+                       const canReceipt = selectedObjs.every(t => (t.payments && t.payments.length > 0) || t.paymentStatus === 'Pago' || t.paymentStatus === 'Pago parcialmente');
+
+                       return (
+                          <>
+                             {selectedPayments.length > 0 && (
+                                 <div className="bg-blue-50 border border-blue-200 rounded-lg py-3 px-5 flex items-center justify-between animate-in fade-in slide-in-from-top-2 mb-2">
+                                     <span className="text-sm font-semibold text-blue-800">{selectedPayments.length} selecionado(s)</span>
+                                     <div className="flex items-center gap-2">
+                                         <button 
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm transition-colors ${canCancel ? 'text-red-600 bg-white border border-red-200 hover:bg-red-50' : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
+                                            disabled={!canCancel}
+                                            title={!canCancel ? "Apenas tratamentos com pagamentos podem ser cancelados" : ""}
+                                            onClick={() => setCancelingPayments(selectedObjs)}>
+                                             Cancelar pagamento
+                                         </button>
+                                         <button 
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm transition-colors ${canReceipt ? 'text-blue-600 bg-white border border-blue-200 hover:bg-blue-50' : 'text-gray-400 bg-gray-50 border border-gray-200 cursor-not-allowed'}`}
+                                            disabled={!canReceipt}
+                                            title={!canReceipt ? "Apenas tratamentos com pagamentos podem emitir recibo" : ""}
+                                            onClick={() => printReceipt(selectedObjs, null)}>
+                                             Emitir Recibo
+                                         </button>
+                                         <button 
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm transition-colors ${canPay ? 'text-white bg-blue-600 hover:bg-blue-700' : 'text-gray-400 bg-gray-200 cursor-not-allowed'}`}
+                                            disabled={!canPay}
+                                            title={!canPay ? "Você selecionou itens já pagos" : ""}
+                                            onClick={() => setPayingTreatments(selectedObjs)}>
+                                             Pagar selecionados
+                                         </button>
+                                     </div>
+                                 </div>
+                             )}
+
+                             {mappedTreatments.length === 0 ? (
+                                 <div className="text-center py-12 text-sm text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">Nenhum pagamento correspondente para "{pagamentosFilter}".</div>
+                             ) : mappedTreatments.map(t => (
+                                <div key={t.id || Math.random()} className={`bg-white border rounded-xl p-4 flex items-center grid grid-cols-12 gap-4 transition-colors shadow-sm relative ${selectedPayments.includes(t.id) ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 hover:border-blue-300'}`}>
+                                   <div className="col-span-1 flex items-center pl-2">
+                                      <input type="checkbox" 
+                                         checked={selectedPayments.includes(t.id)}
+                                         onChange={(e) => setSelectedPayments(prev => e.target.checked ? [...prev, t.id] : prev.filter(id => id !== t.id))}
+                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                                      />
+                                   </div>
+                             <div className="col-span-5 flex flex-col justify-center">
+                                <span className="text-[14px] font-semibold text-gray-800">{t.treatmentName || t.tratamento}</span>
+                                <div className="flex flex-col mt-1 gap-0.5">
+                                   {t.isPaid && t.paymentDate && (
+                                       <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded w-fit mb-1">Pago em {t.paymentDate.toLocaleDateString('pt-BR')}</span>
+                                   )}
+                                   <div className="flex items-center gap-3 text-[12px] text-gray-500 font-medium">
+                                       {(t.dente || t.faces) && <span>Dente {t.dente} {t.faces ? `- ${t.faces}` : ''}</span>}
+                                       <span className="text-gray-400">Orc #{t.budget.numero || t.budget.id.substring(0,8)}</span>
+                                   </div>
+                                </div>
+                                {t.paymentCancellationReason && (
+                                    <div className="mt-1.5 text-[11px] text-red-600 font-medium bg-red-50 border border-red-100 px-2 py-0.5 rounded flex w-fit max-w-full items-center gap-1">
+                                        Cancelamento: {t.paymentCancellationReason}
+                                    </div>
+                                )}
+                             </div>
+                             <div className="col-span-1 flex flex-col items-center justify-center text-center">
+                                 {t.approvalDate ? (
+                                     <span className="text-[12px] font-semibold text-gray-700">{t.approvalDate.toLocaleDateString('pt-BR')}</span>
+                                 ) : (
+                                     <span className="text-[12px] text-gray-400">--</span>
+                                 )}
+                             </div>
+                             <div className="col-span-2 flex items-center justify-center gap-3">
+                                {!t.isPaid && (
+                                   <button 
+                                      className="flex items-center gap-2 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
+                                      onClick={() => setPayingTreatments([t])}
+                                   >
+                                      <CreditCard size={14} /> Pagar
+                                   </button>
+                                )}
+                                <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                   {t.isPaid ? 'Pago' : t.isLate ? 'Em atraso' : 'Em aberto'}
+                                </span>
+                             </div>
+                             <div className="col-span-3 flex items-center justify-end gap-3">
+                                <span className="font-bold text-gray-800">
+                                   R$ {parseFloat(t.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                </span>
+                                 <div className="relative">
+                                    <button 
+                                        className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
+                                        onClick={() => setOpenPaymentMenuId(openPaymentMenuId === t.id ? null : t.id)}
+                                    >
+                                       <MoreVertical size={18} />
+                                    </button>
+                                    
+                                    {openPaymentMenuId === t.id && (
+                                        <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
+                                           <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                             onClick={() => { setEditingPaymentBudget(t.budget); setOpenPaymentMenuId(null); }}
+                                           >
+                                              <Edit2 size={16} className="text-gray-400" /> Editar e Detalhes
+                                           </button>
+                                           <div className="h-px bg-gray-100 my-1"></div>
+                                           <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                                             onClick={() => { setCancelingPayments([t]); setOpenPaymentMenuId(null); }}
+                                           >
+                                              <X size={16} className="text-red-400" /> Cancelar pagamento
+                                           </button>
+                                        </div>
+                                    )}
+                                 </div>
+                             </div>
+                          </div>
+                       ))}
+                       </>
+                       );
+                   })()}
+                </div>
+             </div>
+           );
+        })()}
 
         {activeTab === 'Evoluções' && (
           <div className="flex flex-col gap-6 animate-in fade-in">
@@ -1075,7 +1542,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         )}
 
         {/* Other Tabs content placeholder */}
-        {activeTab !== 'Visão Geral' && activeTab !== 'Orçamentos' && activeTab !== 'Tratamentos' && activeTab !== 'Evoluções' && (
+        {activeTab !== 'Visão Geral' && activeTab !== 'Orçamentos' && activeTab !== 'Tratamentos' && activeTab !== 'Evoluções' && activeTab !== 'Pagamentos' && activeTab !== 'Anamneses' && activeTab !== 'Documentos' && (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 text-center min-h-[400px] flex flex-col justify-center items-center h-full">
             <span className="text-gray-400 mb-2"><FileText size={48} /></span>
             <h3 className="text-lg font-medium text-gray-700">Aba em desenvolvimento</h3>
@@ -1197,6 +1664,135 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         }}
       />
       </ErrorBoundary>
+
+      <PaymentModal
+          isOpen={payingTreatments.length > 0}
+          onClose={() => setPayingTreatments([])}
+          treatments={payingTreatments}
+          patient={patient}
+          onProcessPayment={async (payment, isFullyPaid) => {
+              if (payingTreatments.length === 0) return;
+              
+              let updatedBudgetsMap: any = {};
+              
+              payingTreatments.forEach(t => {
+                  if (!updatedBudgetsMap[t.budget.id]) {
+                      updatedBudgetsMap[t.budget.id] = { ...t.budget, treatments: [...t.budget.treatments] };
+                  }
+                  const bTreatments = updatedBudgetsMap[t.budget.id].treatments;
+                  const tIdx = bTreatments.findIndex((xt:any) => xt.id === t.id);
+                  if (tIdx >= 0) {
+                      const prevPayments = bTreatments[tIdx].payments || [];
+                      bTreatments[tIdx] = {
+                          ...bTreatments[tIdx],
+                          payments: [...prevPayments, payment],
+                          paymentStatus: isFullyPaid ? 'Pago' : 'Pago parcialmente',
+                          paymentCancellationReason: null // clearing justify if they pay again
+                      };
+                  }
+              });
+              
+              let lastSaved = null;
+              for (const budgetId of Object.keys(updatedBudgetsMap)) {
+                  const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updatedBudgetsMap[budgetId]);
+                  if (saved) {
+                      setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
+                      lastSaved = saved;
+                  }
+              }
+              
+              if (lastSaved) {
+                  printReceipt(payingTreatments, payment);
+                  setPayingTreatments([]);
+                  setSelectedPayments([]);
+              }
+          }}
+      />
+
+          {/* Modal Cancelar Pagamentos em Lote */}
+          {cancelingPayments.length > 0 && (
+              <div className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+                      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3 bg-red-50/50">
+                          <Trash2 size={24} className="text-red-600" />
+                          <h2 className="text-xl font-bold text-gray-800">Cancelar {cancelingPayments.length > 1 ? `${cancelingPayments.length} pagamentos` : 'pagamento'}</h2>
+                      </div>
+                      <div className="p-6">
+                           <p className="text-gray-600 text-[14px] leading-relaxed mb-4">
+                               Tem certeza que deseja cancelar {cancelingPayments.length > 1 ? 'os pagamentos selecionados' : 'este pagamento'}? 
+                               Essa ação removerá os registros financeiros e precisará de uma justificativa.
+                           </p>
+                           <label className="text-sm font-semibold text-gray-700 mb-2 block">Justificativa do Cancelamento <span className="text-red-500">*</span></label>
+                           <textarea 
+                              className="w-full border border-gray-200 rounded-xl p-3 h-24 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none"
+                              placeholder="Motivo obrigatório..."
+                              value={cancelJustification}
+                              onChange={(e) => setCancelJustification(e.target.value)}
+                           ></textarea>
+                      </div>
+                      <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                          <button onClick={() => { setCancelingPayments([]); setCancelJustification(''); }} className="px-5 py-2 text-[14px] font-semibold text-gray-600 hover:bg-gray-200 rounded-xl transition-colors">
+                              Voltar
+                          </button>
+                          <button 
+                             disabled={!cancelJustification.trim()}
+                             onClick={async () => {
+                                 if (!empresaId || !cancelJustification.trim()) return;
+                                 let newBudgets = [...budgets];
+                                 for (const t of cancelingPayments) {
+                                     // For each treatment, we set isPaid false and clear its payments
+                                     const budgetToUpdate = newBudgets.find(b => b.id === t.budget.id);
+                                     if (budgetToUpdate) {
+                                         budgetToUpdate.treatments = budgetToUpdate.treatments.map((x: any) => {
+                                             if (x.id === t.id) {
+                                                return { 
+                                                    ...x, 
+                                                    isPaid: false, 
+                                                    paymentStatus: 'Pendente', 
+                                                    payments: [], 
+                                                    paymentCancellationReason: cancelJustification,
+                                                    paymentCancellationDate: new Date().toISOString()
+                                                };
+                                             }
+                                             return x;
+                                         });
+                                         const saved = await budgetService.saveBudget(empresaId, Number(patient.id), budgetToUpdate);
+                                         if (saved) {
+                                             newBudgets = newBudgets.map(b => b.id === saved.id ? saved : b);
+                                         }
+                                     }
+                                 }
+                                 setBudgets(newBudgets);
+                                 setCancelingPayments([]);
+                                 setCancelJustification('');
+                                 setSelectedPayments([]);
+                             }} 
+                             className="px-5 py-2 bg-red-600 text-white text-[14px] font-bold rounded-xl hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+                          >
+                              Confirmar Cancelamento
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          )}
+
+          {/* Modal Editar Pagamento / Detalhes */}
+          <PaymentDetailsModal
+             isOpen={!!editingPaymentBudget}
+             onClose={() => setEditingPaymentBudget(null)}
+             budgetTreatments={editingPaymentBudget?.treatments || []}
+             budget={editingPaymentBudget}
+             patient={patient}
+             onSave={async (updBudget) => {
+                 if (!empresaId) return;
+                 const saved = await budgetService.saveBudget(empresaId, Number(patient.id), updBudget);
+                 if (saved) {
+                     setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
+                 }
+                 setEditingPaymentBudget(null);
+             }}
+          />
+
     </div>
   );
 };

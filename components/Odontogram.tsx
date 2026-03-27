@@ -23,9 +23,10 @@ interface OdontogramProps {
   onAppendToBudget?: (treatments: any[]) => void;
   viewMode?: boolean;
   onUpdateTreatment?: (budget: any, treatmentId: string, updates: any) => Promise<void>;
+  onToggleExtraction?: (tooth: number, extracted: boolean) => Promise<void>;
 }
 
-export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment }: OdontogramProps) {
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
@@ -263,12 +264,20 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
                                      updates.observacoes = viewNotes[p.id];
                                      shouldUpdate = true;
                                  }
+                                 if (viewExtracted !== !!p.sourceTreatment?.isExtraction) {
+                                     updates.isExtraction = viewExtracted;
+                                     shouldUpdate = true;
+                                 }
                                  if (shouldUpdate && p.sourceBudget && p.id) {
                                      return onUpdateTreatment(p.sourceBudget, p.id, updates);
                                  }
                                  return Promise.resolve();
                               });
                               await Promise.all(promises);
+                           }
+                           
+                           if (onToggleExtraction) {
+                               await onToggleExtraction(selectedTooth as number, viewExtracted);
                            }
                               
                            if (procedures[selectedTooth] && viewExtracted !== procedures[selectedTooth].some(x => x.isExtraction)) {

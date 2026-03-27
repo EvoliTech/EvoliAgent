@@ -5,6 +5,7 @@ export interface Budget {
   numero?: number;
   name: string;
   date: string;
+  created_at?: string;
   total: number;
   status: 'Pendente' | 'Aguardando' | 'Aprovado';
   treatments: any[];
@@ -29,6 +30,7 @@ export const budgetService = {
       numero: dbBudget.numero,
       name: dbBudget.nome,
       date: dbBudget.data_orcamento,
+      created_at: dbBudget.created_at,
       total: Number(dbBudget.total),
       status: dbBudget.status as 'Pendente' | 'Aguardando' | 'Aprovado',
       treatments: dbBudget.tratamentos || []
@@ -116,6 +118,7 @@ export const budgetService = {
       numero: dbBudget.numero,
       name: dbBudget.nome,
       date: dbBudget.data_orcamento,
+      created_at: dbBudget.created_at,
       total: Number(dbBudget.total),
       status: dbBudget.status,
       treatments: dbBudget.tratamentos || []
