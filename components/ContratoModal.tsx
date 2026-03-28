@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search } from 'lucide-react';
+import { X, Search, Printer } from 'lucide-react';
+import { documentoService, DocumentoData } from '../services/documentoService';
 
 export interface ContratoModalProps {
     patient: any;
     budgets: any[];
+    empresaId: number;
+    existingDocumentData?: DocumentoData | null;
     onClose: () => void;
+    onSaved?: () => void;
 }
 
-export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, onClose }) => {
+export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, empresaId, existingDocumentData, onClose, onSaved }) => {
     const [formData, setFormData] = useState({
         nomePaciente: patient?.name || '',
         dataNascimento: patient?.dataNascimento || '',
@@ -24,6 +28,14 @@ export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, 
         valorContrato: '',
         tratamentos: ''
     });
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (existingDocumentData && existingDocumentData.conteudo) {
+            // Restore from existing Document structure
+            setFormData(existingDocumentData.conteudo);
+        }
+    }, [existingDocumentData]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -67,6 +79,136 @@ export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, 
         return `${date.getDate()} de ${months[date.getMonth()]} de ${date.getFullYear()}`;
     };
 
+    const handleSave = async () => {
+        if (!isComplete()) return;
+        setIsSaving(true);
+        try {
+            await documentoService.saveDocumento({
+                id: existingDocumentData?.id,
+                IDEmpresa: empresaId,
+                patient_id: patient.id,
+                tipo: 'Contrato',
+                conteudo: formData
+            });
+            if (onSaved) onSaved();
+            else onClose();
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao salvar documento. Tente novamente.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handlePrint = () => {
+        const printContent = document.getElementById('contrato-print-area');
+        if (!printContent) return;
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Por favor, permita pop-ups no seu navegador para imprimir.');
+            return;
+        }
+
+        const html = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Impressão de Contrato - ${patient.name}</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            line-height: 1.6;
+                            margin: 0;
+                            padding: 30px;
+                            color: #000;
+                            font-size: 14px;
+                        }
+                        .print-container {
+                            max-width: 100%;
+                            margin: 0 auto;
+                        }
+                        h1 {
+                            text-align: center;
+                            font-size: 16px;
+                            margin-bottom: 25px;
+                            font-weight: bold;
+                        }
+                        p {
+                            margin-bottom: 12px;
+                            text-align: justify;
+                        }
+                        .highlight {
+                            font-weight: bold;
+                        }
+                        ol {
+                            margin-bottom: 15px;
+                            padding-left: 25px;
+                        }
+                        li {
+                            margin-bottom: 8px;
+                            text-align: justify;
+                        }
+                        .flex-center {
+                            text-align: center;
+                            margin: 40px 0;
+                        }
+                        .signatures {
+                            display: flex;
+                            justify-content: space-around;
+                            align-items: center;
+                            margin-top: 60px;
+                            gap: 40px;
+                        }
+                        .signature-block {
+                            text-align: center;
+                            width: 250px;
+                            flex: 1;
+                        }
+                        .signature-line {
+                            border-top: 1px solid #000;
+                            padding-top: 5px;
+                            font-size: 13px;
+                        }
+                        @media print {
+                            body {
+                                padding: 0;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="print-container">
+                        ${printContent.innerHTML
+                            // Convert valid blue spans into bold text
+                            .replace(/<span class="bg-\[#5c9ce6\][^>]*>(.*?)<\/span>/g, '<span class="highlight">$1</span>')
+                            // Convert empty red spans into blank lines
+                            .replace(/<span class="bg-\[#ef5350\][^>]*>(.*?)<\/span>/g, '<span class="highlight">_______________________</span>')
+                            // Replace specific tailwind alignments with standard html align classes if needed
+                            .replace(/<div class="flex justify-center mb-16">/g, '<div class="flex-center">')
+                            .replace(/<div class="flex flex-col gap-12 max-w-sm mx-auto">/g, '<div class="signatures">')
+                            .replace(/<div class="text-center">/g, '<div class="signature-block">')
+                            .replace(/<div class="border-t border-black pt-2 text-\[13px\]">/g, '<div class="signature-line">')
+                        }
+                    </div>
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                                window.onafterprint = function() {
+                                    window.close();
+                                };
+                            }, 300);
+                        };
+                    </script>
+                </body>
+            </html>
+        `;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
+
     return (
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-[#f0f2f5] rounded-xl shadow-2xl w-full max-w-[1300px] h-[95vh] flex flex-col overflow-hidden animate-in zoom-in-95">
@@ -74,17 +216,24 @@ export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, 
                 {/* Header */}
                 <div className="bg-white px-6 py-4 flex items-center justify-between shadow-sm shrink-0 z-10">
                     <div className="flex items-center gap-3">
-                        <div className="text-[#1976d2] font-semibold text-[15px]">Como funciona o contrato</div>
+                        <div className="text-[#1976d2] font-semibold text-[15px]">{existingDocumentData ? 'Visualizando/Editando Contrato' : 'Como funciona o contrato'}</div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button onClick={onClose} className="px-5 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors uppercase tracking-wide">
+                        <button onClick={onClose} className="px-5 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors uppercase tracking-wide disabled:opacity-50">
                             Fechar
                         </button>
                         <button 
-                            disabled={!isComplete()}
-                            className="px-6 py-2.5 bg-[#4caf50] hover:bg-[#43a047] disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-bold rounded shadow-sm transition-colors uppercase tracking-wide"
+                            onClick={handlePrint}
+                            className="px-5 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded shadow-sm transition-colors uppercase tracking-wide flex items-center gap-2"
                         >
-                            Salvar Contrato
+                            <Printer size={16} /> Imprimir
+                        </button>
+                        <button 
+                            disabled={!isComplete() || isSaving}
+                            onClick={handleSave}
+                            className="px-6 py-2.5 bg-[#4caf50] hover:bg-[#43a047] disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm font-bold rounded shadow-sm transition-colors uppercase tracking-wide flex items-center gap-2"
+                        >
+                            {isSaving ? 'Salvando...' : 'Salvar Contrato'}
                         </button>
                     </div>
                 </div>
@@ -243,7 +392,7 @@ export const ContratoModal: React.FC<ContratoModalProps> = ({ patient, budgets, 
                                 <span className="line-through cursor-not-allowed">S</span>
                             </div>
 
-                            <div className="p-10 text-[14px] leading-relaxed text-gray-800 font-sans">
+                            <div id="contrato-print-area" className="p-10 text-[14px] leading-relaxed text-gray-800 font-sans">
                                 <h1 className="text-center font-extrabold text-[18px] mb-6">CONTRATO DE PRESTAÇÃO DE SERVIÇOS ODONTOLÓGICOS</h1>
 
                                 <p className="mb-4">São partes do presente instrumento:</p>

@@ -70,7 +70,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN') {
-                setLoading(true);
+                // Do not set loading=true here to prevent the entire app from remounting when the window regains focus.
                 loadUserCompany(session);
             } else if (event === 'SIGNED_OUT') {
                 setEmpresaId(null);
