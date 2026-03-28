@@ -3,6 +3,7 @@ import { Plus, X, Printer, FileText, Trash2, Edit3, Settings, Calendar } from 'l
 import { ContratoModal } from './ContratoModal';
 import { TermoConsentimentoModal } from './TermoConsentimentoModal';
 import { ReceituarioModal } from './ReceituarioModal';
+import { AtestadoModal } from './AtestadoModal';
 import { documentoService, DocumentoData } from '../services/documentoService';
 
 const DocumentIcon = ({ color }: { color: string }) => (
@@ -193,8 +194,19 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                  />
              )}
 
+             {/* Atestado Modal Handler */}
+             {selectedDocType === 'Atestados' && (
+                 <AtestadoModal 
+                     patient={patient} 
+                     empresaId={empresaId}
+                     existingDocumentData={selectedDocData}
+                     onClose={() => setSelectedDocType(null)} 
+                     onSaved={onDocumentSaved}
+                 />
+             )}
+
              {/* Simple Document Editor Placeholder */ }
-             {selectedDocType && selectedDocType !== 'Contrato' && selectedDocType !== 'Termo de Consentimento' && selectedDocType !== 'Receituário' && (
+             {selectedDocType && selectedDocType !== 'Contrato' && selectedDocType !== 'Termo de Consentimento' && selectedDocType !== 'Receituário' && selectedDocType !== 'Atestados' && (
                 <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
                         {/* Header */}
