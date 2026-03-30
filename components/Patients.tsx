@@ -101,6 +101,12 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
     try {
       const data = await patientService.fetchPatients(empresaId);
       setPatients(data);
+      // Sincroniza o paciente aberto com os dados frescos do banco
+      setSelectedPatient(prev => {
+        if (!prev) return null;
+        const updated = data.find(p => p.id === prev.id);
+        return updated ?? prev;
+      });
     } catch (error) {
       console.error('Failed to load patients', error);
       showAlert('Erro', 'Erro ao carregar pacientes do Supabase.', 'error');
@@ -108,6 +114,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
       setIsLoading(false);
     }
   };
+
 
   // Lógica de Filtragem
   const filteredPatients = useMemo(() => {

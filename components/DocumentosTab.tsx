@@ -13,7 +13,7 @@ const DocumentIcon = ({ color }: { color: string }) => (
             <div className="w-full h-1 bg-gray-200 rounded-full" />
             <div className="w-full h-1 bg-gray-200 rounded-full" />
             <div className="w-3/4 h-1 bg-gray-200 rounded-full" />
-            
+
             <div className="flex gap-1.5 w-full mt-auto mb-1">
                 <div className="w-4 h-1.5 bg-blue-200 rounded-sm" />
                 <div className="w-4 h-1.5 bg-blue-200 rounded-sm" />
@@ -33,7 +33,6 @@ const docs = [
     { title: 'Termo de Consentimento', icon: <DocumentIcon color="bg-[#fbc02d]" /> },
     { title: 'Receituário', icon: <DocumentIcon color="bg-[#2196f3]" /> },
     { title: 'Atestados', icon: <DocumentIcon color="bg-[#4caf50]" /> },
-    { title: 'Personalizado', icon: <CustomIcon /> },
 ];
 
 export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, empresaId: number, budgets: any[] }) => {
@@ -67,7 +66,12 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
 
     const handleEditDoc = (doc: DocumentoData) => {
         setSelectedDocData(doc);
-        setSelectedDocType(doc.tipo);
+        // Normaliza o tipo para garantir que o modal correto abre
+        // (ex: 'Atestado' salvo no banco → abre o modal 'Atestados')
+        const tipoMap: Record<string, string> = {
+            'Atestado': 'Atestados',
+        };
+        setSelectedDocType(tipoMap[doc.tipo] ?? doc.tipo);
     };
 
     const handleDeleteDoc = async (docId: string) => {
@@ -82,37 +86,37 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
     };
 
     const onDocumentSaved = async () => {
-         setSelectedDocType(null);
-         setSelectedDocData(null);
-         await loadSettingsAndDocs();
+        setSelectedDocType(null);
+        setSelectedDocData(null);
+        await loadSettingsAndDocs();
     };
 
     return (
         <div className="p-8 h-full bg-gray-50/50 rounded-2xl animate-in fade-in flex flex-col gap-8">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {docs.map((doc, i) => (
-                     <div key={i} className="bg-white border border-gray-200 rounded-[4px] p-6 flex flex-col items-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all">
-                         <div className="mt-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {docs.map((doc, i) => (
+                    <div key={i} className="bg-white border border-gray-200 rounded-[4px] p-6 flex flex-col items-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all">
+                        <div className="mt-4 mb-6">
                             {doc.icon}
-                         </div>
-                         
-                         <h3 className="text-[14px] font-semibold text-gray-700 mb-6 text-center">{doc.title}</h3>
-                         
-                         <button 
-                             onClick={() => handleCreateNew(doc.title)}
-                             className="w-full bg-[#2196f3] hover:bg-[#1976d2] text-white font-bold py-2.5 rounded text-[12px] transition-colors"
-                         >
-                             NOVO
-                         </button>
-                     </div>
-                 ))}
-             </div>
-             {/* Histórico de Documentos */}
-             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 overflow-hidden">
+                        </div>
+
+                        <h3 className="text-[14px] font-semibold text-gray-700 mb-6 text-center">{doc.title}</h3>
+
+                        <button
+                            onClick={() => handleCreateNew(doc.title)}
+                            className="w-full bg-[#2196f3] hover:bg-[#1976d2] text-white font-bold py-2.5 rounded text-[12px] transition-colors"
+                        >
+                            NOVO
+                        </button>
+                    </div>
+                ))}
+            </div>
+            {/* Histórico de Documentos */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 overflow-hidden">
                 <h3 className="font-bold text-gray-800 text-lg mb-4 flex items-center gap-2">
-                   <FileText size={20} className="text-gray-500" /> Histórico de Documentos Salvos
+                    <FileText size={20} className="text-gray-500" /> Histórico de Documentos Salvos
                 </h3>
-                
+
                 {loading ? (
                     <div className="text-center py-6 text-gray-500">Carregando documentos...</div>
                 ) : savedDocs.length === 0 ? (
@@ -139,7 +143,7 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                                             <span className="font-semibold text-gray-700">{doc.tipo}</span>
                                         </td>
                                         <td className="px-5 py-4 text-gray-500 flex items-center gap-2">
-                                            <Calendar size={14} /> 
+                                            <Calendar size={14} />
                                             {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '-'}
                                         </td>
                                         <td className="px-5 py-4 text-center">
@@ -158,55 +162,55 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                         </table>
                     </div>
                 )}
-             </div>
+            </div>
 
-             {/* Contrato Modal Handler */}
-             {selectedDocType === 'Contrato' && (
-                 <ContratoModal 
-                     patient={patient} 
-                     budgets={budgets} 
-                     empresaId={empresaId}
-                     existingDocumentData={selectedDocData}
-                     onClose={() => setSelectedDocType(null)} 
-                     onSaved={onDocumentSaved}
-                 />
-             )}
+            {/* Contrato Modal Handler */}
+            {selectedDocType === 'Contrato' && (
+                <ContratoModal
+                    patient={patient}
+                    budgets={budgets}
+                    empresaId={empresaId}
+                    existingDocumentData={selectedDocData}
+                    onClose={() => setSelectedDocType(null)}
+                    onSaved={onDocumentSaved}
+                />
+            )}
 
-             {/* Termo Consentimento Modal Handler */}
-             {selectedDocType === 'Termo de Consentimento' && (
-                 <TermoConsentimentoModal 
-                     patient={patient} 
-                     empresaId={empresaId}
-                     existingDocumentData={selectedDocData}
-                     onClose={() => setSelectedDocType(null)} 
-                     onSaved={onDocumentSaved}
-                 />
-             )}
+            {/* Termo Consentimento Modal Handler */}
+            {selectedDocType === 'Termo de Consentimento' && (
+                <TermoConsentimentoModal
+                    patient={patient}
+                    empresaId={empresaId}
+                    existingDocumentData={selectedDocData}
+                    onClose={() => setSelectedDocType(null)}
+                    onSaved={onDocumentSaved}
+                />
+            )}
 
-             {/* Receituário Modal Handler */}
-             {selectedDocType === 'Receituário' && (
-                 <ReceituarioModal 
-                     patient={patient} 
-                     empresaId={empresaId}
-                     existingDocumentData={selectedDocData}
-                     onClose={() => setSelectedDocType(null)} 
-                     onSaved={onDocumentSaved}
-                 />
-             )}
+            {/* Receituário Modal Handler */}
+            {selectedDocType === 'Receituário' && (
+                <ReceituarioModal
+                    patient={patient}
+                    empresaId={empresaId}
+                    existingDocumentData={selectedDocData}
+                    onClose={() => setSelectedDocType(null)}
+                    onSaved={onDocumentSaved}
+                />
+            )}
 
-             {/* Atestado Modal Handler */}
-             {selectedDocType === 'Atestados' && (
-                 <AtestadoModal 
-                     patient={patient} 
-                     empresaId={empresaId}
-                     existingDocumentData={selectedDocData}
-                     onClose={() => setSelectedDocType(null)} 
-                     onSaved={onDocumentSaved}
-                 />
-             )}
+            {/* Atestado Modal Handler */}
+            {(selectedDocType === 'Atestados' || selectedDocType === 'Atestado') && (
+                <AtestadoModal
+                    patient={patient}
+                    empresaId={empresaId}
+                    existingDocumentData={selectedDocData}
+                    onClose={() => setSelectedDocType(null)}
+                    onSaved={onDocumentSaved}
+                />
+            )}
 
-             {/* Simple Document Editor Placeholder */ }
-             {selectedDocType && selectedDocType !== 'Contrato' && selectedDocType !== 'Termo de Consentimento' && selectedDocType !== 'Receituário' && selectedDocType !== 'Atestados' && (
+            {/* Simple Document Editor Placeholder */}
+            {selectedDocType && selectedDocType !== 'Contrato' && selectedDocType !== 'Termo de Consentimento' && selectedDocType !== 'Receituário' && selectedDocType !== 'Atestados' && selectedDocType !== 'Atestado' && (
                 <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
                         {/* Header */}
@@ -223,15 +227,15 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                         {/* Editor content */}
                         <div className="flex-1 p-6 bg-gray-50 flex flex-col gap-4 overflow-y-auto">
                             <label className="text-sm font-semibold text-gray-700">Conteúdo do Documento</label>
-                            <textarea 
+                            <textarea
                                 className="flex-1 w-full border border-gray-200 rounded-xl p-4 text-sm font-medium focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none resize-none shadow-sm"
                                 placeholder="Digite o conteúdo aqui..."
                                 defaultValue={
-                                    selectedDocType === 'Receituário' 
-                                      ? `NOME DO PACIENTE: ${patient.name}\nDATA: ${new Date().toLocaleDateString('pt-BR')}\n\nPrescrição:\n1. `
-                                      : selectedDocType === 'Atestados'
-                                      ? `Atesto para os devidos fins que o(a) sr(a) ${patient.name}, portador(a) do CPF ${patient.cpf}, esteve sob meus cuidados odontológicos na data de ${new Date().toLocaleDateString('pt-BR')}, das ___ às ___.`
-                                      : `Título: ${selectedDocType}\nPaciente: ${patient.name}\nCPF: ${patient.cpf || 'Não informado'}\n\n`
+                                    selectedDocType === 'Receituário'
+                                        ? `NOME DO PACIENTE: ${patient.name}\nDATA: ${new Date().toLocaleDateString('pt-BR')}\n\nPrescrição:\n1. `
+                                        : selectedDocType === 'Atestados'
+                                            ? `Atesto para os devidos fins que o(a) sr(a) ${patient.name}, portador(a) do CPF ${patient.cpf}, esteve sob meus cuidados odontológicos na data de ${new Date().toLocaleDateString('pt-BR')}, das ___ às ___.`
+                                            : `Título: ${selectedDocType}\nPaciente: ${patient.name}\nCPF: ${patient.cpf || 'Não informado'}\n\n`
                                 }
                             />
                         </div>
@@ -253,7 +257,7 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                         </div>
                     </div>
                 </div>
-             )}
+            )}
         </div>
     );
 }
