@@ -13,6 +13,7 @@ import { PaymentModal, PaymentData } from './PaymentModal';
 import { PaymentDetailsModal } from './PaymentDetailsModal';
 import { AnamneseTab } from './AnamneseTab';
 import { DocumentosTab } from './DocumentosTab';
+import { ArquivosTab } from './ArquivosTab';
 
 interface PatientDetailsProps {
   patient: any; // Using any for Patient to avoid circular dependency complaints here
@@ -510,6 +511,13 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                empresaId={empresaId!}
                patient={patient}
                budgets={budgets}
+           />
+        )}
+
+        {activeTab === 'Arquivos' && (
+           <ArquivosTab
+               empresaId={empresaId!}
+               patient={patient}
            />
         )}
 
