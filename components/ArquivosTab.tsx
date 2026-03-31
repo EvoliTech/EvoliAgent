@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Upload,
     Camera,
@@ -54,21 +54,21 @@ const FileIcon = ({ mimeType, size = 24 }: { mimeType: string; size?: number }) 
     const category = getFileCategory(mimeType);
     const props = { size, strokeWidth: 1.5 };
     switch (category) {
-        case 'image':   return <ImageIcon {...props} className="text-pink-500" />;
-        case 'video':   return <Film {...props} className="text-purple-500" />;
-        case 'audio':   return <Music {...props} className="text-indigo-500" />;
+        case 'image': return <ImageIcon {...props} className="text-pink-500" />;
+        case 'video': return <Film {...props} className="text-purple-500" />;
+        case 'audio': return <Music {...props} className="text-indigo-500" />;
         case 'document': return <FileText {...props} className="text-blue-500" />;
-        default:        return <File {...props} className="text-gray-400" />;
+        default: return <File {...props} className="text-gray-400" />;
     }
 };
 
 const categoryColor = (mimeType: string) => {
     switch (getFileCategory(mimeType)) {
-        case 'image':    return 'bg-pink-50 border-pink-200';
-        case 'video':    return 'bg-purple-50 border-purple-200';
-        case 'audio':    return 'bg-indigo-50 border-indigo-200';
+        case 'image': return 'bg-pink-50 border-pink-200';
+        case 'video': return 'bg-purple-50 border-purple-200';
+        case 'audio': return 'bg-indigo-50 border-indigo-200';
         case 'document': return 'bg-blue-50 border-blue-200';
-        default:         return 'bg-gray-50 border-gray-200';
+        default: return 'bg-gray-50 border-gray-200';
     }
 };
 
@@ -81,79 +81,134 @@ interface CameraModalProps {
 
 const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [stream, setStream] = useState<MediaStream | null>(null);
-    const [capturedImage, setCapturedImage] = useState<string | null>(null);
-    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
-    const [error, setError] = useState<string | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const [phase, setPhase] = useState<'camera' | 'preview'>('camera');
+    const [previewUrl, setPreviewUrl] = useState('');
+    const [capturedFile, setCapturedFile] = useState<File | null>(null);
+    const [cameraError, setCameraError] = useState('');
     const [cameraCount, setCameraCount] = useState(0);
+    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
-    const startCamera = useCallback(async (mode: 'user' | 'environment') => {
+    const stopStream = () => {
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+    };
+
+    const startCamera = async (mode: 'user' | 'environment') => {
+        stopStream();
+        setCameraError('');
         try {
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-            }
             const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
-            setCameraCount(videoDevices.length);
+            setCameraCount(devices.filter(d => d.kind === 'videoinput').length);
 
-            const newStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } },
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: mode },
                 audio: false,
             });
-            setStream(newStream);
+            streamRef.current = stream;
             if (videoRef.current) {
-                videoRef.current.srcObject = newStream;
+                videoRef.current.srcObject = stream;
             }
-            setError(null);
-        } catch (err: any) {
-            setError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+        } catch {
+            setCameraError('Não foi possível acessar a câmera. Verifique as permissões.');
         }
-    }, [stream]);
+    };
 
     useEffect(() => {
         startCamera(facingMode);
         return () => {
-            stream?.getTracks().forEach(t => t.stop());
+            stopStream();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const switchCamera = () => {
+    const handleCapture = () => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        setCameraError(''); // Limpa qualquer erro anterior
+
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || video.clientWidth || 640;
+            canvas.height = video.videoHeight || video.clientHeight || 480;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                setCameraError('Erro ao iniciar processamento da imagem.');
+                return;
+            }
+
+            // Desenha o frame no canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(blob => {
+                stopStream(); // Desliga a câmera
+
+                if (!blob) {
+                    setCameraError('Falha ao gerar o arquivo da imagem. Tente novamente.');
+                    return;
+                }
+
+                try {
+                    let file: File;
+                    const fileName = `foto_${Date.now()}.jpg`;
+
+                    try {
+                        // Tentativa 1: Jeito moderno (Navegadores atuais)
+                        file = new File([blob], fileName, { type: 'image/jpeg' });
+                    } catch (e) {
+                        // Tentativa 2: Fallback para WebViews e Safari antigo
+                        // Transforma o Blob diretamente em um formato aceitável
+                        file = blob as any;
+                        (file as any).name = fileName;
+                        (file as any).lastModified = new Date().getTime();
+                    }
+
+                    const url = URL.createObjectURL(blob);
+
+                    setCapturedFile(file);
+                    setPreviewUrl(url);
+                    setPhase('preview'); // Vai mostrar a foto e o botão verde
+                } catch (err) {
+                    console.error('Erro ao processar a imagem:', err);
+                    setCameraError('Erro interno ao preparar a imagem para envio.');
+                }
+
+            }, 'image/jpeg', 0.92);
+
+        } catch (err) {
+            console.error("Erro na captura do frame:", err);
+            setCameraError('Ocorreu um problema ao tentar capturar a foto.');
+        }
+    };
+
+    const handleRetake = () => {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setCapturedFile(null);
+        setPreviewUrl('');
+        setPhase('camera');
+        startCamera(facingMode);
+    };
+
+    const handleUsarFoto = () => {
+        if (!capturedFile) {
+            alert('Nenhuma foto capturada. Tente novamente.');
+            return;
+        }
+        onCapture(capturedFile);
+    };
+
+    const handleSwitchCamera = () => {
         const next = facingMode === 'environment' ? 'user' : 'environment';
         setFacingMode(next);
         startCamera(next);
     };
 
-    const capture = () => {
-        if (!videoRef.current || !canvasRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d')?.drawImage(video, 0, 0);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        setCapturedImage(dataUrl);
-        stream?.getTracks().forEach(t => t.stop());
-    };
-
-    const retake = () => {
-        setCapturedImage(null);
-        startCamera(facingMode);
-    };
-
-    const confirmCapture = () => {
-        if (!capturedImage) return;
-        // Convert base64 to File
-        const arr = capturedImage.split(',');
-        const mime = arr[0].match(/:(.*?);/)![1];
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) u8arr[n] = bstr.charCodeAt(n);
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const file = new File([u8arr], `captura_${timestamp}.jpg`, { type: mime });
-        onCapture(file);
+    const handleClose = () => {
+        stopStream();
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        onClose();
     };
 
     return (
@@ -162,20 +217,17 @@ const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
                 {/* Header */}
                 <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-5 pt-4 pb-2 bg-gradient-to-b from-black/70 to-transparent">
                     <span className="text-white font-semibold text-lg tracking-wide">📸 Câmera</span>
-                    <button
-                        onClick={onClose}
-                        className="text-white/80 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all"
-                    >
+                    <button onClick={handleClose} className="text-white/80 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all">
                         <X size={22} />
                     </button>
                 </div>
 
-                {/* Video / Preview */}
+                {/* Video / Preview area */}
                 <div className="relative aspect-video bg-black flex items-center justify-center">
-                    {error ? (
+                    {cameraError ? (
                         <div className="flex flex-col items-center gap-3 p-8 text-center">
                             <AlertCircle size={40} className="text-red-400" />
-                            <p className="text-white/70 text-sm">{error}</p>
+                            <p className="text-white/70 text-sm">{cameraError}</p>
                             <button
                                 onClick={() => startCamera(facingMode)}
                                 className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-white text-sm transition-all"
@@ -183,40 +235,28 @@ const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
                                 Tentar Novamente
                             </button>
                         </div>
-                    ) : capturedImage ? (
-                        <img
-                            src={capturedImage}
-                            alt="Captura"
-                            className="w-full h-full object-cover"
-                        />
+                    ) : phase === 'preview' ? (
+                        <img src={previewUrl} alt="Captura" className="w-full h-full object-cover" />
                     ) : (
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="w-full h-full object-cover"
-                        />
-                    )}
-                    <canvas ref={canvasRef} className="hidden" />
-
-                    {/* Overlay frame */}
-                    {!capturedImage && !error && (
-                        <div className="absolute inset-0 border-2 border-white/10 rounded-none pointer-events-none">
-                            <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-white/60 rounded-tl-lg" />
-                            <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-white/60 rounded-tr-lg" />
-                            <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-white/60 rounded-bl-lg" />
-                            <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-white/60 rounded-br-lg" />
-                        </div>
+                        <>
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                            {/* Corner frame overlay */}
+                            <div className="absolute inset-0 pointer-events-none">
+                                <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-white/60 rounded-tl-lg" />
+                                <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-white/60 rounded-tr-lg" />
+                                <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-white/60 rounded-bl-lg" />
+                                <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-white/60 rounded-br-lg" />
+                            </div>
+                        </>
                     )}
                 </div>
 
                 {/* Controls */}
-                <div className="flex items-center justify-center gap-6 py-6 bg-black">
-                    {capturedImage ? (
+                <div className="flex items-center justify-center gap-8 py-6 bg-black">
+                    {phase === 'preview' ? (
                         <>
                             <button
-                                onClick={retake}
+                                onClick={handleRetake}
                                 className="flex flex-col items-center gap-1 text-white/70 hover:text-white transition-all"
                             >
                                 <div className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all">
@@ -225,10 +265,11 @@ const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
                                 <span className="text-xs">Refazer</span>
                             </button>
                             <button
-                                onClick={confirmCapture}
+                                type="button"
+                                onClick={handleUsarFoto}
                                 className="flex flex-col items-center gap-1 text-white"
                             >
-                                <div className="p-5 bg-green-500 hover:bg-green-400 rounded-full shadow-lg shadow-green-500/30 transition-all scale-100 hover:scale-110">
+                                <div className="p-5 bg-green-500 hover:bg-green-400 rounded-full shadow-lg shadow-green-500/30 transition-all hover:scale-110">
                                     <CheckCircle2 size={30} />
                                 </div>
                                 <span className="text-xs font-semibold">Usar foto</span>
@@ -238,7 +279,7 @@ const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
                         <>
                             {cameraCount > 1 && (
                                 <button
-                                    onClick={switchCamera}
+                                    onClick={handleSwitchCamera}
                                     className="flex flex-col items-center gap-1 text-white/70 hover:text-white transition-all"
                                 >
                                     <div className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all">
@@ -248,8 +289,9 @@ const CameraModal: React.FC<CameraModalProps> = ({ onCapture, onClose }) => {
                                 </button>
                             )}
                             <button
-                                onClick={capture}
-                                disabled={!!error}
+                                type="button"
+                                onClick={handleCapture}
+                                disabled={!!cameraError}
                                 className="flex flex-col items-center gap-1 text-white disabled:opacity-40"
                             >
                                 <div className="p-1 rounded-full border-4 border-white shadow-xl">
@@ -771,12 +813,9 @@ export const ArquivosTab: React.FC<ArquivosTabProps> = ({ patient, empresaId }) 
             {showCamera && (
                 <CameraModal
                     onCapture={file => {
-                        // Close modal first (sync), then upload using the already-captured File reference
+                        console.log('ArquivosTab recebeu file →', file);
                         setShowCamera(false);
-                        // Small delay ensures modal state is settled before async work starts
-                        setTimeout(() => {
-                            processFiles([file]);
-                        }, 50);
+                        processFiles([file]);
                     }}
                     onClose={() => setShowCamera(false)}
                 />

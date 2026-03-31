@@ -99,6 +99,7 @@ export default function App() {
                setSelectedPatientId(id);
                setCurrentPage('patient-registration-update');
              }}
+             onNavigate={setCurrentPage}
            />
         </div>
         <div className={currentPage === 'patient-registration-update' ? 'block w-full h-full' : 'hidden'}>

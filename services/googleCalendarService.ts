@@ -80,7 +80,7 @@ export const googleCalendarService = {
     return data.items || [];
   },
 
-  async createEvent(empresaId: number, userEmail: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
+  async createEvent(empresaId: number, userEmail: string, event: GoogleEvent, calendarId?: string, cliente_id?: any): Promise<GoogleEvent> {
     // 1. Create in Google Calendar first
     const { data: googleData, error: googleError } = await supabase.functions.invoke('google-auth', {
       body: {
@@ -96,10 +96,7 @@ export const googleCalendarService = {
       throw new Error(googleError?.message || googleData?.error);
     }
 
-    // 2. Mirror to Supabase 'agendamentos' table using Google's ID
-    const { error: supabaseError } = await supabase
-      .from('agendamentos')
-      .insert({
+    const payload: any = {
         google_event_id: googleData.id,
         calendar_id: calendarId || 'primary',
         titulo: googleData.summary,
@@ -110,7 +107,20 @@ export const googleCalendarService = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         IDEmpresa: empresaId
-      });
+    };
+
+    if (cliente_id) payload.cliente_id = cliente_id;
+
+    let { error: supabaseError } = await supabase
+      .from('agendamentos')
+      .insert(payload);
+
+    // Fallback if column cliente_id doesn't exist yet
+    if (supabaseError && supabaseError.code === '42703' && payload.cliente_id) {
+        delete payload.cliente_id;
+        const retry = await supabase.from('agendamentos').insert(payload);
+        supabaseError = retry.error;
+    }
 
     if (supabaseError) {
       console.error('Mirroring error (Create):', supabaseError);
@@ -121,7 +131,7 @@ export const googleCalendarService = {
     return googleData;
   },
 
-  async updateEvent(empresaId: number, userEmail: string, eventId: string, event: GoogleEvent, calendarId?: string): Promise<GoogleEvent> {
+  async updateEvent(empresaId: number, userEmail: string, eventId: string, event: GoogleEvent, calendarId?: string, cliente_id?: any): Promise<GoogleEvent> {
     // 1. Update in Google Calendar
     const { data: googleData, error: googleError } = await supabase.functions.invoke('google-auth', {
       body: {
@@ -139,17 +149,31 @@ export const googleCalendarService = {
     }
 
     // 2. Update mirror in Supabase
-    const { error: supabaseError } = await supabase
-      .from('agendamentos')
-      .update({
+    const updatePayload: any = {
         titulo: googleData.summary,
         data_inicio: googleData.start.dateTime || googleData.start.date,
         data_fim: googleData.end.dateTime || googleData.end.date,
         status: googleData.status || 'confirmed',
         updated_at: new Date().toISOString()
-      })
+    };
+
+    if (cliente_id !== undefined) updatePayload.cliente_id = cliente_id;
+
+    let { error: supabaseError } = await supabase
+      .from('agendamentos')
+      .update(updatePayload)
       .eq('google_event_id', eventId)
       .eq('IDEmpresa', empresaId);
+
+    if (supabaseError && supabaseError.code === '42703' && 'cliente_id' in updatePayload) {
+        delete updatePayload.cliente_id;
+        const retry = await supabase
+            .from('agendamentos')
+            .update(updatePayload)
+            .eq('google_event_id', eventId)
+            .eq('IDEmpresa', empresaId);
+        supabaseError = retry.error;
+    }
 
     if (supabaseError) {
       console.error('Mirroring error (Update):', supabaseError);

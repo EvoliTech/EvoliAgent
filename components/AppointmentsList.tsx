@@ -121,12 +121,12 @@ export const AppointmentsList: React.FC = () => {
 
     const handleCreateEvent = async (eventData: any) => {
         if (!adminEmail || !empresaId) return;
-        const { calendarId, id, ...googleEventData } = eventData;
+        const { calendarId, id, cliente_id, ...googleEventData } = eventData;
         try {
             if (id) {
-                await googleCalendarService.updateEvent(empresaId, adminEmail, id, googleEventData, calendarId);
+                await googleCalendarService.updateEvent(empresaId, adminEmail, id, googleEventData, calendarId, cliente_id);
             } else {
-                await googleCalendarService.createEvent(empresaId, adminEmail, googleEventData, calendarId);
+                await googleCalendarService.createEvent(empresaId, adminEmail, googleEventData, calendarId, cliente_id);
             }
             loadEvents();
             setEditingEvent(undefined);

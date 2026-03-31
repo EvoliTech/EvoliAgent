@@ -12,9 +12,10 @@ import { useCompany } from '../contexts/CompanyContext';
 
 interface PatientsProps {
   onUpdateRegistration?: (id: string) => void;
+  onNavigate?: (page: any) => void;
 }
 
-export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
+export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavigate }) => {
   const { empresaId } = useCompany();
   // Estado principal dos pacientes
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -245,6 +246,11 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration }) => {
             onUpdateRegistration(selectedPatient.id);
           }
         }} 
+        onNavigateToSchedule={() => {
+          if (onNavigate) {
+            onNavigate('agenda');
+          }
+        }}
       />
     );
   }

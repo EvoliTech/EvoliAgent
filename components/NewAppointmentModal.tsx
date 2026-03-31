@@ -41,6 +41,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [phoneOnly, setPhoneOnly] = useState('');
     const [observations, setObservations] = useState('');
     const [consultationType, setConsultationType] = useState<string>('');
+    const [patientId, setPatientId] = useState<number | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -101,6 +102,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                 setObservations('');
                 setConsultationType('');
                 setSearchTerm('');
+                setPatientId(null);
             }
         }
     }, [isOpen, defaultDate, specialists, initialData]);
@@ -167,6 +169,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
         setSearchTerm('');
         setShowPatientResults(false);
+        setPatientId(patient.id);
     };
 
     const handleSubmit = async () => {
@@ -260,7 +263,7 @@ Obs: ${observations || '-'}`,
             // If the user has multiple calendars, I should allow selecting one.
 
             // If editing, preserve ID
-            const payload = { ...eventData, calendarId: selectedCalendarId };
+            const payload = { ...eventData, calendarId: selectedCalendarId, cliente_id: finalPhone };
             if (initialData?.id) {
                 (payload as any).id = initialData.id;
             }
