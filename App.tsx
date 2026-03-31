@@ -12,6 +12,7 @@ import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdat
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
 import { Login } from './components/Login';
+import { PublicAnamnese } from './components/PublicAnamnese';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
@@ -128,6 +129,10 @@ export default function App() {
       </div>
     );
   };
+
+  if (window.location.pathname.startsWith('/anamnese/')) {
+    return <PublicAnamnese />;
+  }
 
   if (loading || (session && companyLoading)) {
     return (

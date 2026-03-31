@@ -352,7 +352,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         setTarefas(fetchedTarefas);
 
         // Load Anamnese for Health Alerts
-        const anamneseRecord = await anamneseService.fetchAnamnese(empresaId, patientIdNum);
+        const anamneseRecords = await anamneseService.fetchAnamneses(empresaId, patientIdNum);
+        const anamneseRecord = anamneseRecords.length > 0 ? anamneseRecords[0] : null;
         if (anamneseRecord && anamneseRecord.respostas) {
           const alerts: string[] = [];
           for (const q of ANAMNESE_QUESTIONS) {
