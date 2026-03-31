@@ -49,6 +49,24 @@ export const anamneseService = {
       }
    },
    
+   async updateAnamnese(empresaId: number, id: string, respostas: Record<string, any>): Promise<Anamnese | null> {
+      try {
+          const { data, error } = await supabase
+             .from('anamneses')
+             .update({ respostas, updated_at: new Date().toISOString() })
+             .eq('id', id)
+             .eq('IDEmpresa', empresaId)
+             .select()
+             .single();
+             
+          if (error) throw error;
+          return data;
+      } catch (err) {
+          console.error('Error updating anamnese:', err);
+          return null;
+      }
+   },
+   
    async deleteAnamnese(empresaId: number, id: string): Promise<boolean> {
       try {
           const { error } = await supabase

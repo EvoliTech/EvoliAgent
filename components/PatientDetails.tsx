@@ -353,7 +353,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
         // Load Anamnese for Health Alerts
         const anamneseRecords = await anamneseService.fetchAnamneses(empresaId, patientIdNum);
-        const anamneseRecord = anamneseRecords.length > 0 ? anamneseRecords[0] : null;
+        let anamneseRecord = anamneseRecords.find(a => a.respostas?._is_default === true) || null;
+        if (!anamneseRecord && anamneseRecords.length > 0) {
+          anamneseRecord = anamneseRecords[anamneseRecords.length - 1]; // Oldest is default explicitly
+        }
+        
         if (anamneseRecord && anamneseRecord.respostas) {
           const alerts: string[] = [];
           for (const q of ANAMNESE_QUESTIONS) {

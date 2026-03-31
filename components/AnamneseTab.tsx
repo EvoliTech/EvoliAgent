@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { anamneseService, Anamnese } from '../services/anamneseService';
-import { ChevronLeft, Save, Printer, Plus, Link, Check, Clock, Eye, Trash2 } from 'lucide-react';
+import { ChevronLeft, Save, Printer, Plus, Link, Check, Clock, Eye, Trash2, Star } from 'lucide-react';
 
 export const ANAMNESE_QUESTIONS = [
   { id: 'queixa_principal', label: 'Queixa principal', hasInfo: true, type: 'text_only' },
@@ -143,6 +143,17 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
        }
    };
 
+   const handleSetDefault = async (anamnese: Anamnese) => {
+       const currentDefault = history.find(a => a.respostas?._is_default === true) || history[history.length - 1];
+       if (currentDefault && currentDefault.id === anamnese.id) return;
+
+       if (currentDefault) {
+           await anamneseService.updateAnamnese(empresaId, currentDefault.id, { ...currentDefault.respostas, _is_default: false });
+       }
+       await anamneseService.updateAnamnese(empresaId, anamnese.id, { ...anamnese.respostas, _is_default: true });
+       await loadHistory();
+   };
+
    if (loading) return <div className="p-8 text-center text-gray-500">Carregando questionários...</div>;
 
    const renderList = () => (
@@ -170,14 +181,22 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
                </div>
            ) : (
                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                   {history.map((anamnese, idx) => (
-                       <div key={anamnese.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow relative group flex flex-col justify-between">
+                   {history.map((anamnese, idx) => {
+                       const isDefault = anamnese.id === (history.find(a => a.respostas?._is_default === true)?.id || history[history.length - 1]?.id);
+                       
+                       return (
+                       <div key={anamnese.id} className={`bg-white border rounded-xl p-5 hover:shadow-md transition-shadow relative group flex flex-col justify-between ${isDefault ? 'border-amber-300 ring-2 ring-amber-100/50' : 'border-gray-200'}`}>
                            <div>
-                               <div className="flex items-center justify-between mb-3">
+                               <div className="flex items-center gap-2 mb-3">
                                    <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
                                        Versão {history.length - idx}
                                    </span>
-                                   <span className="text-xs text-gray-400 font-medium">
+                                   {isDefault && (
+                                       <span className="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm">
+                                           <Star size={11} className="fill-amber-500" /> Padrão
+                                       </span>
+                                   )}
+                                   <span className="text-xs text-gray-400 font-medium ml-auto">
                                        {new Date(anamnese.created_at).toLocaleDateString('pt-BR')}
                                    </span>
                                </div>
@@ -193,15 +212,27 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
                                    <Printer size={15} />
                                </button>
                            </div>
-                           <button 
-                               onClick={() => handleDelete(anamnese)} 
-                               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                               title="Excluir"
-                           >
-                               <Trash2 size={16} />
-                           </button>
+                           
+                           <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                               {!isDefault && (
+                                   <button 
+                                       onClick={() => handleSetDefault(anamnese)} 
+                                       className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg shadow-sm bg-white border border-gray-100"
+                                       title="Definir como Padrão"
+                                   >
+                                       <Star size={15} />
+                                   </button>
+                               )}
+                               <button 
+                                   onClick={() => handleDelete(anamnese)} 
+                                   className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm bg-white border border-gray-100"
+                                   title="Excluir"
+                               >
+                                   <Trash2 size={15} />
+                               </button>
+                           </div>
                        </div>
-                   ))}
+                   )})}
                </div>
            )}
        </div>
