@@ -17,7 +17,8 @@ import {
   Video,
   Image as ImageIcon,
   MessageCircle,
-  CircleDollarSign
+  CircleDollarSign,
+  X
 } from 'lucide-react';
 import { PageType } from '../../types';
 import { patientService } from '../../services/patientService';
@@ -35,6 +36,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
   const [gridMenuOpen, setGridMenuOpen] = useState(false);
   const { empresaId } = useCompany();
   const [hasBirthday, setHasBirthday] = useState(false);
+  const [showBirthdayToast, setShowBirthdayToast] = useState(false);
 
   useEffect(() => {
     const checkBirthdays = async () => {
@@ -50,21 +52,52 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
         const tmrwMonth = tomorrow.getMonth() + 1;
         const tmrwDay = tomorrow.getDate();
 
-        const hasAny = allPatients.some(p => {
-          if (!p.dataNascimento) return false;
+        const todayISO = today.toISOString().split('T')[0];
+        const sentSaved = localStorage.getItem(`sent_messages_${empresaId}_${todayISO}`);
+        const sentMsgs = sentSaved ? JSON.parse(sentSaved) : [];
+
+        let anyTodayUnsent = false;
+        let anyBirthday = false;
+
+        allPatients.forEach(p => {
+          if (!p.dataNascimento) return;
           const [, monthStr, dayStr] = p.dataNascimento.split('-');
-          if (!monthStr || !dayStr) return false;
+          if (!monthStr || !dayStr) return;
+          
           const bMonth = parseInt(monthStr, 10);
           const bDay = parseInt(dayStr, 10);
-          return (bMonth === currentMonth && bDay === currentDay) || (bMonth === tmrwMonth && bDay === tmrwDay);
+          
+          const isToday = bMonth === currentMonth && bDay === currentDay;
+          const isTomorrow = bMonth === tmrwMonth && bDay === tmrwDay;
+          
+          if (isToday || isTomorrow) {
+             anyBirthday = true;
+          }
+          if (isToday && !sentMsgs.includes(p.id)) {
+             anyTodayUnsent = true;
+          }
         });
 
-        setHasBirthday(hasAny);
+        setHasBirthday(anyBirthday || anyTodayUnsent);
+        if (anyTodayUnsent) {
+           setShowBirthdayToast(true);
+        }
       } catch (err) {
         console.error(err);
       }
     };
     checkBirthdays();
+    
+    // Listen for storage changes in case they send a message and we want to hide the red dot automatically
+    const handleStorageChange = () => checkBirthdays();
+    window.addEventListener('storage', handleStorageChange);
+    // Also add a custom event dispatch from MessageCenter just in case it's in the same tab
+    window.addEventListener('messages_sent_updated', handleStorageChange);
+    
+    return () => {
+       window.removeEventListener('storage', handleStorageChange);
+       window.removeEventListener('messages_sent_updated', handleStorageChange);
+    };
   }, [empresaId]);
 
   // Remapeando para manter a navegação existente mas parecer com o print
@@ -197,7 +230,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             className={`p-2 rounded-full transition-all relative ${hasBirthday ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'hover:bg-gray-100'}`}
             title="Central de Mensagens"
           >
-            <Gift size={20} />
+            <MessageCircle size={20} />
             {hasBirthday && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse border-2 border-white"></span>
             )}
@@ -235,6 +268,29 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           )}
         </div>
       </div>
+      {/* Birthday Toast Popup */}
+      {showBirthdayToast && (
+         <div className="fixed bottom-6 right-6 z-[100] bg-white border border-indigo-100 shadow-2xl shadow-indigo-500/10 rounded-2xl p-5 w-80 animate-in slide-in-from-bottom-5 fade-in duration-300">
+            <div className="flex items-start justify-between mb-3">
+               <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center -mt-1 -ml-1">
+                  <Gift className="text-indigo-600 w-5 h-5" />
+               </div>
+               <button onClick={() => setShowBirthdayToast(false)} className="text-gray-400 hover:text-gray-600 transition-colors bg-gray-50 rounded-full p-1.5 -mt-1 -mr-1">
+                  <X size={16} />
+               </button>
+            </div>
+            <h4 className="font-bold text-gray-800 text-base mb-1">Aniversariantes do dia!</h4>
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+               Você tem mensagens de aniversário pendentes para enviar hoje. Não deixe passar em branco! 🎉
+            </p>
+            <button 
+               onClick={() => { setShowBirthdayToast(false); onNavigate('message-center'); }} 
+               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm text-sm"
+            >
+               Enviar mensagens agora
+            </button>
+         </div>
+      )}
     </header>
   );
 };

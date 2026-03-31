@@ -12,14 +12,25 @@ interface CampaignType {
 export const Campaigns: React.FC = () => {
   const { empresaId } = useCompany();
 
-  // Basic mock state to toggle active state
-  const [activeCampaigns, setActiveCampaigns] = useState<Record<string, boolean>>({});
+  // Persist active state to localStorage
+  const [activeCampaigns, setActiveCampaigns] = useState<Record<string, boolean>>(() => {
+    if (!empresaId) return {};
+    try {
+      const saved = localStorage.getItem(`campaigns_config_${empresaId}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   const toggleCampaign = (id: string) => {
-    setActiveCampaigns(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+    setActiveCampaigns(prev => {
+      const newState = { ...prev, [id]: !prev[id] };
+      if (empresaId) {
+        localStorage.setItem(`campaigns_config_${empresaId}`, JSON.stringify(newState));
+      }
+      return newState;
+    });
   };
 
   const campaigns: CampaignType[] = [
