@@ -47,5 +47,21 @@ export const anamneseService = {
           console.error('Error saving anamnese:', err);
           return null;
       }
+   },
+   
+   async deleteAnamnese(empresaId: number, id: string): Promise<boolean> {
+      try {
+          const { error } = await supabase
+             .from('anamneses')
+             .delete()
+             .eq('id', id)
+             .eq('IDEmpresa', empresaId);
+             
+          if (error) throw error;
+          return true;
+      } catch (err) {
+          console.error('Error deleting anamnese:', err);
+          return false;
+      }
    }
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { anamneseService, Anamnese } from '../services/anamneseService';
-import { ChevronLeft, Save, Printer, Plus, Link, Check, Clock, Eye } from 'lucide-react';
+import { ChevronLeft, Save, Printer, Plus, Link, Check, Clock, Eye, Trash2 } from 'lucide-react';
 
 export const ANAMNESE_QUESTIONS = [
   { id: 'queixa_principal', label: 'Queixa principal', hasInfo: true, type: 'text_only' },
@@ -132,6 +132,17 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
        w.document.close();
    };
 
+   const handleDelete = async (anamnese: Anamnese) => {
+       if (window.confirm("Deseja realmente excluir esta anamnese?")) {
+           const success = await anamneseService.deleteAnamnese(empresaId, anamnese.id);
+           if (success) {
+               await loadHistory();
+           } else {
+               alert("Erro ao excluir anamnese. Tente novamente.");
+           }
+       }
+   };
+
    if (loading) return <div className="p-8 text-center text-gray-500">Carregando questionários...</div>;
 
    const renderList = () => (
@@ -182,6 +193,13 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
                                    <Printer size={15} />
                                </button>
                            </div>
+                           <button 
+                               onClick={() => handleDelete(anamnese)} 
+                               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                               title="Excluir"
+                           >
+                               <Trash2 size={16} />
+                           </button>
                        </div>
                    ))}
                </div>

@@ -36,15 +36,15 @@ export const PublicAnamnese = () => {
 
         // Fetch user data to confirm it's valid and get name
         const { data, error } = await supabase
-          .from('clientes')
-          .select('nome_cliente')
+          .from('Cliente')
+          .select('nome')
           .eq('id', patId)
           .eq('IDEmpresa', empId)
           .single();
 
         if (error || !data) throw new Error("Paciente não encontrado ou link expirado.");
 
-        setPatientName(data.nome_cliente);
+        setPatientName(data.nome);
         setLoading(false);
       } catch (err: any) {
         setErrorMsg(err.message || 'Erro ao carregar link.');
@@ -75,9 +75,9 @@ export const PublicAnamnese = () => {
         
       if (error) throw error;
       setSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Ocorreu um erro ao enviar sua ficha. Tente novamente.");
+      alert("Ocorreu um erro ao enviar sua ficha: " + (err.message || JSON.stringify(err)));
     } finally {
       setSaving(false);
     }
