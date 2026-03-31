@@ -12,6 +12,8 @@ import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdat
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
 import { Gallery } from './components/Gallery';
+import { Campaigns } from './components/Campaigns';
+import { MessageCenter } from './components/MessageCenter';
 import { Login } from './components/Login';
 import { PublicAnamnese } from './components/PublicAnamnese';
 import { supabase } from './lib/supabase';
@@ -120,6 +122,12 @@ export default function App() {
         </div>
         <div className={currentPage === 'gallery' ? 'block' : 'hidden'}>
            <Gallery />
+        </div>
+        <div className={currentPage === 'campaigns' ? 'block' : 'hidden'}>
+           <Campaigns />
+        </div>
+        <div className={currentPage === 'message-center' ? 'block' : 'hidden'}>
+           <MessageCenter />
         </div>
         <div className={currentPage === 'professionals' ? 'block' : 'hidden'}>
            <Professionals />

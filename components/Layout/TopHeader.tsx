@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CalendarDays,
   User,
@@ -7,9 +7,7 @@ import {
   Settings,
   LogOut,
   Search,
-  Bell,
-  MessageSquare,
-  CheckSquare,
+  Gift,
   ChevronDown,
   Calendar1Icon,
   Archive,
@@ -22,6 +20,8 @@ import {
   CircleDollarSign
 } from 'lucide-react';
 import { PageType } from '../../types';
+import { patientService } from '../../services/patientService';
+import { useCompany } from '../../contexts/CompanyContext';
 
 interface TopHeaderProps {
   activePage: PageType;
@@ -33,6 +33,39 @@ interface TopHeaderProps {
 export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, userEmail }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [gridMenuOpen, setGridMenuOpen] = useState(false);
+  const { empresaId } = useCompany();
+  const [hasBirthday, setHasBirthday] = useState(false);
+
+  useEffect(() => {
+    const checkBirthdays = async () => {
+      if (!empresaId) return;
+      try {
+        const allPatients = await patientService.fetchPatients(empresaId);
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        
+        const currentMonth = today.getMonth() + 1;
+        const currentDay = today.getDate();
+        const tmrwMonth = tomorrow.getMonth() + 1;
+        const tmrwDay = tomorrow.getDate();
+
+        const hasAny = allPatients.some(p => {
+          if (!p.dataNascimento) return false;
+          const [, monthStr, dayStr] = p.dataNascimento.split('-');
+          if (!monthStr || !dayStr) return false;
+          const bMonth = parseInt(monthStr, 10);
+          const bDay = parseInt(dayStr, 10);
+          return (bMonth === currentMonth && bDay === currentDay) || (bMonth === tmrwMonth && bDay === tmrwDay);
+        });
+
+        setHasBirthday(hasAny);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    checkBirthdays();
+  }, [empresaId]);
 
   // Remapeando para manter a navegação existente mas parecer com o print
   const menuItems = [
@@ -120,7 +153,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                   </button>
 
                   {/* Item 3 - Campanhas */}
-                  <button className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left">
+                  <button 
+                    onClick={() => { onNavigate('campaigns'); setGridMenuOpen(false); }}
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
+                  >
                     <MessageSquareIcon className="text-gray-400 shrink-0" size={24} />
                     <span className="text-sm font-medium text-gray-700 leading-tight">Campanhas<br />automáticas</span>
                   </button>
@@ -155,9 +191,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
         {/* Action Icons */}
         <div className="flex items-center space-x-2 text-gray-500">
           <button onClick={() => onNavigate('patients')} className={`p-2 rounded-full transition-colors ${activePage === 'patients' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`} title="Buscar Pacientes"><Search size={20} /></button>
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><Bell size={20} /></button>
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><MessageSquare size={20} /></button>
-          <button className="p-2 hover:bg-gray-100 rounded-full transition-colors"><CheckSquare size={20} /></button>
+          
+          <button 
+            onClick={() => onNavigate('message-center')} 
+            className={`p-2 rounded-full transition-all relative ${hasBirthday ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'hover:bg-gray-100'}`}
+            title="Central de Mensagens"
+          >
+            <Gift size={20} />
+            {hasBirthday && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse border-2 border-white"></span>
+            )}
+          </button>
+
           <button onClick={() => onNavigate('settings')} className={`p-2 rounded-full transition-colors ${activePage === 'settings' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`}><Settings size={20} /></button>
         </div>
 
