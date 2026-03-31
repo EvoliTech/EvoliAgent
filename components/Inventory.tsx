@@ -4,6 +4,7 @@ import { ManageInventoryModal } from './ManageInventoryModal';
 import { StockOutModal } from './StockOutModal';
 import { EditProductModal } from './EditProductModal';
 import { DeleteProductModal } from './DeleteProductModal';
+import { ShoppingListModal } from './ShoppingListModal';
 import { useCompany } from '../contexts/CompanyContext';
 import { inventoryService, InventoryProduct } from '../services/inventoryService';
 import * as XLSX from 'xlsx';
@@ -25,6 +26,9 @@ export const Inventory: React.FC = () => {
   // Stock Out State
   const [selectedProductForOut, setSelectedProductForOut] = useState<InventoryProduct | null>(null);
   const [isStockOutOpen, setIsStockOutOpen] = useState(false);
+
+  // Shopping List Modal State
+  const [isShoppingListOpen, setIsShoppingListOpen] = useState(false);
 
   // Edit / Dropdown State
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<InventoryProduct | null>(null);
@@ -163,7 +167,7 @@ export const Inventory: React.FC = () => {
                   <div className="flex items-center gap-2 p-4 bg-orange-50 border border-orange-200 rounded-md text-sm text-orange-800 shrink-0">
                     <Info className="text-orange-500 shrink-0" size={18} />
                     <span>
-                      Atenção! Há um produto com a quantidade menor que o mínimo. <button className="font-semibold text-orange-600 hover:underline">Ver lista de compras</button>
+                      Atenção! Há um produto com a quantidade menor que o mínimo. <button onClick={() => setIsShoppingListOpen(true)} className="font-semibold text-orange-600 hover:underline">Ver lista de compras</button>
                     </span>
                   </div>
                 )}
@@ -394,6 +398,12 @@ export const Inventory: React.FC = () => {
         }}
         product={selectedProductForDelete}
         onSuccess={fetchProducts}
+      />
+
+      <ShoppingListModal 
+        isOpen={isShoppingListOpen}
+        onClose={() => setIsShoppingListOpen(false)}
+        products={products}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery';
 
 export interface CommissionRule {
   id: string;

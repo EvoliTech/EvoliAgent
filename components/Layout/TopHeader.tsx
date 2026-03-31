@@ -17,6 +17,7 @@ import {
   Globe,
   MessageSquare as MessageSquareIcon,
   Video,
+  Image as ImageIcon,
   MessageCircle,
   CircleDollarSign
 } from 'lucide-react';
@@ -125,9 +126,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                   </button>
 
                   {/* Item 4 - Galeria */}
-                  <button className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left">
-                    <Video className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Galeria de<br />Vídeos</span>
+                  <button 
+                    onClick={() => { onNavigate('gallery'); setGridMenuOpen(false); }}
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
+                  >
+                    <ImageIcon className="text-gray-400 shrink-0" size={24} />
+                    <span className="text-sm font-medium text-gray-700 leading-tight">Galeria de<br />Fotos</span>
                   </button>
                 </div>
               </div>

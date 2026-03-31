@@ -82,7 +82,24 @@ export const arquivoService = {
             .order('created_at', { ascending: false });
 
         if (error) {
-            // Ignora se a tabela ainda não existir
+            if ((error as any)?.code === '42P01') return [];
+            throw error;
+        }
+        return data || [];
+    },
+
+    /**
+     * Busca todos os arquivos de imagens da empresa para a galeria global.
+     */
+    async getAllImages(empresaId: number): Promise<ArquivoPaciente[]> {
+        const { data, error } = await supabase
+            .from('patient_files')
+            .select('*')
+            .eq('IDEmpresa', empresaId)
+            .like('tipo_arquivo', 'image/%') // Fetches only image types
+            .order('created_at', { ascending: false });
+
+        if (error) {
             if ((error as any)?.code === '42P01') return [];
             throw error;
         }

@@ -11,6 +11,7 @@ import { AppointmentsList } from './components/AppointmentsList';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
+import { Gallery } from './components/Gallery';
 import { Login } from './components/Login';
 import { PublicAnamnese } from './components/PublicAnamnese';
 import { supabase } from './lib/supabase';
@@ -116,6 +117,9 @@ export default function App() {
         </div>
         <div className={currentPage === 'financeiro' ? 'block' : 'hidden'}>
            <Financial />
+        </div>
+        <div className={currentPage === 'gallery' ? 'block' : 'hidden'}>
+           <Gallery />
         </div>
         <div className={currentPage === 'professionals' ? 'block' : 'hidden'}>
            <Professionals />
