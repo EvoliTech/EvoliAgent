@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { OdontogramProcedure } from './Odontogram';
-import { DEFAULT_TREATMENTS } from '../constants/treatments';
+import { plansService } from '../services/plansService';
+import { useCompany } from '../contexts/CompanyContext';
+import { HealthPlan } from '../types';
 
 interface NewBudgetModalProps {
   isOpen: boolean;
@@ -18,8 +20,10 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [date, setDate] = useState('');
 
   // Adding treatment form state
+  const { empresaId } = useCompany();
+  const [plans, setPlans] = useState<HealthPlan[]>([]);
   const [profissional, setProfissional] = useState('Everton Oliveira'); // Mocked for now
-  const [convenio, setConvenio] = useState('Particular');
+  const [convenio, setConvenio] = useState('');
   const [tratamentoSearch, setTratamentoSearch] = useState('');
   const [selectedTratamento, setSelectedTratamento] = useState<string>('');
   const [valor, setValor] = useState('');
@@ -42,8 +46,18 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         setDate(new Date().toISOString().split('T')[0]);
         setAddedTreatments([]);
       }
+      
+      // Load Plans
+      if (empresaId) {
+         plansService.fetchPlans(empresaId).then(loadedPlans => {
+            setPlans(loadedPlans);
+            if (loadedPlans.length > 0 && !convenio) {
+               setConvenio(loadedPlans.find(p => p.isDefault)?.id || loadedPlans[0].id);
+            }
+         });
+      }
     }
-  }, [isOpen, initialData, patientName]);
+  }, [isOpen, initialData, patientName, empresaId]);
 
   // Editing pending treatment state
   const [editingPendingId, setEditingPendingId] = useState<string | null>(null);
@@ -60,6 +74,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
        return;
     }
 
+    const resolvedConvenioName = plans.find(p => p.id === convenio)?.name || convenio;
+
     if (editingPendingId) {
       setAddedTreatments(prev => prev.map(t => t.id === editingPendingId ? {
          ...t,
@@ -68,7 +84,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
          dente: denteId,
          faces,
          profissional,
-         convenio,
+         convenio: resolvedConvenioName,
          status: 'Aguardando',
          observacoes
       } : t));
@@ -81,7 +97,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         dente: denteId,
         faces,
         profissional,
-        convenio,
+        convenio: resolvedConvenioName,
         status: 'Aguardando',
         observacoes
       };
@@ -121,7 +137,11 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setDenteId(t.dente || '');
     setFaces(t.faces || '');
     setProfissional('Everton Oliveira'); // pre-fill or keep existing
-    setConvenio('Particular'); // pre-fill or keep existing
+    
+    // Find the plan ID that matches the text name from the old treatment
+    const matchedPlan = plans.find(p => p.name === t.convenio);
+    setConvenio(matchedPlan ? matchedPlan.id : (plans.find(p => p.isDefault)?.id || ''));
+    
     setValor(t.valor || '');
     setObservacoes(t.observacoes || '');
   };
@@ -142,7 +162,9 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     }
   };
 
-  const filteredTreatments = DEFAULT_TREATMENTS.filter(t => t.name.toLowerCase().includes(tratamentoSearch.toLowerCase())).slice(0, 5);
+  const selectedPlanObj = plans.find(p => p.id === convenio);
+  const planTreatments = selectedPlanObj?.treatments.filter(t => t.active) || [];
+  const filteredTreatments = planTreatments.filter(t => t.name.toLowerCase().includes(tratamentoSearch.toLowerCase())).slice(0, 5);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
@@ -202,9 +224,10 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                     onChange={e => setConvenio(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option>Particular</option>
-                    <option>Amil Dental</option>
-                    <option>Unimed Odonto</option>
+                    {!convenio && <option value="">Selecionar</option>}
+                    {plans.map(p => (
+                       <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -228,9 +251,17 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                         />
                         {tratamentoSearch && (
                           <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
+                            {filteredTreatments.length === 0 && (
+                               <div className="px-3 py-4 text-sm text-gray-400 text-center">Nenhum tratamento encontrado neste plano.</div>
+                            )}
                             {filteredTreatments.map(t => (
-                              <button key={t.id} onClick={() => { setSelectedTratamento(t.name); setTratamentoSearch(''); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 truncate">
-                                {t.name}
+                              <button key={t.id} onClick={() => { 
+                                 setSelectedTratamento(t.name); 
+                                 setTratamentoSearch(''); 
+                                 setValor(String(t.price));
+                              }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 truncate flex justify-between items-center group">
+                                <span className="group-hover:text-blue-700">{t.name}</span>
+                                <span className="text-emerald-600 font-semibold text-xs whitespace-nowrap">R$ {Number(t.price).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                               </button>
                             ))}
                           </div>

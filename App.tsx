@@ -5,6 +5,8 @@ import { Dashboard } from './components/Dashboard';
 import { Agenda } from './components/Agenda';
 import { Professionals } from './components/Professionals';
 import { Patients } from './components/Patients';
+import { ClinicSettings } from './components/ClinicSettings';
+import { PlansManagement } from './components/PlansManagement';
 import { Settings } from './components/Settings';
 import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
@@ -130,10 +132,19 @@ export default function App() {
            <MessageCenter />
         </div>
         <div className={currentPage === 'professionals' ? 'block' : 'hidden'}>
-           <Professionals />
+           <Professionals onBack={() => setCurrentPage('settings')} />
         </div>
         <div className={currentPage === 'settings' ? 'block' : 'hidden'}>
-           <Settings />
+           <Settings onNavigate={setCurrentPage} />
+        </div>
+        <div className={currentPage === 'clinic-settings' ? 'block' : 'hidden'}>
+           <ClinicSettings initialTab="general" onBack={() => setCurrentPage('settings')} />
+        </div>
+        <div className={currentPage === 'integrations' ? 'block' : 'hidden'}>
+           <ClinicSettings initialTab="integrations" onBack={() => setCurrentPage('settings')} />
+        </div>
+        <div className={currentPage === 'plans-management' ? 'block' : 'hidden'}>
+           <PlansManagement onBack={() => setCurrentPage('settings')} />
         </div>
         <div className={currentPage === 'google-callback' ? 'block' : 'hidden'}>
            <GoogleCallback onNavigate={setCurrentPage} />

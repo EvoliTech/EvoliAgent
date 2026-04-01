@@ -245,7 +245,7 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
                               <input 
                                 type="text" 
                                 disabled
-                                value={t.baseValue}
+                                value={t.price}
                                 className="w-full bg-white text-[#64748b] border border-[#cbd5e1] rounded-lg pl-9 pr-3 py-2 text-[13px] outline-none"
                               />
                             </div>

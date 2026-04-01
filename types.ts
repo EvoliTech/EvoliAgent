@@ -1,5 +1,21 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations';
+
+export interface TreatmentItem {
+  id: string;
+  name: string;
+  category: string;
+  cost: number;
+  price: number;
+  active: boolean;
+}
+
+export interface HealthPlan {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+  treatments: TreatmentItem[];
+}
 
 export interface CommissionRule {
   id: string;
