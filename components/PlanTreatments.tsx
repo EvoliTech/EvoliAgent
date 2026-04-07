@@ -27,6 +27,7 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
     category: 'Odontologia Geral',
     cost: 0,
     price: 0,
+    receiveDays: 30,
     active: true
   });
 
@@ -62,13 +63,14 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
       category: newTreatment.category,
       cost: newTreatment.cost || 0,
       price: newTreatment.price || 0,
+      receiveDays: newTreatment.receiveDays || 0,
       active: true
     };
     
     const updatedTreatments = [...currentPlan.treatments, treatment];
     savePlanState({ ...currentPlan, treatments: updatedTreatments });
     setIsNewTreatmentOpen(false);
-    setNewTreatment({ name: '', category: 'Odontologia Geral', cost: 0, price: 0, active: true });
+    setNewTreatment({ name: '', category: 'Odontologia Geral', cost: 0, price: 0, receiveDays: 30, active: true });
   };
 
   const handleSaveName = () => {
@@ -152,11 +154,12 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
           </div>
 
           {/* Labels Cabeçalho (somente desktop) */}
-          <div className="hidden md:grid grid-cols-[2.5fr_1.5fr_1fr_1fr] gap-4 mb-2 px-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
+          <div className="hidden md:grid grid-cols-[2.5fr_1.5fr_1fr_1fr_1fr] gap-4 mb-2 px-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
             <div>Tratamento</div>
             <div>Categoria</div>
             <div>Custo</div>
             <div>Valor</div>
+            <div>Diasp/ Receber</div>
           </div>
 
           <div className="space-y-6 flex-1 overflow-y-auto pr-2 pb-10">
@@ -169,7 +172,7 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
                </div>
             ) : filteredTreatments.map(treatment => (
               <div key={treatment.id} className="border-b border-gray-100 pb-5">
-                <div className="grid grid-cols-1 md:grid-cols-[2.5fr_1.5fr_1fr_1fr] gap-4 mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-[2.5fr_1.5fr_1fr_1fr_1fr] gap-4 mb-3">
                   <input
                     type="text"
                     value={treatment.name}
@@ -204,6 +207,17 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
                       onChange={e => handleUpdateTreatment(treatment.id, 'price', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 text-sm text-gray-800 outline-none"
                     />
+                  </div>
+
+                  <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden bg-white">
+                    <input
+                      type="number"
+                      min={0}
+                      value={treatment.receiveDays || 0}
+                      onChange={e => handleUpdateTreatment(treatment.id, 'receiveDays', parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 text-sm text-gray-800 outline-none"
+                    />
+                    <span className="text-gray-500 text-xs font-medium px-2 bg-gray-50 border-l border-gray-300 py-2.5">dias</span>
                   </div>
                 </div>
 
@@ -278,7 +292,7 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
                  ))}
                </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-3 gap-4">
                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Custo (R$)</label>
                   <input 
@@ -294,6 +308,16 @@ export const PlanTreatments: React.FC<PlanTreatmentsProps> = ({ plan, onBack }) 
                     type="number" 
                     value={newTreatment.price} 
                     onChange={e => setNewTreatment({...newTreatment, price: parseFloat(e.target.value) || 0})}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+               </div>
+               <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Dias para receber</label>
+                  <input 
+                    type="number" 
+                    min={0}
+                    value={newTreatment.receiveDays !== undefined ? newTreatment.receiveDays : 30} 
+                    onChange={e => setNewTreatment({...newTreatment, receiveDays: parseInt(e.target.value) || 0})}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                </div>

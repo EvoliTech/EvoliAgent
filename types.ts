@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings';
 
 export interface TreatmentItem {
   id: string;
@@ -7,6 +7,7 @@ export interface TreatmentItem {
   category: string;
   cost: number;
   price: number;
+  receiveDays?: number;
   active: boolean;
 }
 

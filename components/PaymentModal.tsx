@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Banknote, Landmark, QrCode, Receipt, CheckCircle, FileText } from 'lucide-react';
-import { Patient } from '../types';
+import { Patient, HealthPlan } from '../types';
+import { supabase } from '../lib/supabase';
+import { useCompany } from '../contexts/CompanyContext';
+import { plansService } from '../services/plansService';
 
 export interface PaymentData {
     id: string;
@@ -8,6 +11,11 @@ export interface PaymentData {
     amount: number;
     date: string;
     observations: string;
+    installments?: number;
+    maquininha_id?: string;
+    plano_id?: string;
+    receiveDate?: string;
+    planAmount?: number;
 }
 
 interface PaymentModalProps {
@@ -23,9 +31,9 @@ const PAYMENT_METHODS = [
     { id: 'Crédito', icon: CreditCard, label: 'Crédito' },
     { id: 'Débito', icon: CreditCard, label: 'Débito' },
     { id: 'Boleto', icon: Receipt, label: 'Boleto' },
-    { id: 'Cheque', icon: FileText, label: 'Cheque' },
     { id: 'Pix', icon: QrCode, label: 'Pix' },
-    { id: 'TED', icon: Landmark, label: 'TED' }
+    { id: 'TED', icon: Landmark, label: 'TED' },
+    { id: 'Plano', icon: FileText, label: 'Plano' }
 ];
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, treatments, patient, onProcessPayment }) => {
@@ -39,8 +47,34 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
     const now = new Date();
     const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const [date, setDate] = useState<string>(defaultDate);
+    const [installments, setInstallments] = useState<number>(1);
     const [observations, setObservations] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Maquininhas and Plans state
+    const { empresaId } = useCompany();
+    const [maquininhas, setMaquininhas] = useState<any[]>([]);
+    const [selectedMaquininhaId, setSelectedMaquininhaId] = useState<string>('');
+    const [plans, setPlans] = useState<HealthPlan[]>([]);
+    const [selectedPlanoId, setSelectedPlanoId] = useState<string>('');
+
+    useEffect(() => {
+        const loadMaquininhasAndPlans = async () => {
+            if (!empresaId) return;
+            const { data } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
+            if (data && data.length > 0) {
+                setMaquininhas(data);
+                setSelectedMaquininhaId(data[0].id);
+            }
+            
+            const fetchedPlans = await plansService.fetchPlans(empresaId);
+            if (fetchedPlans && fetchedPlans.length > 0) {
+                setPlans(fetchedPlans);
+                setSelectedPlanoId(fetchedPlans[0].id);
+            }
+        };
+        loadMaquininhasAndPlans();
+    }, [empresaId]);
 
     // Reset amount when treatment changes
     React.useEffect(() => {
@@ -61,17 +95,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
         }
 
         setIsProcessing(true);
+        let receiveDate: string | undefined;
+        let planAmount: number | undefined;
+
+        if (method === 'Plano' && selectedPlanoId) {
+            const selectedPlan = plans.find(p => p.id === selectedPlanoId);
+            if (selectedPlan) {
+                let maxDays = 0;
+                let totalPlanVal = 0;
+                treatments.forEach(t => {
+                    const tName = t.treatmentName || t.tratamento;
+                    const pTreat = selectedPlan.treatments.find(pt => pt.name === tName);
+                    if (pTreat) {
+                        maxDays = Math.max(maxDays, pTreat.receiveDays || 0);
+                        // planAmount based on instructions: "valor do tratamento menos o custo"
+                        totalPlanVal += (pTreat.price - pTreat.cost);
+                    } else {
+                        totalPlanVal += parseFloat(t.valor || '0');
+                    }
+                });
+
+                planAmount = totalPlanVal;
+                
+                const baseDate = new Date();
+                baseDate.setDate(baseDate.getDate() + maxDays);
+                receiveDate = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`;
+            }
+        }
+
         const p: PaymentData = {
             id: Math.random().toString(36).substring(2, 9),
             method,
             amount: val,
             date,
-            observations
+            observations,
+            ...(method === 'Crédito' ? { installments } : {}),
+            ...((method === 'Crédito' || method === 'Débito' || method === 'Pix') && selectedMaquininhaId ? { maquininha_id: selectedMaquininhaId } : {}),
+            ...(method === 'Plano' && selectedPlanoId ? { plano_id: selectedPlanoId } : {}),
+            ...(receiveDate ? { receiveDate } : {}),
+            ...(planAmount !== undefined ? { planAmount } : {})
         };
 
         const newPaidSoFar = paidSoFar + val;
         // Se o valor recém pago + o que já foi pago atingir o custo total (com tolerância de arredondamento)
-        const isFullyPaid = newPaidSoFar >= totalCost - 0.01; 
+        const isFullyPaid = newPaidSoFar >= totalCost - 0.01;
 
         await onProcessPayment(p, isFullyPaid);
         setIsProcessing(false);
@@ -80,7 +147,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
     return (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in" onClick={handleBackdropClick}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                
+
                 {/* Header */}
                 <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
                     <h2 className="text-xl font-bold text-slate-800">Realizar pagamento</h2>
@@ -91,11 +158,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
 
                 <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
                     {/* Patient / Treatment Info Box */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 relative overflow-hidden">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 relative overflow-hidden shrink-0">
                         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                        
+
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 overflow-hidden">
+                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 overflow-hidden shrink-0">
                                 {patient.photo ? <img src={patient.photo} alt="P" className="w-full h-full object-cover" /> : <UserIcon />}
                             </div>
                             <span className="font-semibold text-slate-700">{patient.name}</span>
@@ -107,36 +174,36 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                                 <span className="font-semibold text-slate-800 flex-1">
                                     {treatments.length === 1 ? (treatments[0].treatmentName || treatments[0].tratamento) : `${treatments.length} tratamentos selecionados`}
                                 </span>
-                                <span className="font-semibold text-slate-800">R$ {totalCost.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                <span className="font-semibold text-slate-800">R$ {totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
                             {treatments.length === 1 && <span className="text-xs text-slate-500 mt-1">Dr(a) Profissional</span>}
                         </div>
 
                         <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center px-1">
                             {paidSoFar > 0 && (
-                                <span className="text-sm font-semibold text-emerald-600">Já pago: R$ {paidSoFar.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                <span className="text-sm font-semibold text-emerald-600">Já pago: R$ {paidSoFar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             )}
                             <div className="flex flex-col items-end flex-1">
                                 <span className="text-sm text-slate-600 font-semibold">Falta pagar</span>
-                                <span className="text-lg font-bold text-slate-900">R$ {remainingCost.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                <span className="text-lg font-bold text-slate-900">R$ {remainingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     </div>
 
                     {/* Payment Method */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 shrink-0">
                         <label className="text-sm font-bold text-slate-700">Forma de pagamento</label>
                         <div className="flex flex-wrap gap-2">
                             {PAYMENT_METHODS.map((m) => {
                                 const Icon = m.icon;
                                 const isSelected = method === m.id;
                                 return (
-                                    <button 
+                                    <button
                                         key={m.id}
                                         onClick={() => setMethod(m.id)}
                                         className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border font-semibold text-sm transition-all
-                                            ${isSelected 
-                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200' 
+                                            ${isSelected
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-200'
                                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
                                             }`}
                                     >
@@ -148,13 +215,58 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mt-2">
+                    {method === 'Crédito' && (
+                        <div className="space-y-2 shrink-0 mt-2">
+                            <label className="text-sm font-bold text-slate-700">Parcelas</label>
+                            <select
+                                value={installments}
+                                onChange={(e) => setInstallments(Number(e.target.value))}
+                                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                {[...Array(12)].map((_, i) => (
+                                    <option key={i + 1} value={i + 1}>{i + 1}x</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {(method === 'Crédito' || method === 'Débito' || method === 'Pix') && maquininhas.length > 0 && (
+                        <div className="space-y-2 shrink-0 mt-2">
+                            <label className="text-sm font-bold text-slate-700">Maquininha / Conta (Taxas)</label>
+                            <select 
+                                value={selectedMaquininhaId}
+                                onChange={(e) => setSelectedMaquininhaId(e.target.value)}
+                                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                {maquininhas.map(m => (
+                                    <option key={m.id} value={m.id}>{m.nome}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {method === 'Plano' && plans.length > 0 && (
+                        <div className="space-y-2 shrink-0 mt-2">
+                            <label className="text-sm font-bold text-slate-700">Plano Associado</label>
+                            <select 
+                                value={selectedPlanoId}
+                                onChange={(e) => setSelectedPlanoId(e.target.value)}
+                                className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                {plans.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 mt-2 shrink-0">
                         {/* Final Value */}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700">Valor pago</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">R$</span>
-                                <input 
+                                <input
                                     type="number"
                                     min="0"
                                     step="0.01"
@@ -168,7 +280,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                         {/* Date */}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700">Data do pagamento</label>
-                            <input 
+                            <input
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
@@ -178,9 +290,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                     </div>
 
                     {/* Observations */}
-                    <div className="space-y-2 mb-2">
+                    <div className="space-y-2 mb-2 shrink-0">
                         <label className="text-sm font-bold text-slate-700">Observações <span className="text-slate-400 font-normal">(Opcional)</span></label>
-                        <textarea 
+                        <textarea
                             value={observations}
                             onChange={(e) => setObservations(e.target.value)}
                             rows={3}
@@ -192,19 +304,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                 </div>
 
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 mt-auto shrink-0">
-                    <button 
+                    <button
                         onClick={onClose}
                         className="px-5 py-2.5 rounded-lg text-slate-600 font-semibold text-sm hover:bg-slate-200 transition-colors"
                         disabled={isProcessing}
                     >
                         Cancelar
                     </button>
-                    <button 
+                    <button
                         onClick={handleSave}
                         disabled={isProcessing}
                         className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-md shadow-blue-200 transition-all flex items-center gap-2"
                     >
-                        {isProcessing ? 'Processando...' : <><CreditCard size={16}/> Pagar</>}
+                        {isProcessing ? 'Processando...' : <><CreditCard size={16} /> Pagar</>}
                     </button>
                 </div>
             </div>
@@ -213,5 +325,5 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
 }
 
 const UserIcon = () => (
-    <svg fill="currentColor" viewBox="0 0 24 24" className="w-8 h-8 opacity-50"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+    <svg fill="currentColor" viewBox="0 0 24 24" className="w-8 h-8 opacity-50"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
 );

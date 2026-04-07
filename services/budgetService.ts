@@ -36,6 +36,24 @@ export const budgetService = {
       treatments: dbBudget.tratamentos || []
     }));
   },
+  async fetchAllCompanyBudgets(empresaId: number): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('orcamentos')
+      .select(`
+        *,
+        paciente:Cliente (
+          id, nome, nome_completo, cpf
+        )
+      `)
+      .eq('empresa_id', empresaId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching company budgets:', error);
+      return [];
+    }
+    return data;
+  },
 
   async saveBudget(empresaId: number, pacienteId: number, budget: Budget): Promise<Budget | null> {
     const payload = {

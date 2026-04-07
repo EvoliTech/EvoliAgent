@@ -34,6 +34,13 @@ export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
       description: 'Gerencie os planos de saúde, valores e coberturas de forma simples e rápida.',
       iconPath: '/gestaodeplanos.svg',
       action: () => onNavigate('plans-management')
+    },
+    {
+      id: 'fees-settings',
+      title: 'Configurar Taxas',
+      description: 'Defina as taxas para as opções de pagamento (Pix, Débito, Boleto, Crédito em até 12x).',
+      iconPath: '/financeiro.svg', // using financeiro.svg which likely exists or we can use another
+      action: () => onNavigate('fees-settings')
     }
   ];
 

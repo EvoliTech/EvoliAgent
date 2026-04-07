@@ -11,6 +11,7 @@ import { Settings } from './components/Settings';
 import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
+import { FeesSettings } from './components/FeesSettings';
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
 import { Gallery } from './components/Gallery';
@@ -145,6 +146,9 @@ export default function App() {
         </div>
         <div className={currentPage === 'plans-management' ? 'block' : 'hidden'}>
            <PlansManagement onBack={() => setCurrentPage('settings')} />
+        </div>
+        <div className={currentPage === 'fees-settings' ? 'block' : 'hidden'}>
+           <FeesSettings onNavigate={setCurrentPage} />
         </div>
         <div className={currentPage === 'google-callback' ? 'block' : 'hidden'}>
            <GoogleCallback onNavigate={setCurrentPage} />
