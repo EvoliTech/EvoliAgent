@@ -99,10 +99,20 @@ export const Financial: React.FC = () => {
     let pendingTotal = 0;
     let inadimplenciaAmount = 0;
     let planTaxesTotal = 0;
+    let comissoesTotal = 0;
+    const comissoesList: any[] = [];
     const patientsInad = new Set<string>();
     const methodsSummary: Record<string, number> = {};
     const treatmentsSummary: Record<string, { count: number, amount: number }> = {};
     const transactions: any[] = [];
+
+    const getCommissionRule = (rules: CommissionRule[] | undefined, trtName: string, convenioName: string) => {
+      if (!rules) return null;
+      return rules.find(r => 
+        (r.convenio === 'todos' || r.convenio === convenioName || (r.convenio === 'particular' && convenioName === 'Particular')) &&
+        (r.especialidade === 'todas' || r.especialidade === trtName)
+      );
+    };
 
     allBudgets.forEach(b => {
       if (b.status !== 'Aprovado') return;
@@ -110,8 +120,13 @@ export const Financial: React.FC = () => {
 
       (b.tratamentos || []).forEach((t: any) => {
         const trtName = t.treatmentName || t.tratamento || 'Outro';
+        const convenioName = t.convenio || 'Particular';
         const itemVal = parseFloat(t.valor || 0);
         let paidOnTrt = 0;
+        
+        const profId = specialists.find(s => s.name === t.profissional)?.id;
+        const profRules = profId ? commissionedSpecialists[profId] : undefined;
+        const rule = getCommissionRule(profRules, trtName, convenioName);
 
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
@@ -125,6 +140,30 @@ export const Financial: React.FC = () => {
               pendingTotal += netReceived;
             } else {
               paidTotal += netReceived;
+              
+              // Calculate apos_pagamento commission
+              if (rule && rule.quandoRecebe === 'apos_pagamento') {
+                 let valComissao = 0;
+                 const valRegra = parseFloat(rule.valor.replace(',', '.'));
+                 if (rule.tipoComissao === 'porcentagem') {
+                    valComissao = netReceived * (valRegra / 100);
+                 } else {
+                    const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
+                    valComissao = valRegra * prop;
+                 }
+                 if (valComissao > 0) {
+                    comissoesTotal += valComissao;
+                    comissoesList.push({
+                       id: 'com_' + Math.random().toString(36).substr(2, 9),
+                       profissional: t.profissional,
+                       treatment: trtName,
+                       date: p.receiveDate || p.date,
+                       amount: valComissao,
+                       paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                       status: 'Repassado' // Deduction on receipt implies it's resolved logic wise
+                    });
+                 }
+              }
             }
 
             paidOnTrt += patientPaid;
@@ -184,6 +223,30 @@ export const Financial: React.FC = () => {
           treatmentsSummary[trtName].count += 1;
           treatmentsSummary[trtName].amount += itemVal;
         }
+
+        // Calculate apos_procedimento commission
+        if (rule && rule.quandoRecebe === 'apos_procedimento' && t.status === 'Finalizado') {
+           let valComissao = 0;
+           const valRegra = parseFloat(rule.valor.replace(',', '.'));
+           if (rule.tipoComissao === 'porcentagem') {
+              valComissao = itemVal * (valRegra / 100);
+           } else {
+              valComissao = valRegra;
+           }
+           
+           if (valComissao > 0) {
+               comissoesTotal += valComissao;
+               comissoesList.push({
+                   id: 'com_proc_' + Math.random().toString(36).substr(2, 9),
+                   profissional: t.profissional,
+                   treatment: trtName,
+                   date: b.updated_at || b.created_at || new Date().toISOString(),
+                   amount: valComissao,
+                   paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                   status: t.isComissaoPaga ? 'Repassado' : 'A repassar'
+               });
+           }
+        }
       });
     });
 
@@ -219,9 +282,9 @@ export const Financial: React.FC = () => {
     return {
       paidTotal, pendingTotal, totalBalance, transactions,
       inadimplenciaAmount, inadimplenciaCount: patientsInad.size,
-      topTreatments, methodsData, planTaxesTotal
+      topTreatments, methodsData, planTaxesTotal, comissoesTotal, comissoesList
     };
-  }, [allBudgets]);
+  }, [allBudgets, commissionedSpecialists, specialists]);
 
   const handleSaveRules = (specialistId: string, rules: CommissionRule[]) => {
     setCommissionedSpecialists(prev => {
@@ -389,17 +452,63 @@ export const Financial: React.FC = () => {
                 </div>
               </div>
 
-              {/* Total Inadimplencia */}
-              <div className="flex flex-col px-6 border-r border-gray-200 min-h-[160px] relative">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-sm font-medium text-gray-800">Total de inadimplência</h3>
-                  <a href="#" className="text-sm font-medium text-blue-600 hover:underline absolute right-6">Ver todos</a>
-                </div>
-                <div className="flex-1 flex flex-col items-center justify-center mt-4">
-                  <span className="text-2xl font-semibold text-gray-800">R$ {financialStats.inadimplenciaAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-sm text-gray-500 mt-1">{financialStats.inadimplenciaCount} paciente{financialStats.inadimplenciaCount !== 1 ? 's' : ''}</span>
+            {/* Linha 2 de Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              
+              <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center text-center">
+                <h3 className="text-sm font-semibold text-gray-700 mb-6 w-full text-left">Taxas pagas / Planos</h3>
+                <div className="flex flex-col items-center justify-center flex-1">
+                  <div className="text-3xl font-bold text-[#1e293b] mb-1">R$ {financialStats.planTaxesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div className="text-sm text-gray-500">Taxas e custos de convênios</div>
                 </div>
               </div>
+
+              <div className="border border-gray-200 rounded-xl bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] flex flex-col h-full overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="text-sm font-semibold text-gray-700">Histórico de Repasse de Comissões</h3>
+                  <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    Total: R$ {financialStats.comissoesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex flex-col flex-1 pb-2">
+                  <div className="max-h-[160px] overflow-y-auto w-full">
+                    {financialStats.comissoesList.length === 0 ? (
+                       <div className="flex h-full items-center justify-center p-8 text-center text-sm text-gray-500">
+                          Nenhum repasse de comissão encontrado para o período.
+                       </div>
+                    ) : (
+                       <table className="w-full text-left border-collapse text-sm">
+                         <thead>
+                           <tr className="bg-gray-50/50 sticky top-0 border-b border-gray-100">
+                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase">Profissional</th>
+                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase">Tratamento</th>
+                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase text-right">Comissão</th>
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-gray-100">
+                           {financialStats.comissoesList.map(c => (
+                             <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                               <td className="px-4 py-2.5">
+                                 <span className="font-semibold text-gray-800 text-[13px]">{c.profissional}</span>
+                               </td>
+                               <td className="px-4 py-2.5">
+                                 <div className="flex flex-col">
+                                   <span className="text-gray-700">{c.treatment}</span>
+                                   <span className="text-[11px] text-gray-400">{c.paciente}</span>
+                                 </div>
+                               </td>
+                               <td className="px-4 py-2.5 text-right font-semibold text-blue-600">
+                                 R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                               </td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
               {/* Proximas Despesas */}
               <div className="flex flex-col px-6 pr-0 min-h-[160px]">

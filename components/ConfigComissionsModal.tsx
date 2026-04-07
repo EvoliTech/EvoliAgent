@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { X, Info, ChevronDown, Check } from 'lucide-react';
-import { Specialist, CommissionRule } from '../types';
+import { Specialist, CommissionRule, HealthPlan } from '../types';
 import { DEFAULT_TREATMENTS } from '../constants/treatments';
+import { useCompany } from '../contexts/CompanyContext';
+import { plansService } from '../services/plansService';
 
 interface ConfigComissionsModalProps {
   specialist: Specialist;
@@ -20,6 +22,15 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
   const [treatmentCommissions, setTreatmentCommissions] = useState<Record<string, string>>({});
   
   const [rules, setRules] = useState<CommissionRule[]>(initialRules || []);
+  
+  const { empresaId } = useCompany();
+  const [plans, setPlans] = useState<HealthPlan[]>([]);
+  
+  React.useEffect(() => {
+    if (empresaId) {
+      plansService.fetchPlans(empresaId).then(setPlans).catch(console.error);
+    }
+  }, [empresaId]);
 
   const specialtiesList = [
     "Cirurgia",
@@ -159,7 +170,9 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
                       >
                         <option value="">Selecionar</option>
                         <option value="todos">Todos</option>
-                        <option value="particular">Particular</option>
+                        {plans.map(p => (
+                          <option key={p.id} value={p.name}>{p.name}</option>
+                        ))}
                       </select>
                       <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#64748b]">
                         <ChevronDown size={16} />
@@ -198,7 +211,9 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
                     >
                       <option value="">Selecionar</option>
                       <option value="todos">Todos</option>
-                      <option value="particular">Particular</option>
+                      {plans.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#64748b]">
                       <ChevronDown size={16} />
@@ -301,7 +316,7 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
                         <span className="font-normal text-gray-500 ml-1">em</span> {rule.especialidade}
                       </span>
                       <span className="text-[12.5px] text-gray-500">
-                        {rule.quandoRecebe === 'apos_pagamento' ? 'Após pagamento' : 'Após procedimento'} • Convênio: {rule.convenio === 'todos' ? 'Todos' : 'Particular'}
+                        {rule.quandoRecebe === 'apos_pagamento' ? 'Após pagamento' : 'Após procedimento'} • Convênio: {rule.convenio === 'todos' ? 'Todos' : rule.convenio}
                       </span>
                     </div>
                     <button 
