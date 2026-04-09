@@ -143,7 +143,8 @@ export const specialistService = {
             calendar_id: specialist.calendarId,
             email: specialist.email,
             phone: specialist.phone,
-            treatments: specialist.treatments ?? []
+            treatments: specialist.treatments ?? [],
+            comissoes: specialist.comissoes
         };
 
         const { data, error } = await supabase
@@ -240,6 +241,7 @@ function mapSupabaseToSpecialist(data: any): Specialist {
         email: data.email,
         phone: data.phone,
         treatments: data.treatments || [],
-        created_by: data.created_by
+        created_by: data.created_by,
+        comissoes: data.comissoes
     };
 }

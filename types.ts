@@ -39,6 +39,7 @@ export interface Specialist {
   phone?: string;
   treatments?: string[]; // Lista de tratamentos habilitados
   created_by?: string;
+  comissoes?: CommissionRule[];
 }
 
 export interface Patient {

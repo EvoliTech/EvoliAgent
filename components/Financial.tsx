@@ -11,22 +11,35 @@ import { expenseService } from '../services/expenseService';
 
 export const Financial: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes'>('painel');
+  const [filterMonth, setFilterMonth] = useState<string>((new Date().getMonth() + 1).toString());
+  const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedSpecialist, setSelectedSpecialist] = useState<Specialist | null>(null);
   const [showDetails, setShowDetails] = useState<'entradas' | 'saidas' | 'addDespesa' | null>(null);
+  const [showCommissionsDetail, setShowCommissionsDetail] = useState<string | null>(null);
+  const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
   const { empresaId } = useCompany();
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [commissionedSpecialists, setCommissionedSpecialists] = useState<Record<string, CommissionRule[]>>({});
   const [allBudgets, setAllBudgets] = useState<any[]>([]);
-  const [despesas, setDespesas] = useState<DespesaType[]>([]);
+  const [allDespesas, setAllDespesas] = useState<DespesaType[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   useEffect(() => {
     if (empresaId) {
-      specialistService.fetchSpecialists(empresaId).then(setSpecialists).catch(console.error);
+      specialistService.fetchSpecialists(empresaId).then(data => {
+        setSpecialists(data);
+        const mapRules: Record<string, CommissionRule[]> = {};
+        data.forEach(s => {
+          if (s.comissoes && s.comissoes.length > 0) {
+            mapRules[s.id] = s.comissoes;
+          }
+        });
+        setCommissionedSpecialists(mapRules);
+      }).catch(console.error);
       budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
 
       expenseService.fetchExpenses(empresaId)
-        .then((data) => setDespesas(data as DespesaType[]))
+        .then((data) => setAllDespesas(data as DespesaType[]))
         .catch(console.error);
     }
   }, [empresaId]);
@@ -35,7 +48,7 @@ export const Financial: React.FC = () => {
     if (e) e.stopPropagation();
     if (window.confirm("Deseja realmente cancelar/excluir esta despesa?")) {
       await expenseService.deleteExpense(id);
-      setDespesas(prev => prev.filter(d => d.id !== id));
+      setAllDespesas(prev => prev.filter(d => d.id !== id));
     }
   };
 
@@ -43,8 +56,8 @@ export const Financial: React.FC = () => {
     if (e) e.stopPropagation();
     if (window.confirm("Confirmar o pagamento desta despesa?")) {
       const success = await expenseService.payExpense(id, 'Dinheiro');
-      if (success) {
-        setDespesas(prev => prev.map(d => d.id === id ? { ...d, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : d));
+      if (id) {
+        setAllDespesas(prev => prev.map(d => d.id === id ? { ...d, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : d));
       }
     }
   };
@@ -53,12 +66,80 @@ export const Financial: React.FC = () => {
     if (e) e.stopPropagation();
     if (window.confirm("Deseja cancelar TODAS as cobranças desta despesa recorrente?")) {
       await expenseService.deleteExpenseGroup(grupoId);
-      setDespesas(prev => prev.filter(d => d.grupo_recorrente !== grupoId));
+      setAllDespesas(prev => prev.filter(d => d.grupo_recorrente !== grupoId));
       setExpandedGroup(null);
     }
   };
 
-  // Group despesas by grupo_recorrente for the Fluxo de Caixa view
+  const handlePayCommissions = async () => {
+    if (!empresaId) return;
+    const listToPay = financialStats.comissoesList.filter(c => selectedCommissions.has(c.id));
+    if (listToPay.length === 0) return;
+    
+    // Process payments (Update budget isComissaoPaga & Create expenses)
+    for (const com of listToPay) {
+      const b = allBudgets.find(b => b.id === com.budgetId);
+      if (b) {
+        let updated = false;
+        (b.tratamentos || []).forEach((t: any) => {
+          if (t.id === com.treatmentId || t.treatmentName === com.treatmentName || t.tratamento === com.treatmentName) {
+            if (com.paymentId) {
+              const p = t.payments?.find((pay: any) => pay.id === com.paymentId);
+              if (p) {
+                p.isComissaoPaga = true;
+                updated = true;
+              }
+            } else {
+              t.isComissaoPaga = true;
+              updated = true;
+            }
+          }
+        });
+        if (updated) {
+          const budgetPayload = {
+            id: b.id,
+            name: b.nome || b.name || '',
+            date: b.data_orcamento || b.date || '',
+            total: b.total,
+            status: b.status,
+            treatments: b.tratamentos || b.treatments || []
+          };
+          const pacId = b.paciente?.id || b.paciente_id || 0;
+          await budgetService.saveBudget(empresaId, pacId, budgetPayload as any);
+        }
+      }
+      
+      // Register Expense
+      await expenseService.createExpense({
+         titulo: `Comissão - ${com.treatment} (${com.paciente})`,
+         valor: com.amount,
+         categoria: 'Comissões',
+         is_paga: true,
+         empresa_id: empresaId,
+         data_vencimento: new Date().toISOString().split('T')[0],
+         data_pagamento: new Date().toISOString().split('T')[0],
+         forma_pagamento: 'Transferência'
+      } as any, null);
+    }
+    
+    alert('Comissões pagas e registradas como despesas com sucesso!');
+    setSelectedCommissions(new Set());
+    
+    // Recarregar os dados localmente
+    budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
+    expenseService.fetchExpenses(empresaId).then((data) => setAllDespesas(data as DespesaType[])).catch(console.error);
+  };
+
+  const isDateInFilter = (dateStr?: string) => {
+    if (filterMonth === 'all') return true;
+    if (!dateStr) return false;
+    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00');
+    if (isNaN(d.getTime())) return false;
+    return (d.getMonth() + 1).toString() === filterMonth && d.getFullYear().toString() === filterYear;
+  };
+
+  const despesas = useMemo(() => allDespesas.filter(d => isDateInFilter(d.data_pagamento || d.data_vencimento)), [allDespesas, filterMonth, filterYear]);
+
   const despesasAgrupadas = useMemo(() => {
     const groups: Record<string, DespesaType[]> = {};
     const singles: DespesaType[] = [];
@@ -94,6 +175,49 @@ export const Financial: React.FC = () => {
     return result;
   }, [despesas]);
 
+  const renderDateFilters = () => (
+    <div className="flex items-center gap-3">
+      <div className="relative border border-gray-300 rounded-md bg-white hover:border-gray-400 transition-colors">
+        <select 
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          className="appearance-none bg-transparent pl-4 pr-10 py-1.5 text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
+          <option value="all">Todo o Período</option>
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+          <ChevronDown size={14} />
+        </div>
+      </div>
+
+      <div className="relative border border-gray-300 rounded-md bg-white hover:border-gray-400 transition-colors">
+        <select
+          value={filterYear}
+          onChange={(e) => setFilterYear(e.target.value)}
+          className="appearance-none bg-transparent pl-4 pr-10 py-1.5 text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
+          <option value={new Date().getFullYear() - 1}>{new Date().getFullYear() - 1}</option>
+          <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+          <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1}</option>
+          <option value={new Date().getFullYear() + 2}>{new Date().getFullYear() + 2}</option>
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+          <ChevronDown size={14} />
+        </div>
+      </div>
+    </div>
+  );
+
   const financialStats = useMemo(() => {
     let paidTotal = 0;
     let pendingTotal = 0;
@@ -108,10 +232,15 @@ export const Financial: React.FC = () => {
 
     const getCommissionRule = (rules: CommissionRule[] | undefined, trtName: string, convenioName: string) => {
       if (!rules) return null;
-      return rules.find(r => 
-        (r.convenio === 'todos' || r.convenio === convenioName || (r.convenio === 'particular' && convenioName === 'Particular')) &&
-        (r.especialidade === 'todas' || r.especialidade === trtName)
-      );
+      const cName = (convenioName || '').toLowerCase().trim();
+      const tName = (trtName || '').toLowerCase().trim();
+      
+      return rules.find(r => {
+        const rc = (r.convenio || '').toLowerCase().trim();
+        const re = (r.especialidade || '').toLowerCase().trim();
+        return (rc === 'todos' || rc === cName || (rc === 'particular' && cName === 'particular')) &&
+               (re === 'todas' || re === tName);
+      });
     };
 
     allBudgets.forEach(b => {
@@ -124,9 +253,16 @@ export const Financial: React.FC = () => {
         const itemVal = parseFloat(t.valor || 0);
         let paidOnTrt = 0;
         
-        const profId = specialists.find(s => s.name === t.profissional)?.id;
+        const normalizeName = (name: string) => name.replace(/Dr\(a\)\s*/gi, '').trim().toLowerCase();
+        const matchedSpec = specialists.find(s => 
+          normalizeName(s.name) === normalizeName(t.profissional) || 
+          t.profissional.toLowerCase().includes(normalizeName(s.name)) ||
+          s.name.toLowerCase().includes(normalizeName(t.profissional))
+        );
+        const profId = matchedSpec?.id;
         const profRules = profId ? commissionedSpecialists[profId] : undefined;
         const rule = getCommissionRule(profRules, trtName, convenioName);
+        const profNameForCommission = matchedSpec?.name || t.profissional;
 
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
@@ -134,39 +270,49 @@ export const Financial: React.FC = () => {
             const netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
             const planFee = Math.max(0, patientPaid - netReceived);
 
+            paidOnTrt += patientPaid;
+
+            const dateStr = p.receiveDate || p.date;
+            if (!isDateInFilter(dateStr)) return;
+
             const isFuture = p.receiveDate && new Date(p.receiveDate + 'T23:59:59').getTime() > new Date().getTime();
 
             if (isFuture) {
               pendingTotal += netReceived;
             } else {
               paidTotal += netReceived;
-              
-              // Calculate apos_pagamento commission
-              if (rule && rule.quandoRecebe === 'apos_pagamento') {
-                 let valComissao = 0;
-                 const valRegra = parseFloat(rule.valor.replace(',', '.'));
-                 if (rule.tipoComissao === 'porcentagem') {
-                    valComissao = netReceived * (valRegra / 100);
-                 } else {
-                    const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
-                    valComissao = valRegra * prop;
-                 }
-                 if (valComissao > 0) {
-                    comissoesTotal += valComissao;
-                    comissoesList.push({
-                       id: 'com_' + Math.random().toString(36).substr(2, 9),
-                       profissional: t.profissional,
-                       treatment: trtName,
-                       date: p.receiveDate || p.date,
-                       amount: valComissao,
-                       paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                       status: 'Repassado' // Deduction on receipt implies it's resolved logic wise
-                    });
-                 }
-              }
             }
 
-            paidOnTrt += patientPaid;
+            // Calculate apos_pagamento commission
+            if (rule && rule.quandoRecebe === 'apos_pagamento') {
+               let valComissao = 0;
+               const valRegra = parseFloat(rule.valor.replace(',', '.'));
+               if (rule.tipoComissao === 'porcentagem') {
+                  valComissao = netReceived * (valRegra / 100);
+               } else {
+                  const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
+                  valComissao = valRegra * prop;
+               }
+               if (valComissao > 0) {
+                  comissoesTotal += valComissao;
+                  comissoesList.push({
+                     id: 'com_pg_' + p.id,
+                     budgetId: b.id,
+                     treatmentId: t.id,
+                     paymentId: p.id,
+                     treatmentName: trtName,
+                     profissional: profNameForCommission,
+                     treatment: trtName,
+                     date: p.receiveDate || p.date,
+                     amount: valComissao,
+                     paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                     status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
+                     valorLiquido: netReceived,
+                     custo: planFee,
+                     ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+                  });
+               }
+            }
 
             if (p.planAmount !== undefined) {
               planTaxesTotal += planFee;
@@ -193,30 +339,33 @@ export const Financial: React.FC = () => {
         const remaining = Math.max(0, itemVal - paidOnTrt);
 
         if (remaining > 0 && (t.status === 'Em andamento' || t.status === 'Finalizado')) {
-          pendingTotal += remaining;
+          const pendDate = b.date || b.created_at || new Date().toISOString();
+          if (isDateInFilter(pendDate)) {
+            pendingTotal += remaining;
 
-          // Consider inadimplente if treatment is finalized but not paid, or older than 30 days
-          if (t.status === 'Finalizado' || (b.date && new Date(b.date).getTime() < new Date().getTime() - 1000 * 60 * 60 * 24 * 30)) {
-            inadimplenciaAmount += remaining;
-            if (pacId) patientsInad.add(pacId);
+            // Consider inadimplente if treatment is finalized but not paid, or older than 30 days
+            if (t.status === 'Finalizado' || (b.date && new Date(b.date).getTime() < new Date().getTime() - 1000 * 60 * 60 * 24 * 30)) {
+              inadimplenciaAmount += remaining;
+              if (pacId) patientsInad.add(pacId);
+            }
+
+            transactions.push({
+              id: t.id + '_pend',
+              treatmentName: trtName,
+              patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+              cpf: b.paciente?.cpf || '',
+              date: b.date || b.created_at,
+              amount: remaining,
+              originalAmount: remaining,
+              planFee: 0,
+              isPaid: false,
+              type: 'pendente'
+            });
           }
-
-          transactions.push({
-            id: t.id + '_pend',
-            treatmentName: trtName,
-            patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-            cpf: b.paciente?.cpf || '',
-            date: b.date || b.created_at,
-            amount: remaining,
-            originalAmount: remaining,
-            planFee: 0,
-            isPaid: false,
-            type: 'pendente'
-          });
         }
 
         // Treatments sum
-        if (itemVal > 0) {
+        if (itemVal > 0 && isDateInFilter(b.date || b.created_at)) {
           if (!treatmentsSummary[trtName]) {
             treatmentsSummary[trtName] = { count: 0, amount: 0 };
           }
@@ -226,25 +375,35 @@ export const Financial: React.FC = () => {
 
         // Calculate apos_procedimento commission
         if (rule && rule.quandoRecebe === 'apos_procedimento' && t.status === 'Finalizado') {
-           let valComissao = 0;
-           const valRegra = parseFloat(rule.valor.replace(',', '.'));
-           if (rule.tipoComissao === 'porcentagem') {
-              valComissao = itemVal * (valRegra / 100);
-           } else {
-              valComissao = valRegra;
-           }
-           
-           if (valComissao > 0) {
-               comissoesTotal += valComissao;
-               comissoesList.push({
-                   id: 'com_proc_' + Math.random().toString(36).substr(2, 9),
-                   profissional: t.profissional,
-                   treatment: trtName,
-                   date: b.updated_at || b.created_at || new Date().toISOString(),
-                   amount: valComissao,
-                   paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                   status: t.isComissaoPaga ? 'Repassado' : 'A repassar'
-               });
+           const procDate = b.updated_at || b.created_at || new Date().toISOString();
+           if (isDateInFilter(procDate)) {
+               let valComissao = 0;
+               const valRegra = parseFloat(rule.valor.replace(',', '.'));
+               if (rule.tipoComissao === 'porcentagem') {
+                  valComissao = itemVal * (valRegra / 100);
+               } else {
+                  valComissao = valRegra;
+               }
+               
+               if (valComissao > 0) {
+                   comissoesTotal += valComissao;
+                   comissoesList.push({
+                       id: 'com_proc_' + t.id,
+                       budgetId: b.id,
+                       treatmentId: t.id,
+                       paymentId: null,
+                       treatmentName: trtName,
+                       profissional: profNameForCommission,
+                       treatment: trtName,
+                       date: b.updated_at || b.created_at || new Date().toISOString(),
+                       amount: valComissao,
+                       paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                       status: t.isComissaoPaga ? 'Repassado' : 'A repassar',
+                       valorLiquido: itemVal,
+                       custo: 0,
+                       ruleInfo: `Procedimento Concluído > Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+                   });
+               }
            }
         }
       });
@@ -275,8 +434,10 @@ export const Financial: React.FC = () => {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
+    const methodsTotalAmount = Object.values(methodsSummary).reduce((a, b) => a + b, 0);
+
     const methodsData = Object.entries(methodsSummary)
-      .map(([name, amount]) => ({ name, amount, perc: paidTotal > 0 ? (amount / paidTotal) * 100 : 0 }))
+      .map(([name, amount]) => ({ name, amount, perc: methodsTotalAmount > 0 ? (amount / methodsTotalAmount) * 100 : 0 }))
       .sort((a, b) => b.amount - a.amount);
 
     return {
@@ -284,9 +445,10 @@ export const Financial: React.FC = () => {
       inadimplenciaAmount, inadimplenciaCount: patientsInad.size,
       topTreatments, methodsData, planTaxesTotal, comissoesTotal, comissoesList
     };
-  }, [allBudgets, commissionedSpecialists, specialists]);
+  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas]);
 
-  const handleSaveRules = (specialistId: string, rules: CommissionRule[]) => {
+  const handleSaveRules = async (specialistId: string, rules: CommissionRule[]) => {
+    // Optimistic UI Update
     setCommissionedSpecialists(prev => {
       const updated = { ...prev };
       if (rules.length > 0) {
@@ -297,6 +459,19 @@ export const Financial: React.FC = () => {
       return updated;
     });
     setSelectedSpecialist(null);
+    
+    // Save to Cloud via Service
+    const spec = specialists.find(s => s.id === specialistId);
+    if (spec && empresaId) {
+      try {
+        await specialistService.updateSpecialist(empresaId, {
+          ...spec,
+          comissoes: rules
+        });
+      } catch (err) {
+        console.error('Failed to sync commissions to cloud:', err);
+      }
+    }
   };
 
   const configuredSpecialists = specialists.filter(s => !!commissionedSpecialists[s.id]);
@@ -355,27 +530,7 @@ export const Financial: React.FC = () => {
             {/* Header Content */}
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-[1.1rem] font-medium text-gray-800">Visão Geral</h2>
-              <div className="flex items-center gap-3">
-                <div className="relative border border-gray-300 rounded-md bg-white">
-                  <select className="appearance-none bg-transparent pl-4 pr-10 py-1.5 text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
-                    <option>Março</option>
-                    {/* Add other months as needed */}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                    <ChevronDown size={14} />
-                  </div>
-                </div>
-
-                <div className="relative border border-gray-300 rounded-md bg-white">
-                  <select className="appearance-none bg-transparent pl-4 pr-10 py-1.5 text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
-                    <option>2026</option>
-                    {/* Add other years as needed */}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                    <ChevronDown size={14} />
-                  </div>
-                </div>
-              </div>
+              {renderDateFilters()}
             </div>
 
             {/* Financial Grid Data */}
@@ -425,6 +580,18 @@ export const Financial: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Taxas pagas / Planos */}
+                <div className="flex flex-col px-6">
+                  <div className="flex flex-col items-start justify-start mb-6 w-full">
+                    <h3 className="text-sm font-medium text-gray-800">Taxas e Deduções</h3>
+                    <span className="text-xs text-gray-400 mt-1">Custos retidos por operadoras e maquininhas</span>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="text-[28px] font-bold text-gray-800 mt-2">
+                      R$ {financialStats.planTaxesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
 
               </div>
             </div>
@@ -433,82 +600,67 @@ export const Financial: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 flex-1">
 
               {/* Aguardando Repasse */}
-              <div className="flex flex-col px-6 border-r border-gray-200 first:pl-0 min-h-[160px]">
-                <h3 className="text-sm font-medium text-gray-800 mb-6">Aguardando repasse</h3>
-                <div className="flex-1 flex flex-col items-center justify-center">
-                  <div className="w-20 h-20 mb-3 relative flex items-center justify-center">
-                    {/* Placeholder for POS machine illustration */}
-                    <div className="absolute inset-0 bg-blue-50 rounded-lg flex items-center justify-center opacity-80">
-                      <div className="w-12 h-16 bg-blue-400 rounded-sm shadow relative">
-                        <div className="w-8 h-4 bg-white/20 mx-auto mt-2 rounded-sm" />
-                        <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1 justify-center">
-                          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="w-2 h-2 bg-white/40 rounded-sm" />)}
+              <div className="flex flex-col px-6 border-r border-gray-200 first:pl-0 min-h-[160px] h-full overflow-hidden">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-medium text-gray-800 w-full">Aguardando repasse (A receber)</h3>
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded whitespace-nowrap">
+                    Total: R$ {financialStats.pendingTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="max-h-[160px] overflow-y-auto w-full pr-2 space-y-3">
+                    {(() => {
+                      const repassesPendentes = financialStats.transactions.filter(t => !t.isPaid && t.type !== 'saida');
+                      if (repassesPendentes.length === 0) {
+                        return <div className="text-center text-xs text-gray-500 mt-8">Não há pagamentos aguardando repasse.</div>;
+                      }
+                      return repassesPendentes.map((t, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-800 line-clamp-1">{t.treatmentName || 'Pagamento'}</span>
+                            <span className="text-xs text-gray-500">{t.patientName} • Data: {new Date(t.date).toLocaleDateString()}</span>
+                          </div>
+                          <span className="font-semibold text-emerald-600 whitespace-nowrap ml-2">
+                            R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
-                      </div>
-                    </div>
-                    <HelpCircle className="absolute -top-1 -left-1 text-yellow-400 fill-white" size={24} />
+                      ));
+                    })()}
                   </div>
-                  <p className="text-xs font-medium text-gray-600">Não há pagamentos aguardando repasse.</p>
                 </div>
               </div>
 
-            {/* Linha 2 de Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              
-              <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center text-center">
-                <h3 className="text-sm font-semibold text-gray-700 mb-6 w-full text-left">Taxas pagas / Planos</h3>
-                <div className="flex flex-col items-center justify-center flex-1">
-                  <div className="text-3xl font-bold text-[#1e293b] mb-1">R$ {financialStats.planTaxesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                  <div className="text-sm text-gray-500">Taxas e custos de convênios</div>
-                </div>
-              </div>
-
-              <div className="border border-gray-200 rounded-xl bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] flex flex-col h-full overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                  <h3 className="text-sm font-semibold text-gray-700">Histórico de Repasse de Comissões</h3>
+              <div className="flex flex-col px-6 border-r border-gray-200">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-medium text-gray-800">Histórico de Comissões</h3>
                   <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
                     Total: R$ {financialStats.comissoesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex flex-col flex-1 pb-2">
-                  <div className="max-h-[160px] overflow-y-auto w-full">
+                  <div className="max-h-[160px] overflow-y-auto w-full pr-2">
                     {financialStats.comissoesList.length === 0 ? (
-                       <div className="flex h-full items-center justify-center p-8 text-center text-sm text-gray-500">
+                       <div className="flex mt-8 items-center justify-center text-center text-xs text-gray-500">
                           Nenhum repasse de comissão encontrado para o período.
                        </div>
                     ) : (
-                       <table className="w-full text-left border-collapse text-sm">
-                         <thead>
-                           <tr className="bg-gray-50/50 sticky top-0 border-b border-gray-100">
-                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase">Profissional</th>
-                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase">Tratamento</th>
-                             <th className="px-4 py-2 font-medium text-gray-500 text-xs uppercase text-right">Comissão</th>
-                           </tr>
-                         </thead>
-                         <tbody className="divide-y divide-gray-100">
-                           {financialStats.comissoesList.map(c => (
-                             <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                               <td className="px-4 py-2.5">
-                                 <span className="font-semibold text-gray-800 text-[13px]">{c.profissional}</span>
-                               </td>
-                               <td className="px-4 py-2.5">
-                                 <div className="flex flex-col">
-                                   <span className="text-gray-700">{c.treatment}</span>
-                                   <span className="text-[11px] text-gray-400">{c.paciente}</span>
-                                 </div>
-                               </td>
-                               <td className="px-4 py-2.5 text-right font-semibold text-blue-600">
-                                 R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                               </td>
-                             </tr>
-                           ))}
-                         </tbody>
-                       </table>
+                       <div className="space-y-3">
+                         {financialStats.comissoesList.map(c => (
+                           <div key={c.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                             <div className="flex flex-col">
+                               <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
+                               <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
+                             </div>
+                             <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
+                               R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                             </span>
+                           </div>
+                         ))}
+                       </div>
                     )}
                   </div>
                 </div>
               </div>
-            </div>
 
               {/* Proximas Despesas */}
               <div className="flex flex-col px-6 pr-0 min-h-[160px]">
@@ -568,10 +720,7 @@ export const Financial: React.FC = () => {
             <div className="pt-10 flex flex-col">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-[1.1rem] font-medium text-gray-800">Saúde da clínica</h2>
-                <button className="flex items-center gap-2 border border-gray-300 rounded-md px-4 py-1.5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                  1 de março - 31 de março
-                </button>
+                {renderDateFilters()}
               </div>
 
               <div className="border border-gray-200 rounded-xl overflow-hidden bg-white flex flex-col">
@@ -583,7 +732,7 @@ export const Financial: React.FC = () => {
                     <span className="text-gray-600 flex-1">Clínica</span>
                     <span className="text-gray-700 font-medium w-32 text-center">100%</span>
                     <div className="w-32 flex justify-between items-center ml-auto">
-                      <span className="text-gray-800 font-medium">R$ {financialStats.paidTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-gray-800 font-medium">R$ {financialStats.methodsData.reduce((acc, md) => acc + md.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
@@ -670,14 +819,7 @@ export const Financial: React.FC = () => {
 
             {/* Filters & Actions */}
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <button className="flex items-center gap-2 border border-gray-200 rounded-md px-4 py-2 text-sm text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-colors font-medium">
-                  <Calendar size={18} className="text-gray-400" /> Período: todo
-                </button>
-                <button className="flex items-center gap-2 border border-gray-200 rounded-md px-4 py-2 text-sm text-gray-600 bg-white hover:bg-gray-50 shadow-sm transition-colors font-medium">
-                  <Filter size={18} className="text-gray-400" /> Filtrar
-                </button>
-              </div>
+              {renderDateFilters()}
               <button
                 onClick={() => setShowDetails('addDespesa')}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 text-sm font-medium transition-colors border border-transparent shadow-sm">
@@ -688,9 +830,13 @@ export const Financial: React.FC = () => {
             <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm">
               <div className="flex items-center justify-between px-6 py-4 text-xs font-bold text-gray-800 border-b border-gray-100">
                 <div className="flex-1 pl-12">Descrição</div>
-                <div className="w-[12%] flex items-center gap-1 cursor-pointer select-none">Data (Recebto) <ArrowUp size={12} strokeWidth={3} className="text-gray-400" /></div>
-                <div className="w-[12%]">Valor líquido</div>
-                <div className="w-28 text-center pr-10">Status</div>
+                <div className="flex items-center justify-between w-[48%] pl-8">
+                  <div className="w-16"></div>
+                  <div className="w-[20%] flex items-center gap-1 cursor-pointer select-none">Data (Recebto) <ArrowUp size={12} strokeWidth={3} className="text-gray-400" /></div>
+                  <div className="w-[20%]">Valor líquido</div>
+                  <div className="w-28 flex justify-end pr-2">Status</div>
+                  <div className="w-8"></div>
+                </div>
               </div>
 
               <div className="flex flex-col">
@@ -754,11 +900,13 @@ export const Financial: React.FC = () => {
             <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-8">
               <div className="flex items-center justify-between px-6 py-4 text-xs font-bold text-gray-800 border-b border-gray-100">
                 <div className="flex-1 pl-12">Despesa</div>
-                <div className="w-[12%]">Categoria</div>
-                <div className="w-[12%]">Vencimento</div>
-                <div className="w-[12%]">Valor</div>
-                <div className="w-28 text-center pr-2">Status</div>
-                <div className="w-8"></div>
+                <div className="flex items-center justify-between w-[55%] pl-4">
+                  <div className="w-[18%]">Categoria</div>
+                  <div className="w-[18%]">Vencimento</div>
+                  <div className="w-[18%]">Valor</div>
+                  <div className="w-28 flex justify-end pr-2">Status</div>
+                  <div className="w-8"></div>
+                </div>
               </div>
 
               <div className="flex flex-col">
@@ -881,9 +1029,7 @@ export const Financial: React.FC = () => {
           <div className="flex-1 flex flex-col p-8 bg-white rounded-b-xl">
             {/* Header / Date Picker */}
             <div className="mb-10">
-              <button className="flex items-center gap-2 border border-gray-300 rounded-md px-4 py-2 text-sm text-gray-700 bg-white hover:bg-gray-50 shadow-sm font-medium transition-colors">
-                <Calendar size={16} className="text-gray-500" /> 19 de março - 19 de março
-              </button>
+              {renderDateFilters()}
             </div>
 
             {/* Profissionais comissionados */}
@@ -891,39 +1037,46 @@ export const Financial: React.FC = () => {
               <h3 className="text-[14.5px] font-semibold text-[#5a6b7c] mb-4">Profissionais comissionados</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
 
-                {configuredSpecialists.map(specialist => (
-                  <div key={specialist.id} className="border border-gray-200 rounded-xl p-5 flex flex-col items-center bg-white shadow-sm relative group">
-                    <div
-                      onClick={() => setSelectedSpecialist(specialist)}
-                      className="absolute top-4 right-3 text-gray-400 hover:text-gray-700 cursor-pointer"
-                    >
-                      <MoreVertical size={20} />
-                    </div>
+                {configuredSpecialists.map(specialist => {
+                  const profComissions = financialStats.comissoesList.filter(c => c.profissional === specialist.name);
+                  const totalProf = profComissions.reduce((acc, c) => acc + c.amount, 0);
 
-                    <div className="w-28 h-28 mb-5 mt-2 relative flex items-center justify-center">
-                      <div className="absolute inset-0 bg-blue-50/40 rounded-full blur-xl"></div>
-                      <div className="relative z-10 w-16 h-16 border-[3px] border-[#93c5fd] rounded-md transform -skew-x-12 rotate-[-10deg] flex items-center justify-center bg-[#bfdbfe]">
-                        <div className="w-full h-2 bg-blue-100 absolute bottom-2"></div>
+                  return (
+                    <div key={specialist.id} className="border border-gray-200 rounded-xl p-5 flex flex-col items-center bg-white shadow-sm relative group">
+                      <div
+                        onClick={() => setSelectedSpecialist(specialist)}
+                        className="absolute top-4 right-3 text-gray-400 hover:text-gray-700 cursor-pointer"
+                      >
+                        <MoreVertical size={20} />
                       </div>
-                    </div>
 
-                    <div className="w-full text-left">
-                      <h4 className="text-[14.5px] font-semibold text-gray-800">{specialist.name}</h4>
-                      <div className="flex items-center justify-between mt-1 mb-5">
-                        <div className="flex items-center gap-1.5 text-gray-600 font-medium text-[13px]">
-                          R$ **** <Eye size={14} className="cursor-pointer hover:text-gray-800 transition-colors" />
+                      <div className="w-28 h-28 mb-5 mt-2 relative flex items-center justify-center">
+                        <div className="absolute inset-0 bg-blue-50/40 rounded-full blur-xl"></div>
+                        <div className="relative z-10 w-16 h-16 border-[3px] border-[#93c5fd] rounded-md transform -skew-x-12 rotate-[-10deg] flex items-center justify-center bg-[#bfdbfe]">
+                          <div className="w-full h-2 bg-blue-100 absolute bottom-2"></div>
                         </div>
-                        <span className="bg-[#f1f5f9] text-[#475569] border border-gray-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
-                          Em dia
-                        </span>
                       </div>
-                    </div>
 
-                    <button className="w-full border border-gray-200 rounded-lg py-2 mt-auto text-xs font-bold text-gray-400 cursor-not-allowed bg-[#fafafa]">
-                      Visualizar detalhes
-                    </button>
-                  </div>
-                ))}
+                      <div className="w-full text-left">
+                        <h4 className="text-[14.5px] font-semibold text-gray-800">{specialist.name}</h4>
+                        <div className="flex items-center justify-between mt-1 mb-5">
+                          <div className="flex items-center gap-1.5 text-gray-800 font-bold text-[14px]">
+                            R$ {totalProf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </div>
+                          <span className="bg-[#f1f5f9] text-[#475569] border border-gray-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                            Em dia
+                          </span>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => { setShowCommissionsDetail(specialist.name); setSelectedCommissions(new Set()); }}
+                        className="w-full border border-blue-200 rounded-lg py-2 mt-auto text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors bg-white">
+                        Visualizar detalhes
+                      </button>
+                    </div>
+                  );
+                })}
 
                 {configuredSpecialists.length === 0 && (
                   <div className="col-span-full py-8 text-center text-sm text-gray-500">
@@ -1028,43 +1181,169 @@ export const Financial: React.FC = () => {
 
         {showDetails === 'saidas' && (
           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] flex flex-col">
+            <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
               <div className="flex justify-between items-center p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-800">Detalhes de Saídas</h3>
                 <button onClick={() => setShowDetails(null)} className="text-gray-400 hover:text-gray-600">
                   <X size={20} />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto flex-1">
-                {despesas.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-6">Nenhuma despesa registrada.</p>
-                ) : (
-                  despesas.map(d => (
-                    <div key={d.id} className="text-sm border-b border-gray-100 py-3 last:border-0 flex justify-between items-start">
-                      <div>
-                        <p className="font-medium text-gray-800">{d.titulo}</p>
-                        <p className="text-gray-500 text-xs text-blue-600 mt-1">{d.is_paga ? 'Pago em ' + new Date((d.data_pagamento || d.data_vencimento) + 'T12:00:00').toLocaleDateString() : 'A vencer em ' + new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString()}</p>
-                      </div>
-                      <div className="text-right flex flex-col items-end">
-                        <div className="flex items-center gap-3">
-                          <p className={`font-semibold ${d.is_paga ? 'text-red-500' : 'text-orange-500'}`}>-R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="text-gray-400 hover:text-red-500 transition-colors" title="Excluir/Cancelar">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                        {d.anexo_url && (
-                          <a href={d.anexo_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 inline-block">
-                            Ver anexo
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                 <p className="text-sm text-gray-500">Detalhes de saídas estão em construção.</p>
               </div>
             </div>
           </div>
         )}
+
+        {showCommissionsDetail && (() => {
+          const profComissions = financialStats.comissoesList.filter(c => c.profissional === showCommissionsDetail);
+          const emAberto = profComissions.filter(c => c.status === 'A repassar');
+          const pagas = profComissions.filter(c => c.status === 'Repassado');
+          
+          const totalAberto = emAberto.reduce((a, b) => a + b.amount, 0);
+          const totalSelecionado = Array.from(selectedCommissions).reduce((a, id) => {
+             const c = emAberto.find(x => x.id === id);
+             return a + (c ? c.amount : 0);
+          }, 0);
+
+          return (
+            <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+              <div className="bg-[#f8fafc] rounded-xl shadow-lg w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+                <div className="flex justify-between items-center px-6 py-5 bg-white border-b border-gray-200">
+                  <h3 className="text-[1.05rem] font-bold text-gray-700">Comissões em aberto de {showCommissionsDetail}</h3>
+                  <button onClick={() => setShowCommissionsDetail(null)} className="text-gray-400 hover:text-gray-600">
+                    <X size={20} strokeWidth={2.5} />
+                  </button>
+                </div>
+                
+                <div className="p-6 overflow-y-auto flex-1 flex flex-col space-y-6">
+                  <div>
+                    <button className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-600 bg-white font-medium">
+                      <Calendar size={15} /> 7 de abril - 7 de abril
+                    </button>
+                  </div>
+
+                  {/* Tabela de "A repassar" */}
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden shrink-0">
+                     <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
+                        <span>A Repassar (Pendentes)</span>
+                        <ChevronDown size={16} className="text-gray-400" />
+                     </div>
+                     {emAberto.length === 0 ? (
+                        <div className="p-5 text-center text-sm text-gray-500">Nenhuma comissão pendente.</div>
+                     ) : (
+                        <div className="w-full">
+                             <table className="w-full text-left border-collapse">
+                               <thead className="bg-white shadow-sm">
+                                 <tr className="border-b border-gray-100">
+                                   <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase w-10"></th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento/Orçamento</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Parcela</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data ref.</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Valor líquido</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Custo</th>
+                                 <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {emAberto.map(c => (
+                                 <tr key={c.id} className={`border-b border-gray-50 text-[13px] ${selectedCommissions.has(c.id) ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
+                                   <td className="px-5 py-3">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={selectedCommissions.has(c.id)}
+                                        onChange={(e) => {
+                                           const newSet = new Set(selectedCommissions);
+                                           if (e.target.checked) newSet.add(c.id);
+                                           else newSet.delete(c.id);
+                                           setSelectedCommissions(newSet);
+                                        }}
+                                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                      />
+                                   </td>
+                                   <td className="px-2 py-3 font-semibold text-gray-700">
+                                      <div className="flex flex-col">
+                                         {c.treatment}
+                                         <span className="text-[10px] text-gray-400 font-normal">{c.ruleInfo}</span>
+                                      </div>
+                                   </td>
+                                   <td className="px-2 py-3 text-center text-gray-500">-</td>
+                                   <td className="px-2 py-3 text-gray-600">{c.paciente}</td>
+                                   <td className="px-2 py-3 text-center text-gray-600">{new Date(c.date).toLocaleDateString()}</td>
+                                   <td className="px-2 py-3 text-right text-gray-600">R$ {c.valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                   <td className="px-2 py-3 text-right text-gray-600">R$ {c.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                   <td className="px-5 py-3 text-right font-bold text-gray-800">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                 </tr>
+                               ))}
+                             </tbody>
+                             </table>
+                           <div className="bg-gray-50/30 px-5 py-4 flex justify-end items-center text-[13.5px] border-t border-gray-100">
+                             <span className="font-semibold text-gray-600 mr-2">Total A Repassar</span>
+                             <span className="font-bold text-gray-800">R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  {/* Tabela de "Pagas" */}
+                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden shrink-0">
+                     <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
+                        <span>Pagas (Histórico)</span>
+                        <ChevronDown size={16} className="text-gray-400" />
+                     </div>
+                     {pagas.length === 0 ? (
+                        <div className="p-5 text-center text-sm text-gray-500">Nenhum histórico de repasse.</div>
+                     ) : (
+                        <div className="w-full">
+                             <table className="w-full text-left border-collapse">
+                               <thead className="bg-white shadow-sm">
+                                 <tr className="border-b border-gray-100">
+                                   <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
+                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data</th>
+                                 <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão Paga</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {pagas.map(c => (
+                                 <tr key={c.id} className="border-b border-gray-50 text-[13px] opacity-70">
+                                   <td className="px-5 py-3 font-semibold text-gray-500">{c.treatment}</td>
+                                   <td className="px-2 py-3 text-gray-500">{c.paciente}</td>
+                                   <td className="px-2 py-3 text-center text-gray-500">{new Date(c.date).toLocaleDateString()}</td>
+                                   <td className="px-5 py-3 text-right font-bold text-emerald-600 text-sm">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                 </tr>
+                               ))}
+                             </tbody>
+                             </table>
+                        </div>
+                     )}
+                  </div>
+                </div>
+
+                {/* Footer Flutuante de Pagamento */}
+                <div className="bg-white border-t border-gray-200 px-6 py-5 mt-auto flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <div className="flex justify-between items-center mb-5 bg-[#f8fafc] border border-gray-200 rounded-lg px-5 py-4">
+                     <span className="text-[14px] font-bold text-gray-600 uppercase">Total a pagar <span className="font-medium text-gray-500 capitalize ml-1">({selectedCommissions.size} tratamentos selecionados)</span></span>
+                     <span className="text-[16px] font-black text-gray-800">R$ {Number(totalSelecionado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-end items-center gap-3">
+                     <button onClick={() => setShowCommissionsDetail(null)} className="px-5 py-2.5 border border-gray-300 rounded font-semibold text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
+                       Cancelar
+                     </button>
+                     <button 
+                       onClick={handlePayCommissions}
+                       disabled={selectedCommissions.size === 0}
+                       className="px-5 py-2.5 bg-[#1d4ed8] hover:bg-blue-800 disabled:bg-blue-300 text-white rounded font-bold text-[13px] transition-colors shadow-sm">
+                       Realizar pagamento ({selectedCommissions.size})
+                     </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          );
+        })()}
 
         {showDetails === 'addDespesa' && (
           <AddDespesaModal
@@ -1073,7 +1352,7 @@ export const Financial: React.FC = () => {
               const despesaToSave = { ...novaDespesa, empresa_id: empresaId };
               try {
                 const savedArray = await expenseService.createExpense(despesaToSave as any, file);
-                setDespesas([...(savedArray as DespesaType[]), ...despesas]);
+                setAllDespesas([...(savedArray as DespesaType[]), ...allDespesas]);
                 setShowDetails(null);
               } catch (error) {
                 console.error("Falha ao salvar despesa", error);

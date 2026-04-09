@@ -102,20 +102,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
             const selectedPlan = plans.find(p => p.id === selectedPlanoId);
             if (selectedPlan) {
                 let maxDays = 0;
-                let totalPlanVal = 0;
+                let totalCostDeduction = 0;
                 treatments.forEach(t => {
                     const tName = t.treatmentName || t.tratamento;
                     const pTreat = selectedPlan.treatments.find(pt => pt.name === tName);
                     if (pTreat) {
                         maxDays = Math.max(maxDays, pTreat.receiveDays || 0);
-                        // planAmount based on instructions: "valor do tratamento menos o custo"
-                        totalPlanVal += (pTreat.price - pTreat.cost);
-                    } else {
-                        totalPlanVal += parseFloat(t.valor || '0');
+                        totalCostDeduction += pTreat.cost;
                     }
                 });
 
-                planAmount = totalPlanVal;
+                planAmount = Math.max(0, val - totalCostDeduction);
                 
                 const baseDate = new Date();
                 baseDate.setDate(baseDate.getDate() + maxDays);
