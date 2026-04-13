@@ -129,3 +129,21 @@ export interface DashboardStats {
   tomorrowAppointments: number;
   recentPatients: number;
 }
+
+export interface Campaign {
+  id: string;
+  empresa_id: string;
+  title: string;
+  type: string;
+  status: 'active' | 'inactive';
+  message_template: string;
+  filters: any;
+  created_at: string;
+}
+
+export interface CampaignLog {
+  id: string;
+  campaign_id: string;
+  cliente_id: string;
+  data_envio: string;
+}

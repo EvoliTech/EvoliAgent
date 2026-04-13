@@ -2,263 +2,282 @@ import React, { useState, useEffect } from 'react';
 import { useCompany } from '../contexts/CompanyContext';
 import { patientService } from '../services/patientService';
 import { Patient } from '../types';
-import { Gift, CalendarClock, Search, MessageCircle, Edit3, X, Loader2, Send, Check, Settings } from 'lucide-react';
+import { Gift, CalendarClock, Search, MessageCircle, Edit3, X, Loader2, Send, Check, Settings, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface BirthdayPatient extends Patient {
   birthdayType: 'hoje' | 'amanha';
   age: number;
 }
 
+const campaignTypesInfo = [
+  { id: 'aniversariantes', title: 'Aniversário', icon: Gift },
+  { id: 'retorno_semestral', title: 'Recuperação de Inativos', icon: CalendarClock },
+  { id: 'pos_operatorio', title: 'Pós-operatório', icon: MessageCircle },
+  { id: 'satisfacao', title: 'Satisfação', icon: MessageCircle },
+  { id: 'orcamentos_aberto', title: 'Recuperação de Orçamentos', icon: MessageCircle },
+  { id: 'tratamentos_finalizados', title: 'Retorno de tratamentos', icon: MessageCircle },
+];
+
 export const MessageCenter: React.FC = () => {
   const { empresaId } = useCompany();
-  const [activeTab, setActiveTab] = useState<'aniversariantes' | 'retorno'>('aniversariantes');
-  const [loading, setLoading] = useState(true);
-  const [birthdayPatients, setBirthdayPatients] = useState<BirthdayPatient[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('aniversariantes');
+  const [loading, setLoading] = useState(false);
   
-  const [selectedPatient, setSelectedPatient] = useState<BirthdayPatient | null>(null);
+  const [activeCampaigns, setActiveCampaigns] = useState<any[]>([]);
+  const [selectedInstance, setSelectedInstance] = useState<any | null>(null);
+  const [patientsList, setPatientsList] = useState<any[]>([]);
+  
+  const [selectedPatient, setSelectedPatient] = useState<any | null>(null);
   const [customMessage, setCustomMessage] = useState('');
-  const [sentMessages, setSentMessages] = useState<string[]>([]);
+  
+  // Anti-spam logs
+  const [sentLogs, setSentLogs] = useState<{patientId: string, campaignId: string, timestamp: number}[]>([]);
+  
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
   
   // Template Editor State
   const [isEditingTemplate, setIsEditingTemplate] = useState(false);
   const [templateToEdit, setTemplateToEdit] = useState('');
   
-  useEffect(() => {
-    if (!empresaId) return;
-    const todayISO = new Date().toISOString().split('T')[0];
-    const saved = localStorage.getItem(`sent_messages_${empresaId}_${todayISO}`);
-    if (saved) {
-      setSentMessages(JSON.parse(saved));
-    }
-  }, [empresaId]);
-
-  const markAsSent = (patientId: string) => {
-    if (!empresaId) return;
-    const todayISO = new Date().toISOString().split('T')[0];
-    const updated = [...sentMessages, patientId];
-    setSentMessages(updated);
-    localStorage.setItem(`sent_messages_${empresaId}_${todayISO}`, JSON.stringify(updated));
-    window.dispatchEvent(new Event('messages_sent_updated'));
+  // Base default templates
+  const defaultTemplates: Record<string, string> = {
+     'aniversariantes': "Olá {nome}, tudo bem?\nNós da Clínica desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!",
+     'retorno_semestral': "Olá {nome}, tudo bem?\nNotamos que já faz um tempo desde a sua última consulta conosco. Que tal agendarmos um retorno preventivo para cuidarmos da sua saúde?",
   };
   
-  // Base default template for birthdays
-  const defaultTemplate = "Olá {nome}, tudo bem?\nNós da Clínica desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!";
-  
-  // Retorno Semestral State
-  const [retornoPatients, setRetornoPatients] = useState<Patient[]>([]);
-  const defaultRetornoTemplate = "Olá {nome}, tudo bem?\nNotamos que já faz um tempo desde a sua última consulta conosco. Que tal agendarmos um retorno preventivo para cuidarmos da sua saúde?";
-  
-  const isRetornoActive = (() => {
-    try {
-      if (!empresaId) return false;
-      const saved = localStorage.getItem(`campaigns_config_${empresaId}`);
-      if (saved) {
-        return JSON.parse(saved)['retorno_semestral'] === true;
-      }
-    } catch {}
-    return false;
-  })();
-
-  const isAniversarioActive = (() => {
-    try {
-      if (!empresaId) return false;
-      const saved = localStorage.getItem(`campaigns_config_${empresaId}`);
-      if (saved) {
-        // Updated to use the correct ID 'aniversariantes'
-        return JSON.parse(saved)['aniversariantes'] === true;
-      }
-    } catch {}
-    return false;
-  })();
+  const getTemplate = (campId: string) => {
+      const saved = localStorage.getItem(`${campId}_template`);
+      return saved || defaultTemplates[campId] || "Olá {nome}, venha nos visitar!";
+  };
 
   useEffect(() => {
-    const fetchAniversariantes = async () => {
-      if (!empresaId || !isAniversarioActive) return;
-      try {
-        setLoading(true);
-        const allPatients = await patientService.fetchPatients(empresaId);
-        
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-        
-        const currentMonth = today.getMonth() + 1;
-        const currentDay = today.getDate();
-        const tmrwMonth = tomorrow.getMonth() + 1;
-        const tmrwDay = tomorrow.getDate();
-
-        const filtered: BirthdayPatient[] = [];
-
-        allPatients.forEach(p => {
-          if (!p.dataNascimento) return;
-          
-          const [yearStr, monthStr, dayStr] = p.dataNascimento.split('-');
-          if (!monthStr || !dayStr) return;
-          
-          const bMonth = parseInt(monthStr, 10);
-          const bDay = parseInt(dayStr, 10);
-          const bYear = parseInt(yearStr, 10);
-          
-          let bType: 'hoje' | 'amanha' | null = null;
-          
-          if (bMonth === currentMonth && bDay === currentDay) {
-            bType = 'hoje';
-          } else if (bMonth === tmrwMonth && bDay === tmrwDay) {
-            bType = 'amanha';
-          }
-          
-          if (bType) {
-             const age = today.getFullYear() - bYear;
-             filtered.push({ ...p, birthdayType: bType, age });
-          }
-        });
-
-        filtered.sort((a, b) => {
-           if (a.birthdayType !== b.birthdayType) {
-              return a.birthdayType === 'hoje' ? -1 : 1;
-           }
-           return a.name.localeCompare(b.name);
-        });
-
-        setBirthdayPatients(filtered);
-      } catch (error) {
-        console.error("Erro ao buscar pacientes:", error);
-      } finally {
-        setLoading(false);
+    if (!empresaId) return;
+    try {
+      const configObj = JSON.parse(localStorage.getItem(`campaigns_config_${empresaId}`) || '{}');
+      const activeKeys = Object.keys(configObj).filter(k => configObj[k]);
+      
+      const savedInstancesStr = localStorage.getItem(`campaigns_instances_${empresaId}`);
+      const instances = savedInstancesStr ? JSON.parse(savedInstancesStr) : [];
+      
+      const campaignsList = [...instances];
+      
+      if (instances.length === 0 && activeKeys.length > 0) {
+         activeKeys.forEach(k => {
+             campaignsList.push({
+                 id: k,
+                 title: k === 'retorno_semestral' ? 'Retorno Semestral' : 'Aniversariantes',
+                 type: k,
+                 messageTemplate: getTemplate(k)
+             });
+         });
       }
-    };
+      
+      // Ensure Aniversariantes is ALWAYS a fixed available tab
+      if (!campaignsList.find(c => c.type === 'aniversariantes')) {
+         campaignsList.unshift({
+             id: 'aniversariantes_fixed',
+             title: 'Aniversariantes',
+             type: 'aniversariantes',
+             messageTemplate: getTemplate('aniversariantes'),
+             status: 'active'
+         });
+      }
+      
+      setActiveCampaigns(campaignsList);
+      const uniqueTypes = Array.from(new Set(campaignsList.map(c => c.type)));
+      if (uniqueTypes.length > 0 && !uniqueTypes.includes(activeTab)) {
+         setActiveTab(uniqueTypes[0] as string);
+         setSelectedInstance(null);
+      }
+      
+      const savedLogs = localStorage.getItem(`campaign_logs_${empresaId}`);
+      if (savedLogs) {
+         setSentLogs(JSON.parse(savedLogs));
+      }
+    } catch {}
+  }, [empresaId]);
 
-    const fetchRetorno = async () => {
-      if (!empresaId) return;
+  const markAsSent = async (patientId: string, campaignId: string) => {
+    if (!empresaId) return;
+    const now = Date.now();
+    const newLog = { patientId, campaignId, timestamp: now };
+    const updated = [...sentLogs, newLog];
+    setSentLogs(updated);
+    localStorage.setItem(`campaign_logs_${empresaId}`, JSON.stringify(updated));
+    
+    // Attempt Supabase insert if applicable
+    if (supabase) {
+       try {
+          await supabase.from('campaign_logs').insert({
+              empresa_id: empresaId,
+              cliente_id: patientId,
+              campaign_id: campaignId // Ideally a UUID, but we use string ID here for logic fallback
+          });
+       } catch (e) {
+          console.error("Failed to log to supabase", e);
+       }
+    }
+  };
+  
+  const isRecentlyContacted = (patientId: string, campaignId: string) => {
+     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+     const now = Date.now();
+     return sentLogs.some(log => 
+        log.patientId === patientId && 
+        log.campaignId === campaignId && 
+        (now - log.timestamp) < THIRTY_DAYS
+     );
+  };
+
+  useEffect(() => {
+    const handleOpenAniv = () => setActiveTab('aniversariantes');
+    window.addEventListener('open_aniversariantes', handleOpenAniv);
+    return () => window.removeEventListener('open_aniversariantes', handleOpenAniv);
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
+      if (!empresaId || !campToUse) {
+         setLoading(false);
+         setPatientsList([]);
+         return;
+      }
+      setLoading(true);
       try {
-        setLoading(true);
-        const allPatients = await patientService.fetchPatients(empresaId);
-        
-        let agData: any[] = [];
-        try {
-            const { supabase: sb } = await import('../lib/supabase');
-            const { data } = await sb.from('agendamentos').select('cliente_id, data_inicio').eq('IDEmpresa', empresaId);
-            agData = data || [];
-        } catch (err) {
-            console.error('Falha ao buscar agendamentos:', err);
-        }
-
-        const now = new Date();
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        
-        const filtered = allPatients.filter(p => {
-            const cleanPhone = p.phone ? p.phone.replace(/\D/g, '') : null;
+         const allPatients = await patientService.fetchPatients(empresaId);
+         const cType = campToUse.type;
+         
+         if (cType === 'aniversariantes') {
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
             
-            const patientAppts = agData.filter(ag => {
-                const isIdMatch = String(ag.cliente_id) === String(p.id);
-                const isPhoneMatch = cleanPhone && String(ag.cliente_id) === cleanPhone;
-                const isTitleMatch = ag.titulo && p.name && ag.titulo.toLowerCase().includes(p.name.toLowerCase());
-                return isIdMatch || isPhoneMatch || isTitleMatch;
+            const currentMonth = today.getMonth() + 1;
+            const currentDay = today.getDate();
+            const tmrwMonth = tomorrow.getMonth() + 1;
+            const tmrwDay = tomorrow.getDate();
+
+            const filtered: BirthdayPatient[] = [];
+
+            allPatients.forEach(p => {
+              if (!p.dataNascimento) return;
+              const [yearStr, monthStr, dayStr] = p.dataNascimento.split('-');
+              if (!monthStr || !dayStr) return;
+              const bMonth = parseInt(monthStr, 10);
+              const bDay = parseInt(dayStr, 10);
+              const bYear = parseInt(yearStr, 10);
+              
+              let bType: 'hoje' | 'amanha' | null = null;
+              if (bMonth === currentMonth && bDay === currentDay) bType = 'hoje';
+              else if (bMonth === tmrwMonth && bDay === tmrwDay) bType = 'amanha';
+              
+              if (bType) {
+                 const age = today.getFullYear() - bYear;
+                 filtered.push({ ...p, birthdayType: bType, age });
+              }
             });
 
-            let lastVisitDate: Date | null = null;
-            let hasFutureAppt = false;
-
-            if (patientAppts.length > 0) {
-                patientAppts.forEach(ag => {
-                    if (!ag.data_inicio) return;
-                    const statusStr = (ag.status || '').toLowerCase();
-                    if (statusStr.includes('cancel')) return;
-
-                    const agDate = new Date(ag.data_inicio);
-                    if (agDate > now) {
-                        hasFutureAppt = true;
-                    } else {
-                        if (!lastVisitDate || agDate > lastVisitDate) {
-                            lastVisitDate = agDate;
-                        }
-                    }
-                });
-            }
-
-            if (hasFutureAppt) return false;
-
-            if (!lastVisitDate) {
-                if (!p.lastVisit || p.lastVisit === '-') return false;
-                
-                if (p.lastVisit.includes('/')) {
-                    const [day, month, year] = p.lastVisit.split('/').map(Number);
-                    if (day && month && year) {
-                       lastVisitDate = new Date(year, month - 1, day);
-                    }
-                } else if (p.lastVisit.includes('-')) {
-                    const [year, month, day] = p.lastVisit.split('T')[0].split('-').map(Number);
-                    if (year && month && day) {
-                       lastVisitDate = new Date(year, month - 1, day);
-                    }
-                } else {
-                   lastVisitDate = new Date(p.lastVisit);
+            filtered.sort((a, b) => a.birthdayType === 'hoje' ? -1 : 1);
+            setPatientsList(filtered);
+            
+         } else if (cType === 'retorno_semestral') {
+            // Retorno Semestral Logic
+            let agData: any[] = [];
+            try {
+                if (supabase) {
+                   const { data } = await supabase.from('agendamentos').select('cliente_id, data_inicio').eq('IDEmpresa', empresaId);
+                   agData = data || [];
                 }
-            }
+            } catch (err) {}
+
+            const now = new Date();
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
             
-            if (!lastVisitDate || isNaN(lastVisitDate.getTime())) return false;
+            const filtered = allPatients.filter(p => {
+                const cleanPhone = p.phone ? p.phone.replace(/\D/g, '') : null;
+                const patientAppts = agData.filter(ag => {
+                    const isIdMatch = String(ag.cliente_id) === String(p.id);
+                    const isPhoneMatch = cleanPhone && String(ag.cliente_id) === cleanPhone;
+                    return isIdMatch || isPhoneMatch;
+                });
+
+                let lastVisitDate: Date | null = null;
+                let hasFutureAppt = false;
+
+                if (patientAppts.length > 0) {
+                    patientAppts.forEach(ag => {
+                        if (!ag.data_inicio) return;
+                        if ((ag.status || '').toLowerCase().includes('cancel')) return;
+                        const agDate = new Date(ag.data_inicio);
+                        if (agDate > now) hasFutureAppt = true;
+                        else if (!lastVisitDate || agDate > lastVisitDate) lastVisitDate = agDate;
+                    });
+                }
+
+                if (hasFutureAppt) return false;
+
+                if (!lastVisitDate && p.lastVisit && p.lastVisit !== '-') {
+                    lastVisitDate = new Date(p.lastVisit);
+                }
+                
+                if (!lastVisitDate || isNaN(lastVisitDate.getTime())) return false;
+                p.lastVisit = lastVisitDate.toISOString();
+                return lastVisitDate <= sixMonthsAgo;
+            });
             
-            p.lastVisit = lastVisitDate.toISOString();
-            return lastVisitDate <= sixMonthsAgo;
-        });
-        
-        filtered.sort((a,b) => {
-           const dA = new Date(a.lastVisit!).getTime();
-           const dB = new Date(b.lastVisit!).getTime();
-           return dA - dB;
-        });
-        
-        setRetornoPatients(filtered);
-      } catch (error) {
-        console.error("Erro ao buscar pacientes retorno:", error);
+            filtered.sort((a,b) => new Date(a.lastVisit!).getTime() - new Date(b.lastVisit!).getTime());
+            setPatientsList(filtered);
+         } else {
+            // Dummy logic for other campaign types for now (shows first 5 patients as qualified)
+            setPatientsList(allPatients.slice(0, 5).map(p => ({...p, fallback: true})));
+         }
+      } catch (e) {
+         console.error(e);
       } finally {
-        setLoading(false);
+         setLoading(false);
       }
     };
+    fetchData();
+  }, [empresaId, selectedInstance, activeTab, activeCampaigns]);
 
-    if (activeTab === 'aniversariantes' && isAniversarioActive) {
-      fetchAniversariantes();
-    } else if (activeTab === 'retorno' && isRetornoActive) {
-      fetchRetorno();
-    } else {
-      setLoading(false);
-    }
-  }, [empresaId, activeTab, isRetornoActive, isAniversarioActive]);
-
-  const generateMessage = (patient: BirthdayPatient, template: string) => {
+  const generateMessage = (patient: any, template: string) => {
      const firstName = patient.name.split(' ')[0] || '';
-     return template.replace(/\{nome\}/gi, firstName).replace(/\{nome_completo\}/gi, patient.name);
+     return template.replace(/\{nome_cliente\}/gi, firstName)
+                    .replace(/\{nome\}/gi, firstName)
+                    .replace(/\{nome_completo\}/gi, patient.name);
+  };
+
+  const getActiveTemplate = () => {
+     const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
+     if (campToUse && campToUse.messageTemplate) return campToUse.messageTemplate;
+     return getTemplate(activeTab);
   };
 
   const handleFastSend = (patient: any) => {
-     const isRetornoTab = activeTab === 'retorno';
-     const savedTemplate = isRetornoTab 
-        ? (localStorage.getItem('retorno_template') || defaultRetornoTemplate)
-        : (localStorage.getItem('birthday_template') || defaultTemplate);
-        
-     const msg = customDrafts[patient.id] || generateMessage(patient as BirthdayPatient, savedTemplate);
+     const savedTemplate = getActiveTemplate();
+     const msg = customDrafts[patient.id] || generateMessage(patient, savedTemplate);
      const encoded = encodeURIComponent(msg);
      
      let phone = patient.phone.replace(/\D/g, '');
      if (phone && !phone.startsWith('55')) phone = '55' + phone;
      
-     markAsSent(patient.id);
+     const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
+     const campId = campToUse ? campToUse.id : activeTab;
+     markAsSent(patient.id, campId);
      window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
   };
 
-  const openCustomize = (patient: Patient, isRetorno: boolean = false) => {
+  const openCustomize = (patient: any) => {
      if (customDrafts[patient.id]) {
         setCustomMessage(customDrafts[patient.id]);
      } else {
-        const savedTemplate = isRetorno 
-           ? (localStorage.getItem('retorno_template') || defaultRetornoTemplate)
-           : (localStorage.getItem('birthday_template') || defaultTemplate);
-           
-        setCustomMessage(generateMessage(patient as BirthdayPatient, savedTemplate));
+        const savedTemplate = getActiveTemplate();
+        setCustomMessage(generateMessage(patient, savedTemplate));
      }
-     setSelectedPatient(patient as BirthdayPatient);
+     setSelectedPatient(patient);
   };
 
   const handleSaveCustomMessage = () => {
@@ -268,17 +287,12 @@ export const MessageCenter: React.FC = () => {
   };
 
   const handleOpenTemplateEditor = () => {
-     const isRetorno = activeTab === 'retorno';
-     const current = isRetorno 
-        ? (localStorage.getItem('retorno_template') || defaultRetornoTemplate)
-        : (localStorage.getItem('birthday_template') || defaultTemplate);
-     setTemplateToEdit(current);
+     setTemplateToEdit(getTemplate(activeTab));
      setIsEditingTemplate(true);
   };
 
   const handleSaveTemplate = () => {
-     const isRetorno = activeTab === 'retorno';
-     localStorage.setItem(isRetorno ? 'retorno_template' : 'birthday_template', templateToEdit);
+     localStorage.setItem(`${activeTab}_template`, templateToEdit);
      setIsEditingTemplate(false);
   };
 
@@ -295,184 +309,158 @@ export const MessageCenter: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
-        <div className="flex border-b border-gray-200 px-6">
-          <button
-            onClick={() => setActiveTab('aniversariantes')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === 'aniversariantes' 
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' 
-                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-            }`}
-          >
-            <Gift size={18} />
-            Aniversariantes
-            {birthdayPatients.length > 0 && (
-              <span className="ml-2 bg-indigo-100 text-indigo-700 py-0.5 px-2 rounded-full text-xs">
-                 {birthdayPatients.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('retorno')}
-            className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === 'retorno' 
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' 
-                : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-            }`}
-          >
-            <CalendarClock size={18} />
-            Retorno Semestral
-          </button>
+        {/* Dynamic Tabs based on campaign Types */}
+        <div className="flex border-b border-gray-200 px-6 overflow-x-auto no-scrollbar">
+          {Array.from(new Set(activeCampaigns.map(c => c.type))).map(type => {
+             const info = campaignTypesInfo.find(c => c.id === type) || { title: type, icon: MessageCircle };
+             const Icon = info.icon;
+             const isSelected = activeTab === type;
+             return (
+                <button
+                  key={type}
+                  onClick={() => { setActiveTab(type as string); setSelectedInstance(null); }}
+                  className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                    isSelected 
+                      ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' 
+                      : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon size={18} />
+                  {info.title}
+                </button>
+             );
+          })}
+          
+          {activeCampaigns.length === 0 && (
+              <div className="px-6 py-4 text-sm font-medium text-gray-400">Nenhuma campanha ativa</div>
+          )}
+          
           <div className="flex-1"></div>
-          <div className="flex items-center px-6">
-             <button 
-               onClick={handleOpenTemplateEditor}
-               className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold text-xs bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors"
-             >
-                <Settings size={14} /> Configurar Modelo Padrão
-             </button>
-          </div>
         </div>
 
         <div className="p-6 flex-1 bg-slate-50/30">
-           {activeTab === 'aniversariantes' && (
-             !isAniversarioActive ? (
+            {activeCampaigns.length === 0 ? (
                 <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
-                       <Gift className="text-gray-300 w-10 h-10" />
+                       <MessageCircle className="text-gray-300 w-10 h-10" />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">Campanha Inativa</h3>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Nenhuma Campanha Ativa</h3>
                     <p className="text-gray-500 max-w-md mx-auto">
-                       A campanha de "Aniversariantes" não está ativada. Vá em 'Campanhas automáticas' no menu principal para ativá-la.
+                       Vá em 'Campanhas automáticas' no menu principal para ativar e configurar suas campanhas de CRM.
                     </p>
                 </div>
-             ) : loading ? (
-               <div className="flex flex-col items-center justify-center py-20">
-                 <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} />
-                 <p className="text-gray-500 font-medium">Buscando aniversariantes...</p>
-               </div>
-             ) : birthdayPatients.length === 0 ? (
-               <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
-                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
-                    <Gift className="text-gray-300 w-10 h-10" />
-                 </div>
-                 <h3 className="text-lg font-bold text-gray-800 mb-2">Nenhum aniversariante</h3>
-                 <p className="text-gray-500 max-w-md mx-auto">
-                    Não há pacientes fazendo aniversário hoje ou amanhã em seu cadastro.
-                 </p>
-               </div>
-             ) : (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {birthdayPatients.map(patient => (
-                   <div key={patient.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all flex flex-col relative group">
-                      {patient.birthdayType === 'hoje' && (
-                         <div className="absolute -top-3 -right-3 bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
-                           <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                           Hoje!
-                         </div>
-                      )}
-                      {patient.birthdayType === 'amanha' && (
-                         <div className="absolute -top-3 -right-3 bg-amber-100 text-amber-700 border border-amber-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
-                           Amanhã
-                         </div>
-                      )}
-
-                      <div className="flex items-center gap-4 mb-5">
-                         <div className="w-14 h-14 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0">
-                            {patient.name.substring(0,2).toUpperCase()}
-                         </div>
-                         <div>
-                            <h4 className="font-bold text-gray-800 text-base leading-tight line-clamp-1 truncate mr-6" title={patient.name}>{patient.name}</h4>
-                            <p className="text-sm text-gray-500 mt-0.5 font-medium">{patient.age} anos</p>
-                         </div>
-                         {sentMessages.includes(patient.id) && (
-                            <div className="ml-auto bg-green-100 text-green-700 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 border border-green-200">
-                               <Check size={14} strokeWidth={3} /> Enviado
-                            </div>
-                         )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
-                         <button 
-                           onClick={() => openCustomize(patient)}
-                           className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 px-3 rounded-lg hover:bg-gray-50 hover:text-indigo-600 transition-colors text-sm shadow-sm"
-                         >
-                            <Edit3 size={15} /> Personalizar
-                         </button>
-                         <button 
-                           onClick={() => handleFastSend(patient)}
-                           className="flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold py-2.5 px-3 rounded-lg hover:bg-[#1ebd5a] transition-colors text-sm shadow-sm shadow-green-500/20"
-                         >
-                            <Send size={15} /> Enviar Msg
-                         </button>
-                      </div>
-                   </div>
-                 ))}
-               </div>
-             )
-           )}
-
-           {activeTab === 'retorno' && (
-             !isRetornoActive ? (
-                 <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
-                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
-                        <CalendarClock className="text-gray-300 w-10 h-10" />
-                     </div>
-                     <h3 className="text-lg font-bold text-gray-800 mb-2">Campanha Inativa</h3>
-                     <p className="text-gray-500 max-w-md mx-auto">
-                        A campanha de "Retorno Semestral" não está ativada. Vá em 'Campanhas automáticas' no menu principal para ativá-la.
-                     </p>
-                 </div>
-             ) : loading ? (
+            ) : (!selectedInstance && activeTab !== 'aniversariantes') ? (
+                /* List of Instances */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {activeCampaigns.filter(c => c.type === activeTab).map(camp => (
+                       <div key={camp.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all flex flex-col">
+                          <h3 className="font-bold text-gray-800 text-lg mb-2 line-clamp-1" title={camp.title}>{camp.title}</h3>
+                          <div className="text-sm text-gray-500 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100 italic line-clamp-3">
+                             "{camp.messageTemplate}"
+                          </div>
+                          <button 
+                             onClick={() => setSelectedInstance(camp)} 
+                             className="mt-auto w-full py-2.5 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100 transition-colors shadow-sm"
+                          >
+                             Ver Contatos
+                          </button>
+                       </div>
+                   ))}
+                </div>
+            ) : loading ? (
                  <div className="flex flex-col items-center justify-center py-20">
                    <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} />
-                   <p className="text-gray-500 font-medium">Buscando pacientes para retorno...</p>
+                   <p className="text-gray-500 font-medium">Buscando público alvo...</p>
                  </div>
-             ) : retornoPatients.length === 0 ? (
-                 <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
+            ) : patientsList.length === 0 ? (
+                 <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center relative">
+                     <button onClick={() => setSelectedInstance(null)} className="absolute top-6 left-6 text-gray-400 hover:text-gray-600 font-semibold text-sm flex items-center gap-1">
+                        ← Voltar
+                     </button>
                      <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
-                        <CalendarClock className="text-emerald-500 w-10 h-10" />
+                        <Check className="text-emerald-500 w-10 h-10" />
                      </div>
-                     <h3 className="text-lg font-bold text-gray-800 mb-2">Tudo em dia!</h3>
+                     <h3 className="text-lg font-bold text-gray-800 mb-2">Lista Vazia</h3>
                      <p className="text-gray-500 max-w-md mx-auto">
-                        Não há nenhum paciente com a última consulta registrada há mais de 6 meses.
+                        {activeTab === 'aniversariantes' ? 'Não há aniversariantes hoje nem amanhã.' : 'Não há pacientes qualificados para esta campanha no momento.'}
                      </p>
                  </div>
-             ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {retornoPatients.map(patient => (
-                     <div key={patient.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all flex flex-col">
-                        <div className="flex items-center gap-4 mb-5">
-                           <div className="w-14 h-14 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center text-amber-600 font-bold text-lg shrink-0">
-                              {patient.name.substring(0,2).toUpperCase()}
-                           </div>
-                           <div>
-                              <h4 className="font-bold text-gray-800 text-base leading-tight line-clamp-1 truncate mr-6" title={patient.name}>{patient.name}</h4>
-                              <p className="text-xs text-amber-600 font-bold bg-amber-100/50 px-2 py-0.5 rounded-md mt-1 w-fit border border-amber-200/50">
-                                Última vez: {new Date(patient.lastVisit!).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                              </p>
-                           </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
-                           <button 
-                             onClick={() => openCustomize(patient, true)}
-                             className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 px-3 rounded-lg hover:bg-gray-50 hover:text-indigo-600 transition-colors text-sm shadow-sm"
-                           >
-                              <Edit3 size={15} /> Personalizar
-                           </button>
-                           <button 
-                             onClick={() => handleFastSend(patient)}
-                             className="flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold py-2.5 px-3 rounded-lg hover:bg-[#1ebd5a] transition-colors text-sm shadow-sm shadow-green-500/20"
-                           >
-                              <Send size={15} /> Lembrar
-                           </button>
-                        </div>
+            ) : (
+                <div className="flex flex-col h-full">
+                  <div className="mb-6 flex items-center gap-4">
+                     {activeTab !== 'aniversariantes' && (
+                        <button onClick={() => setSelectedInstance(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-4 py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all">
+                           ← Voltar
+                        </button>
+                     )}
+                     <h2 className="font-bold text-xl text-gray-800 tracking-tight">
+                        {activeTab === 'aniversariantes' ? 'Aniversariantes' : (selectedInstance ? selectedInstance.title : '')}
+                     </h2>
+                     <div className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-bold">
+                        {patientsList.length} contatos
                      </div>
-                   ))}
-                 </div>
-             )
-           )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {patientsList.map(patient => {
+                       const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
+                       const campId = campToUse ? campToUse.id : activeTab;
+                       const isContacted = isRecentlyContacted(patient.id, campId);
+                     
+                     return (
+                        <div key={patient.id} className={`bg-white border ${isContacted ? 'border-gray-200 opacity-70' : 'border-gray-200 hover:border-indigo-200'} rounded-xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col relative`}>
+                           
+                           {/* Tags */}
+                           {patient.birthdayType === 'hoje' && (
+                              <div className="absolute -top-3 -right-3 bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Hoje!
+                              </div>
+                           )}
+                           
+                           <div className="flex items-center gap-4 mb-5">
+                              <div className="w-14 h-14 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0">
+                                 {patient.name.substring(0,2).toUpperCase()}
+                              </div>
+                              <div>
+                                 <h4 className="font-bold text-gray-800 text-base leading-tight line-clamp-1 truncate mr-6" title={patient.name}>{patient.name}</h4>
+                                 {patient.age && <p className="text-sm text-gray-500 mt-0.5 font-medium">{patient.age} anos</p>}
+                                 {patient.lastVisit && (
+                                   <p className="text-[11px] text-amber-600 font-bold bg-amber-100/50 px-2 py-0.5 rounded-md mt-1 w-fit border border-amber-200/50">
+                                     Última vez: {new Date(patient.lastVisit).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                                   </p>
+                                 )}
+                              </div>
+                           </div>
+                           
+                           {/* Anti-spam UI Block */}
+                           {isContacted ? (
+                              <div className="mt-auto pt-4 border-t border-gray-100">
+                                 <div className="bg-gray-100 text-gray-500 font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm">
+                                     <ShieldAlert size={16} /> Já Contatado (Últimos 30 dias)
+                                 </div>
+                              </div>
+                           ) : (
+                              <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
+                                 <button 
+                                   onClick={() => openCustomize(patient)}
+                                   className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-semibold py-2.5 px-3 rounded-lg hover:bg-gray-50 hover:text-indigo-600 transition-colors text-sm shadow-sm"
+                                 >
+                                    <Edit3 size={15} /> Personalizar
+                                 </button>
+                                 <button 
+                                   onClick={() => handleFastSend(patient)}
+                                   className="flex items-center justify-center gap-2 bg-[#25D366] text-white font-bold py-2.5 px-3 rounded-lg hover:bg-[#1ebd5a] transition-colors text-sm shadow-sm shadow-green-500/20"
+                                 >
+                                    <Send size={15} /> Enviar Msg
+                                 </button>
+                              </div>
+                           )}
+                        </div>
+                     );
+                  })}
+                  </div>
+                </div>
+            )}
         </div>
       </div>
 
@@ -512,6 +500,7 @@ export const MessageCenter: React.FC = () => {
             </div>
          </div>
       )}
+
       {/* Template Editor Modal */}
       {isEditingTemplate && (
          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -519,7 +508,7 @@ export const MessageCenter: React.FC = () => {
                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                   <div>
                     <h3 className="text-lg font-bold text-gray-800">Modelo de Mensagem Padrão</h3>
-                    <p className="text-sm text-gray-500">Defina o texto base para {activeTab === 'aniversariantes' ? 'Aniversários' : 'Retornos'}</p>
+                    <p className="text-sm text-gray-500">Defina o texto para a aba atual</p>
                   </div>
                   <button onClick={() => setIsEditingTemplate(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition-colors">
                      <X size={20} />
@@ -528,8 +517,7 @@ export const MessageCenter: React.FC = () => {
                <div className="p-6">
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4 text-sm text-blue-800">
                      Utilize as tags abaixo para personalizar automaticamente:<br/>
-                     <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600">{"{nome}"}</code> - Primeiro Nome<br/>
-                     <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600">{"{nome_completo}"}</code> - Nome Completo
+                     <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600">{"{nome_cliente}"}</code> - Primeiro Nome
                   </div>
                   <textarea
                      value={templateToEdit}

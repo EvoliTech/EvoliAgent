@@ -284,7 +284,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                Você tem mensagens de aniversário pendentes para enviar hoje. Não deixe passar em branco! 🎉
             </p>
             <button 
-               onClick={() => { setShowBirthdayToast(false); onNavigate('message-center'); }} 
+               onClick={() => { 
+                  setShowBirthdayToast(false); 
+                  onNavigate('message-center');
+                  setTimeout(() => window.dispatchEvent(new Event('open_aniversariantes')), 100);
+               }} 
                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm text-sm"
             >
                Enviar mensagens agora
