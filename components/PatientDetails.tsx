@@ -1349,7 +1349,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         <span className="px-5 py-2 text-[13px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm">Finalizado</span>
                       ) : (
                         <button className="px-5 py-2 border border-gray-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm transition-colors" onClick={async () => {
-                          const upd = { ...t.budget, treatments: t.budget.treatments.map((x: any) => x.id === t.id ? { ...x, status: 'Finalizado' } : x) };
+                          const upd = { ...t.budget, treatments: t.budget.treatments.map((x: any) => x.id === t.id ? { ...x, status: 'Finalizado', data_finalizacao: new Date().toISOString() } : x) };
                           const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), upd);
                           if (saved) setBudgets(prev => prev.map(b => b.id === t.budget.id ? saved : b));
                         }}>Finalizar</button>

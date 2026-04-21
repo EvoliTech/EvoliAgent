@@ -28,6 +28,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [convenio, setConvenio] = useState('');
   const [tratamentoSearch, setTratamentoSearch] = useState('');
   const [selectedTratamento, setSelectedTratamento] = useState<string>('');
+  const [selectedTratamentoCategoria, setSelectedTratamentoCategoria] = useState<string>('');
   const [valor, setValor] = useState('');
   const [denteId, setDenteId] = useState('');
   const [faces, setFaces] = useState('');
@@ -100,6 +101,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
       const t = {
         id: Math.random().toString(36).substr(2, 9),
         treatmentName: selectedTratamento,
+        categoria: selectedTratamentoCategoria, // Salva a categoria para filtros de campanhas
         valor,
         dente: denteId,
         faces,
@@ -266,6 +268,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                           {filteredTreatments.map(t => (
                             <button key={t.id} onClick={() => {
                               setSelectedTratamento(t.name);
+                              setSelectedTratamentoCategoria(t.category);
                               setTratamentoSearch('');
                               setValor(String(t.price));
                             }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 truncate flex justify-between items-center group">

@@ -8,6 +8,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { Campaign } from '../types';
 import { patientService } from '@/services/patientService';
+import { plansService } from '../services/plansService';
 
 const campaignTypes = [
    { id: 'aniversariantes', title: 'Aniversário', icon: Gift, color: 'text-amber-500', bg: 'bg-amber-100', defaultMessage: 'Olá {nome_cliente}!\nNós da Clínica desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!', description: 'Aproveite para marcar presença na vida do seus pacientes no dia mais importante para eles, o aniversário! A EvoliSync envia uma mensagem, seja feriado ou final de semana.' },
@@ -26,6 +27,7 @@ export const Campaigns: React.FC = () => {
 
    // Filters
    const [inativosTime, setInativosTime] = useState('6 meses');
+   const [customDays, setCustomDays] = useState('30');
    const [plano, setPlano] = useState('Todos');
    const [especialidade, setEspecialidade] = useState('Todos');
    const [genero, setGenero] = useState('Todos');
@@ -113,7 +115,7 @@ export const Campaigns: React.FC = () => {
                type: selectedType,
                status: 'active',
                message_template: message,
-               filters: { inativosTime, plano, especialidade, genero, inadimplentes }
+               filters: { inativosTime, customDays, plano, especialidade, genero, inadimplentes }
             }).select().single();
 
             if (error) {
@@ -132,15 +134,18 @@ export const Campaigns: React.FC = () => {
                   if (selectedType !== 'aniversariantes') {
                      let agData: any[] = [];
                      let orcamentos: any[] = [];
+                     let allClinicTreatments: any[] = [];
                      
                      try {
-                        const [{ data: ag }, { data: orc }] = await Promise.all([
+                        const [{ data: ag }, { data: orc }, clinicPlans] = await Promise.all([
                            supabase.from('agendamentos').select('cliente_id, data_inicio, status').eq('IDEmpresa', empresaId),
-                           supabase.from('orcamentos').select('paciente_id, status, data_orcamento, created_at, tratamentos').eq('empresa_id', empresaId)
+                           supabase.from('orcamentos').select('paciente_id, status, data_orcamento, created_at, tratamentos').eq('empresa_id', empresaId),
+                           plansService.fetchPlans(empresaId)
                         ]);
                         agData = ag || [];
                         orcamentos = orc || [];
-                     } catch (err) { }
+                        allClinicTreatments = (clinicPlans || []).flatMap(p => p.treatments);
+                     } catch (err) { console.error(err); }
 
                      const now = new Date();
 
@@ -159,14 +164,39 @@ export const Campaigns: React.FC = () => {
                         }
 
                         if (selectedType === 'pos_operatorio') {
+                           let limitDays = 0;
+                           if (inativosTime === '7 dias') limitDays = 7;
+                           else if (inativosTime === '15 dias') limitDays = 15;
+                           else if (inativosTime === '1 mês') limitDays = 30;
+                           else if (inativosTime === 'Personalizado') limitDays = parseInt(customDays) || 30;
+
+                           const limitDate = new Date();
+                           limitDate.setDate(limitDate.getDate() - limitDays);
+
                            return patientOrcs.some(o => {
                               if (o.status !== 'Aprovado' && o.status !== 'Finalizado') return false;
                               if (!Array.isArray(o.tratamentos)) return false;
-                              return o.tratamentos.some((t: any) => 
-                                 (t.categoria && t.categoria.toLowerCase().includes('cirurgia')) || 
-                                 (t.nome && t.nome.toLowerCase().includes('cirurgia')) ||
-                                 (t.procedimento && t.procedimento.toLowerCase().includes('cirurgia'))
-                              );
+
+                              return o.tratamentos.some((t: any) => {
+                                 const trName = (t.treatmentName || t.tratamento || t.nome || '').toLowerCase();
+                                 let isSurgery = (t.categoria && t.categoria.toLowerCase().includes('cirurgia')) || 
+                                    (t.nome && t.nome.toLowerCase().includes('cirurgia')) ||
+                                    (t.procedimento && t.procedimento.toLowerCase().includes('cirurgia')) ||
+                                    trName.includes('cirurgia') || trName.includes('amputação') || trName.includes('exodontia') || trName.includes('implante') || trName.includes('enxerto');
+                                 
+                                 if (!isSurgery && trName) {
+                                    const matched = allClinicTreatments.find(ct => ct.name.toLowerCase() === trName);
+                                    if (matched && (matched.category.toLowerCase().includes('cirurgia') || matched.category.toLowerCase().includes('endodontia'))) {
+                                       isSurgery = true;
+                                    }
+                                 }
+
+                                 if (!isSurgery) return false;
+                                 if (t.status !== 'Finalizado' && t.status !== 'Concluído') return false;
+
+                                 const d = new Date(t.data_finalizacao || o.data_orcamento || o.created_at);
+                                 return d >= limitDate;
+                              });
                            });
                         }
 
@@ -191,11 +221,11 @@ export const Campaigns: React.FC = () => {
                            const limitDate = new Date();
                            limitDate.setMonth(limitDate.getMonth() - limitMonths);
 
-                           const hasFutureAppt = patientAppts.some(ag => ag.data_inicio && new Date(ag.data_inicio) > now && !(ag.status || '').toLowerCase().includes('cancel'));
+                           const hasRecentAppt = patientAppts.some(ag => ag.data_inicio && new Date(ag.data_inicio) > limitDate && !(ag.status || '').toLowerCase().includes('cancel'));
                            const hasRecentOrcamento = patientOrcs.some(o => new Date(o.data_orcamento || o.created_at) > limitDate);
 
-                           // Se não tem orçamento recente e não tem consulta futura marcada
-                           return !hasFutureAppt && !hasRecentOrcamento;
+                           // Se não tem orçamento recente/futuro e não tem consulta recente/futura
+                           return !hasRecentAppt && !hasRecentOrcamento;
                         }
 
                         return false;
@@ -352,7 +382,31 @@ export const Campaigns: React.FC = () => {
                               </select>
                            </>
                         ) : selectedType === 'pos_operatorio' ? (
-                           <span className="text-sm font-bold text-orange-600">pacientes que finalizaram tratamento na categoria "Cirurgia"</span>
+                           <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-orange-600">pacientes com cirurgia nos últimos</span>
+                              <select
+                                 value={inativosTime}
+                                 onChange={e => setInativosTime(e.target.value)}
+                                 className="border border-gray-300 rounded-md text-sm px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              >
+                                 <option>7 dias</option>
+                                 <option>15 dias</option>
+                                 <option>1 mês</option>
+                                 <option>Personalizado</option>
+                              </select>
+                              {inativosTime === 'Personalizado' && (
+                                 <div className="flex items-center gap-2">
+                                    <input 
+                                       type="number" 
+                                       value={customDays} 
+                                       onChange={e => setCustomDays(e.target.value)} 
+                                       className="border border-gray-300 rounded-md text-sm px-3 py-1.5 w-20 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                       placeholder="Dias"
+                                    />
+                                    <span className="text-sm font-bold text-orange-600">dias</span>
+                                 </div>
+                              )}
+                           </div>
                         ) : selectedType === 'satisfacao' ? (
                            <span className="text-sm font-bold text-green-600">40% aleatório dos pacientes que finalizaram tratamento</span>
                         ) : selectedType === 'orcamentos_aberto' ? (
@@ -470,7 +524,7 @@ export const Campaigns: React.FC = () => {
                            <div className="text-sm text-gray-500">
                              {selectedType === 'retorno_semestral' ? `Ausentes e sem orçamento há ${inativosTime}` :
                               selectedType === 'tratamentos_finalizados' ? `Tratamentos finalizados há ${inativosTime}` :
-                              selectedType === 'pos_operatorio' ? 'Procedimentos de cirurgia finalizados' :
+                              selectedType === 'pos_operatorio' ? `Cirurgia nos últimos ${inativosTime === 'Personalizado' ? customDays + ' dias' : inativosTime}` :
                               selectedType === 'satisfacao' ? '40% clientes com trat. finalizados' :
                               selectedType === 'orcamentos_aberto' ? 'Possuem orçamentos abertos' : 'Todos os pacientes qualificados'}
                            </div>
