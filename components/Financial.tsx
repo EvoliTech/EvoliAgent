@@ -75,7 +75,7 @@ export const Financial: React.FC = () => {
     if (!empresaId) return;
     const listToPay = financialStats.comissoesList.filter(c => selectedCommissions.has(c.id));
     if (listToPay.length === 0) return;
-    
+
     // Process payments (Update budget isComissaoPaga & Create expenses)
     for (const com of listToPay) {
       const b = allBudgets.find(b => b.id === com.budgetId);
@@ -108,23 +108,23 @@ export const Financial: React.FC = () => {
           await budgetService.saveBudget(empresaId, pacId, budgetPayload as any);
         }
       }
-      
+
       // Register Expense
       await expenseService.createExpense({
-         titulo: `Comissão - ${com.treatment} (${com.paciente})`,
-         valor: com.amount,
-         categoria: 'Comissões',
-         is_paga: true,
-         empresa_id: empresaId,
-         data_vencimento: new Date().toISOString().split('T')[0],
-         data_pagamento: new Date().toISOString().split('T')[0],
-         forma_pagamento: 'Transferência'
+        titulo: `Comissão - ${com.treatment} (${com.paciente})`,
+        valor: com.amount,
+        categoria: 'Comissões',
+        is_paga: true,
+        empresa_id: empresaId,
+        data_vencimento: new Date().toISOString().split('T')[0],
+        data_pagamento: new Date().toISOString().split('T')[0],
+        forma_pagamento: 'Transferência'
       } as any, null);
     }
-    
+
     alert('Comissões pagas e registradas como despesas com sucesso!');
     setSelectedCommissions(new Set());
-    
+
     // Recarregar os dados localmente
     budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
     expenseService.fetchExpenses(empresaId).then((data) => setAllDespesas(data as DespesaType[])).catch(console.error);
@@ -178,7 +178,7 @@ export const Financial: React.FC = () => {
   const renderDateFilters = () => (
     <div className="flex items-center gap-3">
       <div className="relative border border-gray-300 rounded-md bg-white hover:border-gray-400 transition-colors">
-        <select 
+        <select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
           className="appearance-none bg-transparent pl-4 pr-10 py-1.5 text-sm font-medium text-gray-700 focus:outline-none cursor-pointer">
@@ -234,12 +234,12 @@ export const Financial: React.FC = () => {
       if (!rules) return null;
       const cName = (convenioName || '').toLowerCase().trim();
       const tName = (trtName || '').toLowerCase().trim();
-      
+
       return rules.find(r => {
         const rc = (r.convenio || '').toLowerCase().trim();
         const re = (r.especialidade || '').toLowerCase().trim();
         return (rc === 'todos' || rc === cName || (rc === 'particular' && cName === 'particular')) &&
-               (re === 'todas' || re === tName);
+          (re === 'todas' || re === tName);
       });
     };
 
@@ -252,10 +252,10 @@ export const Financial: React.FC = () => {
         const convenioName = t.convenio || 'Particular';
         const itemVal = parseFloat(t.valor || 0);
         let paidOnTrt = 0;
-        
+
         const normalizeName = (name: string) => name.replace(/Dr\(a\)\s*/gi, '').trim().toLowerCase();
-        const matchedSpec = specialists.find(s => 
-          normalizeName(s.name) === normalizeName(t.profissional) || 
+        const matchedSpec = specialists.find(s =>
+          normalizeName(s.name) === normalizeName(t.profissional) ||
           t.profissional.toLowerCase().includes(normalizeName(s.name)) ||
           s.name.toLowerCase().includes(normalizeName(t.profissional))
         );
@@ -285,33 +285,33 @@ export const Financial: React.FC = () => {
 
             // Calculate apos_pagamento commission
             if (rule && rule.quandoRecebe === 'apos_pagamento') {
-               let valComissao = 0;
-               const valRegra = parseFloat(rule.valor.replace(',', '.'));
-               if (rule.tipoComissao === 'porcentagem') {
-                  valComissao = netReceived * (valRegra / 100);
-               } else {
-                  const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
-                  valComissao = valRegra * prop;
-               }
-               if (valComissao > 0) {
-                  comissoesTotal += valComissao;
-                  comissoesList.push({
-                     id: 'com_pg_' + p.id,
-                     budgetId: b.id,
-                     treatmentId: t.id,
-                     paymentId: p.id,
-                     treatmentName: trtName,
-                     profissional: profNameForCommission,
-                     treatment: trtName,
-                     date: p.receiveDate || p.date,
-                     amount: valComissao,
-                     paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                     status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
-                     valorLiquido: netReceived,
-                     custo: planFee,
-                     ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
-                  });
-               }
+              let valComissao = 0;
+              const valRegra = parseFloat(rule.valor.replace(',', '.'));
+              if (rule.tipoComissao === 'porcentagem') {
+                valComissao = netReceived * (valRegra / 100);
+              } else {
+                const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
+                valComissao = valRegra * prop;
+              }
+              if (valComissao > 0) {
+                comissoesTotal += valComissao;
+                comissoesList.push({
+                  id: 'com_pg_' + p.id,
+                  budgetId: b.id,
+                  treatmentId: t.id,
+                  paymentId: p.id,
+                  treatmentName: trtName,
+                  profissional: profNameForCommission,
+                  treatment: trtName,
+                  date: p.receiveDate || p.date,
+                  amount: valComissao,
+                  paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                  status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
+                  valorLiquido: netReceived,
+                  custo: planFee,
+                  ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+                });
+              }
             }
 
             if (p.planAmount !== undefined) {
@@ -375,36 +375,36 @@ export const Financial: React.FC = () => {
 
         // Calculate apos_procedimento commission
         if (rule && rule.quandoRecebe === 'apos_procedimento' && t.status === 'Finalizado') {
-           const procDate = b.updated_at || b.created_at || new Date().toISOString();
-           if (isDateInFilter(procDate)) {
-               let valComissao = 0;
-               const valRegra = parseFloat(rule.valor.replace(',', '.'));
-               if (rule.tipoComissao === 'porcentagem') {
-                  valComissao = itemVal * (valRegra / 100);
-               } else {
-                  valComissao = valRegra;
-               }
-               
-               if (valComissao > 0) {
-                   comissoesTotal += valComissao;
-                   comissoesList.push({
-                       id: 'com_proc_' + t.id,
-                       budgetId: b.id,
-                       treatmentId: t.id,
-                       paymentId: null,
-                       treatmentName: trtName,
-                       profissional: profNameForCommission,
-                       treatment: trtName,
-                       date: b.updated_at || b.created_at || new Date().toISOString(),
-                       amount: valComissao,
-                       paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                       status: t.isComissaoPaga ? 'Repassado' : 'A repassar',
-                       valorLiquido: itemVal,
-                       custo: 0,
-                       ruleInfo: `Procedimento Concluído > Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
-                   });
-               }
-           }
+          const procDate = b.updated_at || b.created_at || new Date().toISOString();
+          if (isDateInFilter(procDate)) {
+            let valComissao = 0;
+            const valRegra = parseFloat(rule.valor.replace(',', '.'));
+            if (rule.tipoComissao === 'porcentagem') {
+              valComissao = itemVal * (valRegra / 100);
+            } else {
+              valComissao = valRegra;
+            }
+
+            if (valComissao > 0) {
+              comissoesTotal += valComissao;
+              comissoesList.push({
+                id: 'com_proc_' + t.id,
+                budgetId: b.id,
+                treatmentId: t.id,
+                paymentId: null,
+                treatmentName: trtName,
+                profissional: profNameForCommission,
+                treatment: trtName,
+                date: b.updated_at || b.created_at || new Date().toISOString(),
+                amount: valComissao,
+                paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                status: t.isComissaoPaga ? 'Repassado' : 'A repassar',
+                valorLiquido: itemVal,
+                custo: 0,
+                ruleInfo: `Procedimento Concluído > Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+              });
+            }
+          }
         }
       });
     });
@@ -459,7 +459,7 @@ export const Financial: React.FC = () => {
       return updated;
     });
     setSelectedSpecialist(null);
-    
+
     // Save to Cloud via Service
     const spec = specialists.find(s => s.id === specialistId);
     if (spec && empresaId) {
@@ -482,11 +482,6 @@ export const Financial: React.FC = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Financeiro</h1>
-        {activeTab === 'fluxo' && (
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm">
-            Adicionar despesa
-          </button>
-        )}
       </div>
 
       {/* Main Container */}
@@ -640,23 +635,23 @@ export const Financial: React.FC = () => {
                 <div className="flex flex-col flex-1 pb-2">
                   <div className="max-h-[160px] overflow-y-auto w-full pr-2">
                     {financialStats.comissoesList.length === 0 ? (
-                       <div className="flex mt-8 items-center justify-center text-center text-xs text-gray-500">
-                          Nenhum repasse de comissão encontrado para o período.
-                       </div>
+                      <div className="flex mt-8 items-center justify-center text-center text-xs text-gray-500">
+                        Nenhum repasse de comissão encontrado para o período.
+                      </div>
                     ) : (
-                       <div className="space-y-3">
-                         {financialStats.comissoesList.map(c => (
-                           <div key={c.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                             <div className="flex flex-col">
-                               <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
-                               <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
-                             </div>
-                             <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
-                               R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                             </span>
-                           </div>
-                         ))}
-                       </div>
+                      <div className="space-y-3">
+                        {financialStats.comissoesList.map(c => (
+                          <div key={c.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
+                              <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
+                            </div>
+                            <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
+                              R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -677,7 +672,7 @@ export const Financial: React.FC = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {despesas.filter(d => !d.is_paga).sort((a,b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()).slice(0, 4).map(d => (
+                      {despesas.filter(d => !d.is_paga).sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()).slice(0, 4).map(d => (
                         <div key={d.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                           <div>
                             <p className="font-medium text-gray-800 line-clamp-1">{d.titulo}</p>
@@ -697,8 +692,8 @@ export const Financial: React.FC = () => {
                         </div>
                       ))}
                       {despesas.filter(d => !d.is_paga).length > 4 && (
-                        <button 
-                          onClick={() => setActiveTab('fluxo')} 
+                        <button
+                          onClick={() => setActiveTab('fluxo')}
                           className="w-full mt-2 text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline text-center pt-1"
                         >
                           Ver todas ({despesas.filter(d => !d.is_paga).length})
@@ -870,9 +865,9 @@ export const Financial: React.FC = () => {
                       </div>
                       <div className="w-[20%] text-[13.5px] font-semibold tracking-tight">
                         {tx.type === 'saida' ? (
-                           <span className="text-red-600">-R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-red-600">-R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         ) : (
-                           <span className="text-gray-700">R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-gray-700">R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         )}
                       </div>
                       <div className="w-28 flex justify-end pr-2">
@@ -927,7 +922,7 @@ export const Financial: React.FC = () => {
                         <div className="flex items-center justify-between w-[55%] pl-4">
                           <div className="w-[18%] text-[13px] font-medium text-gray-600">{d.categoria || '--'}</div>
                           <div className="w-[18%] text-[13px] font-medium text-gray-600">{new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-                          <div className="w-[18%] text-[13.5px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                          <div className="w-[18%] text-[13.5px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                           <div className="w-28 flex justify-end pr-2">
                             {d.is_paga ? (
                               <span className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 rounded-full text-[11px] font-bold whitespace-nowrap"><Check size={12} strokeWidth={3.5} /> Pago</span>
@@ -974,7 +969,7 @@ export const Financial: React.FC = () => {
                             {proximaAPagar ? new Date(proximaAPagar.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : 'Todas pagas'}
                           </div>
                           <div className="w-[18%] text-[13.5px] font-semibold text-red-600">
-                            -R$ {totalValor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                            -R$ {totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </div>
                           <div className="w-28 flex justify-end pr-2">
                             <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[11px] font-bold whitespace-nowrap">
@@ -1002,7 +997,7 @@ export const Financial: React.FC = () => {
                           <div className="flex items-center justify-between w-[55%] pl-4">
                             <div className="w-[18%] text-[12px] font-medium text-gray-500">{d.categoria || '--'}</div>
                             <div className="w-[18%] text-[12px] font-medium text-gray-600">{new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-                            <div className="w-[18%] text-[13px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                            <div className="w-[18%] text-[13px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                             <div className="w-28 flex justify-end pr-2 gap-2">
                               {d.is_paga ? (
                                 <span className="flex items-center gap-1 px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold"><Check size={10} strokeWidth={3.5} /> Pago</span>
@@ -1069,7 +1064,7 @@ export const Financial: React.FC = () => {
                         </div>
                       </div>
 
-                      <button 
+                      <button
                         onClick={() => { setShowCommissionsDetail(specialist.name); setSelectedCommissions(new Set()); }}
                         className="w-full border border-blue-200 rounded-lg py-2 mt-auto text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors bg-white">
                         Visualizar detalhes
@@ -1189,7 +1184,7 @@ export const Financial: React.FC = () => {
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-1 space-y-6">
-                 <p className="text-sm text-gray-500">Detalhes de saídas estão em construção.</p>
+                <p className="text-sm text-gray-500">Detalhes de saídas estão em construção.</p>
               </div>
             </div>
           </div>
@@ -1199,11 +1194,11 @@ export const Financial: React.FC = () => {
           const profComissions = financialStats.comissoesList.filter(c => c.profissional === showCommissionsDetail);
           const emAberto = profComissions.filter(c => c.status === 'A repassar');
           const pagas = profComissions.filter(c => c.status === 'Repassado');
-          
+
           const totalAberto = emAberto.reduce((a, b) => a + b.amount, 0);
           const totalSelecionado = Array.from(selectedCommissions).reduce((a, id) => {
-             const c = emAberto.find(x => x.id === id);
-             return a + (c ? c.amount : 0);
+            const c = emAberto.find(x => x.id === id);
+            return a + (c ? c.amount : 0);
           }, 0);
 
           return (
@@ -1215,7 +1210,7 @@ export const Financial: React.FC = () => {
                     <X size={20} strokeWidth={2.5} />
                   </button>
                 </div>
-                
+
                 <div className="p-6 overflow-y-auto flex-1 flex flex-col space-y-6">
                   <div>
                     <button className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-600 bg-white font-medium">
@@ -1225,118 +1220,118 @@ export const Financial: React.FC = () => {
 
                   {/* Tabela de "A repassar" */}
                   <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden shrink-0">
-                     <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
-                        <span>A Repassar (Pendentes)</span>
-                        <ChevronDown size={16} className="text-gray-400" />
-                     </div>
-                     {emAberto.length === 0 ? (
-                        <div className="p-5 text-center text-sm text-gray-500">Nenhuma comissão pendente.</div>
-                     ) : (
-                        <div className="w-full">
-                             <table className="w-full text-left border-collapse">
-                               <thead className="bg-white shadow-sm">
-                                 <tr className="border-b border-gray-100">
-                                   <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase w-10"></th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento/Orçamento</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Parcela</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data ref.</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Valor líquido</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Custo</th>
-                                 <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão</th>
-                               </tr>
-                             </thead>
-                             <tbody>
-                               {emAberto.map(c => (
-                                 <tr key={c.id} className={`border-b border-gray-50 text-[13px] ${selectedCommissions.has(c.id) ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
-                                   <td className="px-5 py-3">
-                                      <input 
-                                        type="checkbox" 
-                                        checked={selectedCommissions.has(c.id)}
-                                        onChange={(e) => {
-                                           const newSet = new Set(selectedCommissions);
-                                           if (e.target.checked) newSet.add(c.id);
-                                           else newSet.delete(c.id);
-                                           setSelectedCommissions(newSet);
-                                        }}
-                                        className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-                                      />
-                                   </td>
-                                   <td className="px-2 py-3 font-semibold text-gray-700">
-                                      <div className="flex flex-col">
-                                         {c.treatment}
-                                         <span className="text-[10px] text-gray-400 font-normal">{c.ruleInfo}</span>
-                                      </div>
-                                   </td>
-                                   <td className="px-2 py-3 text-center text-gray-500">-</td>
-                                   <td className="px-2 py-3 text-gray-600">{c.paciente}</td>
-                                   <td className="px-2 py-3 text-center text-gray-600">{new Date(c.date).toLocaleDateString()}</td>
-                                   <td className="px-2 py-3 text-right text-gray-600">R$ {c.valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                   <td className="px-2 py-3 text-right text-gray-600">R$ {c.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                   <td className="px-5 py-3 text-right font-bold text-gray-800">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                 </tr>
-                               ))}
-                             </tbody>
-                             </table>
-                           <div className="bg-gray-50/30 px-5 py-4 flex justify-end items-center text-[13.5px] border-t border-gray-100">
-                             <span className="font-semibold text-gray-600 mr-2">Total A Repassar</span>
-                             <span className="font-bold text-gray-800">R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                           </div>
+                    <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
+                      <span>A Repassar (Pendentes)</span>
+                      <ChevronDown size={16} className="text-gray-400" />
+                    </div>
+                    {emAberto.length === 0 ? (
+                      <div className="p-5 text-center text-sm text-gray-500">Nenhuma comissão pendente.</div>
+                    ) : (
+                      <div className="w-full">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-white shadow-sm">
+                            <tr className="border-b border-gray-100">
+                              <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase w-10"></th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento/Orçamento</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Parcela</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data ref.</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Valor líquido</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Custo</th>
+                              <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {emAberto.map(c => (
+                              <tr key={c.id} className={`border-b border-gray-50 text-[13px] ${selectedCommissions.has(c.id) ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
+                                <td className="px-5 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCommissions.has(c.id)}
+                                    onChange={(e) => {
+                                      const newSet = new Set(selectedCommissions);
+                                      if (e.target.checked) newSet.add(c.id);
+                                      else newSet.delete(c.id);
+                                      setSelectedCommissions(newSet);
+                                    }}
+                                    className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                  />
+                                </td>
+                                <td className="px-2 py-3 font-semibold text-gray-700">
+                                  <div className="flex flex-col">
+                                    {c.treatment}
+                                    <span className="text-[10px] text-gray-400 font-normal">{c.ruleInfo}</span>
+                                  </div>
+                                </td>
+                                <td className="px-2 py-3 text-center text-gray-500">-</td>
+                                <td className="px-2 py-3 text-gray-600">{c.paciente}</td>
+                                <td className="px-2 py-3 text-center text-gray-600">{new Date(c.date).toLocaleDateString()}</td>
+                                <td className="px-2 py-3 text-right text-gray-600">R$ {c.valorLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td className="px-2 py-3 text-right text-gray-600">R$ {c.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                <td className="px-5 py-3 text-right font-bold text-gray-800">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="bg-gray-50/30 px-5 py-4 flex justify-end items-center text-[13.5px] border-t border-gray-100">
+                          <span className="font-semibold text-gray-600 mr-2">Total A Repassar</span>
+                          <span className="font-bold text-gray-800">R$ {totalAberto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                         </div>
-                     )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Tabela de "Pagas" */}
                   <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden shrink-0">
-                     <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
-                        <span>Pagas (Histórico)</span>
-                        <ChevronDown size={16} className="text-gray-400" />
-                     </div>
-                     {pagas.length === 0 ? (
-                        <div className="p-5 text-center text-sm text-gray-500">Nenhum histórico de repasse.</div>
-                     ) : (
-                        <div className="w-full">
-                             <table className="w-full text-left border-collapse">
-                               <thead className="bg-white shadow-sm">
-                                 <tr className="border-b border-gray-100">
-                                   <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
-                                 <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data</th>
-                                 <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão Paga</th>
-                               </tr>
-                             </thead>
-                             <tbody>
-                               {pagas.map(c => (
-                                 <tr key={c.id} className="border-b border-gray-50 text-[13px] opacity-70">
-                                   <td className="px-5 py-3 font-semibold text-gray-500">{c.treatment}</td>
-                                   <td className="px-2 py-3 text-gray-500">{c.paciente}</td>
-                                   <td className="px-2 py-3 text-center text-gray-500">{new Date(c.date).toLocaleDateString()}</td>
-                                   <td className="px-5 py-3 text-right font-bold text-emerald-600 text-sm">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                 </tr>
-                               ))}
-                             </tbody>
-                             </table>
-                        </div>
-                     )}
+                    <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center text-[13px] font-semibold text-gray-700 bg-gray-50/50">
+                      <span>Pagas (Histórico)</span>
+                      <ChevronDown size={16} className="text-gray-400" />
+                    </div>
+                    {pagas.length === 0 ? (
+                      <div className="p-5 text-center text-sm text-gray-500">Nenhum histórico de repasse.</div>
+                    ) : (
+                      <div className="w-full">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-white shadow-sm">
+                            <tr className="border-b border-gray-100">
+                              <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Tratamento</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase">Paciente</th>
+                              <th className="px-2 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-center">Data</th>
+                              <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase text-right">Comissão Paga</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagas.map(c => (
+                              <tr key={c.id} className="border-b border-gray-50 text-[13px] opacity-70">
+                                <td className="px-5 py-3 font-semibold text-gray-500">{c.treatment}</td>
+                                <td className="px-2 py-3 text-gray-500">{c.paciente}</td>
+                                <td className="px-2 py-3 text-center text-gray-500">{new Date(c.date).toLocaleDateString()}</td>
+                                <td className="px-5 py-3 text-right font-bold text-emerald-600 text-sm">R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Footer Flutuante de Pagamento */}
                 <div className="bg-white border-t border-gray-200 px-6 py-5 mt-auto flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                   <div className="flex justify-between items-center mb-5 bg-[#f8fafc] border border-gray-200 rounded-lg px-5 py-4">
-                     <span className="text-[14px] font-bold text-gray-600 uppercase">Total a pagar <span className="font-medium text-gray-500 capitalize ml-1">({selectedCommissions.size} tratamentos selecionados)</span></span>
-                     <span className="text-[16px] font-black text-gray-800">R$ {Number(totalSelecionado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-[14px] font-bold text-gray-600 uppercase">Total a pagar <span className="font-medium text-gray-500 capitalize ml-1">({selectedCommissions.size} tratamentos selecionados)</span></span>
+                    <span className="text-[16px] font-black text-gray-800">R$ {Number(totalSelecionado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-end items-center gap-3">
-                     <button onClick={() => setShowCommissionsDetail(null)} className="px-5 py-2.5 border border-gray-300 rounded font-semibold text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
-                       Cancelar
-                     </button>
-                     <button 
-                       onClick={handlePayCommissions}
-                       disabled={selectedCommissions.size === 0}
-                       className="px-5 py-2.5 bg-[#1d4ed8] hover:bg-blue-800 disabled:bg-blue-300 text-white rounded font-bold text-[13px] transition-colors shadow-sm">
-                       Realizar pagamento ({selectedCommissions.size})
-                     </button>
+                    <button onClick={() => setShowCommissionsDetail(null)} className="px-5 py-2.5 border border-gray-300 rounded font-semibold text-[13px] text-gray-700 hover:bg-gray-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handlePayCommissions}
+                      disabled={selectedCommissions.size === 0}
+                      className="px-5 py-2.5 bg-[#1d4ed8] hover:bg-blue-800 disabled:bg-blue-300 text-white rounded font-bold text-[13px] transition-colors shadow-sm">
+                      Realizar pagamento ({selectedCommissions.size})
+                    </button>
                   </div>
                 </div>
 

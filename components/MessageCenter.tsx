@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCompany } from '../contexts/CompanyContext';
 import { patientService } from '../services/patientService';
 import { Patient } from '../types';
-import { Gift, CalendarClock, Search, MessageCircle, Edit3, X, Loader2, Send, Check, Settings, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Gift, CalendarClock, Search, MessageCircle, Edit3, X, Loader2, Send, Check, Settings, ShieldAlert, ArrowLeft, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface BirthdayPatient extends Patient {
@@ -53,49 +53,63 @@ export const MessageCenter: React.FC = () => {
 
   useEffect(() => {
     if (!empresaId) return;
-    try {
-      const configObj = JSON.parse(localStorage.getItem(`campaigns_config_${empresaId}`) || '{}');
-      const activeKeys = Object.keys(configObj).filter(k => configObj[k]);
-      
-      const savedInstancesStr = localStorage.getItem(`campaigns_instances_${empresaId}`);
-      const instances = savedInstancesStr ? JSON.parse(savedInstancesStr) : [];
-      
-      const campaignsList = [...instances];
-      
-      if (instances.length === 0 && activeKeys.length > 0) {
-         activeKeys.forEach(k => {
-             campaignsList.push({
-                 id: k,
-                 title: k === 'retorno_semestral' ? 'Retorno Semestral' : 'Aniversariantes',
-                 type: k,
-                 messageTemplate: getTemplate(k)
-             });
-         });
-      }
-      
-      // Ensure Aniversariantes is ALWAYS a fixed available tab
-      if (!campaignsList.find(c => c.type === 'aniversariantes')) {
-         campaignsList.unshift({
-             id: 'aniversariantes_fixed',
-             title: 'Aniversariantes',
-             type: 'aniversariantes',
-             messageTemplate: getTemplate('aniversariantes'),
-             status: 'active'
-         });
-      }
-      
-      setActiveCampaigns(campaignsList);
-      const uniqueTypes = Array.from(new Set(campaignsList.map(c => c.type)));
-      if (uniqueTypes.length > 0 && !uniqueTypes.includes(activeTab)) {
-         setActiveTab(uniqueTypes[0] as string);
-         setSelectedInstance(null);
-      }
-      
-      const savedLogs = localStorage.getItem(`campaign_logs_${empresaId}`);
-      if (savedLogs) {
-         setSentLogs(JSON.parse(savedLogs));
-      }
-    } catch {}
+
+    const fetchCampaigns = async () => {
+       let instances: any[] = [];
+       if (supabase) {
+           const { data } = await supabase.from('campaigns').select('*').eq('empresa_id', empresaId).eq('status', 'active');
+           if (data) {
+               instances = data.map((d: any) => ({
+                   id: d.id,
+                   title: d.title,
+                   type: d.type,
+                   messageTemplate: d.message_template,
+                   status: d.status
+               }));
+           }
+       }
+       
+       const campaignsList = [...instances];
+       
+       // Ensure Aniversariantes is ALWAYS a fixed available tab
+       if (!campaignsList.find(c => c.type === 'aniversariantes')) {
+          campaignsList.unshift({
+              id: 'aniversariantes',
+              title: 'Aniversariantes',
+              type: 'aniversariantes',
+              messageTemplate: getTemplate('aniversariantes'),
+              status: 'inactive'
+          });
+       }
+
+       setActiveCampaigns(campaignsList);
+       const uniqueTypes = Array.from(new Set(campaignsList.map(c => c.type)));
+       if (uniqueTypes.length > 0 && (!activeTab || !uniqueTypes.includes(activeTab))) {
+          setActiveTab(uniqueTypes[0] as string);
+          setSelectedInstance(null);
+       }
+       
+       if (supabase) {
+           try {
+              const { data: logsData } = await supabase.from('campaign_logs').select('cliente_id, campaign_id, data_envio').eq('empresa_id', empresaId);
+              if (logsData) {
+                 const mappedLogs = logsData.map((l: any) => ({
+                    patientId: l.cliente_id,
+                    campaignId: l.campaign_id,
+                    timestamp: new Date(l.data_envio).getTime()
+                 }));
+                 setSentLogs(mappedLogs);
+              }
+           } catch(e) {}
+       } else {
+           const savedLogs = localStorage.getItem(`campaign_logs_${empresaId}`);
+           if (savedLogs) {
+              setSentLogs(JSON.parse(savedLogs));
+           }
+       }
+    };
+    
+    fetchCampaigns();
   }, [empresaId]);
 
   const markAsSent = async (patientId: string, campaignId: string) => {
@@ -128,6 +142,26 @@ export const MessageCenter: React.FC = () => {
         log.campaignId === campaignId && 
         (now - log.timestamp) < THIRTY_DAYS
      );
+  };
+
+  const handleDeleteCampaign = async (campaignId: string) => {
+     if (!window.confirm("Atenção: Tem certeza que deseja excluir esta campanha? Ela não enviará mais novas mensagens. Históricos anteriores serão mantidos.")) return;
+     
+     // Optimistically update UI
+     setActiveCampaigns(prev => prev.filter(c => c.id !== campaignId));
+     
+     if (supabase) {
+        try {
+           await supabase.from('campaigns').delete().eq('id', campaignId);
+        } catch (e) {
+           console.error("Error deleting campaign:", e);
+           alert("Houve um erro ao excluir a campanha da nuvem.");
+        }
+     } else {
+        const localData = JSON.parse(localStorage.getItem(`campaigns_${empresaId}`) || '[]');
+        const updatedData = localData.filter((c: any) => c.id !== campaignId);
+        localStorage.setItem(`campaigns_${empresaId}`, JSON.stringify(updatedData));
+     }
   };
 
   useEffect(() => {
@@ -182,57 +216,19 @@ export const MessageCenter: React.FC = () => {
             filtered.sort((a, b) => a.birthdayType === 'hoje' ? -1 : 1);
             setPatientsList(filtered);
             
-         } else if (cType === 'retorno_semestral') {
-            // Retorno Semestral Logic
-            let agData: any[] = [];
-            try {
-                if (supabase) {
-                   const { data } = await supabase.from('agendamentos').select('cliente_id, data_inicio').eq('IDEmpresa', empresaId);
-                   agData = data || [];
-                }
-            } catch (err) {}
-
-            const now = new Date();
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            
-            const filtered = allPatients.filter(p => {
-                const cleanPhone = p.phone ? p.phone.replace(/\D/g, '') : null;
-                const patientAppts = agData.filter(ag => {
-                    const isIdMatch = String(ag.cliente_id) === String(p.id);
-                    const isPhoneMatch = cleanPhone && String(ag.cliente_id) === cleanPhone;
-                    return isIdMatch || isPhoneMatch;
-                });
-
-                let lastVisitDate: Date | null = null;
-                let hasFutureAppt = false;
-
-                if (patientAppts.length > 0) {
-                    patientAppts.forEach(ag => {
-                        if (!ag.data_inicio) return;
-                        if ((ag.status || '').toLowerCase().includes('cancel')) return;
-                        const agDate = new Date(ag.data_inicio);
-                        if (agDate > now) hasFutureAppt = true;
-                        else if (!lastVisitDate || agDate > lastVisitDate) lastVisitDate = agDate;
-                    });
-                }
-
-                if (hasFutureAppt) return false;
-
-                if (!lastVisitDate && p.lastVisit && p.lastVisit !== '-') {
-                    lastVisitDate = new Date(p.lastVisit);
-                }
-                
-                if (!lastVisitDate || isNaN(lastVisitDate.getTime())) return false;
-                p.lastVisit = lastVisitDate.toISOString();
-                return lastVisitDate <= sixMonthsAgo;
-            });
-            
-            filtered.sort((a,b) => new Date(a.lastVisit!).getTime() - new Date(b.lastVisit!).getTime());
-            setPatientsList(filtered);
-         } else {
-            // Dummy logic for other campaign types for now (shows first 5 patients as qualified)
-            setPatientsList(allPatients.slice(0, 5).map(p => ({...p, fallback: true})));
+         } else if (campToUse.id) {
+            if (supabase) {
+               const { data: contactsData } = await supabase.from('campaign_contacts').select('cliente_id').eq('campaign_id', campToUse.id);
+               if (contactsData) {
+                  const tiedPatientIds = contactsData.map((c: any) => String(c.cliente_id));
+                  const filtered = allPatients.filter(p => tiedPatientIds.includes(String(p.id)));
+                  setPatientsList(filtered);
+               } else {
+                  setPatientsList([]);
+               }
+            } else {
+               setPatientsList([]);
+            }
          }
       } catch (e) {
          console.error(e);
@@ -358,14 +354,33 @@ export const MessageCenter: React.FC = () => {
                           <div className="text-sm text-gray-500 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100 italic line-clamp-3">
                              "{camp.messageTemplate}"
                           </div>
-                          <button 
-                             onClick={() => setSelectedInstance(camp)} 
-                             className="mt-auto w-full py-2.5 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100 transition-colors shadow-sm"
-                          >
-                             Ver Contatos
-                          </button>
+                          <div className="mt-auto flex items-center gap-3">
+                             <button 
+                                onClick={() => setSelectedInstance(camp)} 
+                                className="flex-1 py-2.5 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100 transition-colors shadow-sm"
+                             >
+                                Ver Contatos
+                             </button>
+                             <button 
+                                onClick={() => handleDeleteCampaign(camp.id)}
+                                className="py-2.5 px-3.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition-colors shadow-sm"
+                                title="Excluir campanha"
+                             >
+                                <Trash2 className="w-5 h-5" />
+                             </button>
+                          </div>
                        </div>
                    ))}
+                </div>
+            ) : (activeTab === 'aniversariantes' && activeCampaigns.find(c => c.type === 'aniversariantes')?.status === 'inactive') ? (
+                <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
+                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
+                       <Gift className="text-gray-300 w-10 h-10" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Campanha Inativa</h3>
+                    <p className="text-gray-500 max-w-md mx-auto">
+                       A campanha de "Aniversariantes" não está ativada. Vá em 'Campanhas automáticas' no menu principal para ativá-la.
+                    </p>
                 </div>
             ) : loading ? (
                  <div className="flex flex-col items-center justify-center py-20">
