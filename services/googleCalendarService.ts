@@ -104,8 +104,8 @@ export const googleCalendarService = {
         data_fim: googleData.end.dateTime || googleData.end.date,
         especialista_id: calendarId, // Using calendarId as specialist reference
         status: googleData.status || 'confirmed',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1),
+        updated_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1),
         IDEmpresa: empresaId
     };
 
@@ -154,7 +154,7 @@ export const googleCalendarService = {
         data_inicio: googleData.start.dateTime || googleData.start.date,
         data_fim: googleData.end.dateTime || googleData.end.date,
         status: googleData.status || 'confirmed',
-        updated_at: new Date().toISOString()
+        updated_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1)
     };
 
     if (cliente_id !== undefined) updatePayload.cliente_id = cliente_id;
