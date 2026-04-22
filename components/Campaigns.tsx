@@ -130,6 +130,7 @@ export const Campaigns: React.FC = () => {
                   // We need to generate the snapshot of contacts for this campaign!
                   const allPatients = await patientService.fetchPatients(empresaId);
                   let finalContacts: any[] = [];
+                  let matchContext: Record<string, string> = {};
 
                   if (selectedType !== 'aniversariantes') {
                      let agData: any[] = [];
@@ -164,20 +165,28 @@ export const Campaigns: React.FC = () => {
                         }
 
                         if (selectedType === 'pos_operatorio') {
-                           let limitDays = 0;
+                           let limitDays = 7;
                            if (inativosTime === '7 dias') limitDays = 7;
                            else if (inativosTime === '15 dias') limitDays = 15;
                            else if (inativosTime === '1 mês') limitDays = 30;
                            else if (inativosTime === 'Personalizado') limitDays = parseInt(customDays) || 30;
+                           else if (inativosTime.includes('meses')) limitDays = (parseInt(inativosTime) || 6) * 30;
 
                            const limitDate = new Date();
                            limitDate.setDate(limitDate.getDate() - limitDays);
 
-                           return patientOrcs.some(o => {
+                           const meets = patientOrcs.some(o => {
                               if (o.status !== 'Aprovado' && o.status !== 'Finalizado') return false;
-                              if (!Array.isArray(o.tratamentos)) return false;
+                              let trats = o.tratamentos;
+                              if (typeof trats === 'string') {
+                                 try { 
+                                    trats = JSON.parse(trats); 
+                                    if (typeof trats === 'string') trats = JSON.parse(trats);
+                                 } catch(e) {}
+                              }
+                              if (!Array.isArray(trats)) return false;
 
-                              return o.tratamentos.some((t: any) => {
+                              return trats.some((t: any) => {
                                  const trName = (t.treatmentName || t.tratamento || t.nome || '').toLowerCase();
                                  let isSurgery = (t.categoria && t.categoria.toLowerCase().includes('cirurgia')) || 
                                     (t.nome && t.nome.toLowerCase().includes('cirurgia')) ||
@@ -195,9 +204,14 @@ export const Campaigns: React.FC = () => {
                                  if (t.status !== 'Finalizado' && t.status !== 'Concluído') return false;
 
                                  const d = new Date(t.data_finalizacao || o.data_orcamento || o.created_at);
-                                 return d >= limitDate;
+                                 if (d >= limitDate) {
+                                    matchContext[p.id] = `Cirurgia: ${t.treatmentName || t.tratamento || t.nome || 'Não especificada'} (Finalizada em ${d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })})`;
+                                    return true;
+                                 }
+                                 return false;
                               });
                            });
+                           return meets;
                         }
 
                         if (selectedType === 'tratamentos_finalizados') {
@@ -207,11 +221,16 @@ export const Campaigns: React.FC = () => {
                            const upperDate = new Date(targetDate);
                            upperDate.setMonth(upperDate.getMonth() + 1); // 1 month window
 
-                           return patientOrcs.some(o => {
+                           const meets = patientOrcs.some(o => {
                               if (o.status !== 'Aprovado' && o.status !== 'Finalizado') return false;
                               const d = new Date(o.data_orcamento || o.created_at);
-                              return d >= targetDate && d <= upperDate;
+                              if (d >= targetDate && d <= upperDate) {
+                                 matchContext[p.id] = `Tratamentos Finalizados: Orçamento de ${limitMonths} meses atrás`;
+                                 return true;
+                              }
+                              return false;
                            });
+                           return meets;
                         }
 
                         if (selectedType === 'retorno_semestral') {
@@ -247,6 +266,11 @@ export const Campaigns: React.FC = () => {
 
                      const { error: insErr } = await supabase.from('campaign_contacts').insert(contactsInserts);
                      if (insErr) console.error("Error inserting contacts snapshot:", insErr);
+                     
+                     if (Object.keys(matchContext).length > 0) {
+                        const updatedFilters = { ...campaignData.filters, matchContext };
+                        await supabase.from('campaigns').update({ filters: updatedFilters }).eq('id', campaignData.id);
+                     }
                   }
                }
                
@@ -260,6 +284,13 @@ export const Campaigns: React.FC = () => {
          setSaving(false);
       }
    };
+   const handleSelectType = (type: string) => {
+      setSelectedType(type);
+      if (type === 'pos_operatorio') setInativosTime('7 dias');
+      else if (type === 'tratamentos_finalizados' || type === 'retorno_semestral') setInativosTime('6 meses');
+      else if (type === 'recuperacao_inativos') setInativosTime('1 ano');
+   };
+
 
    return (
       <div className="w-full max-w-[1920px] mx-auto p-4 md:p-8 font-sans bg-gray-50 flex flex-col min-h-screen">
@@ -307,7 +338,7 @@ export const Campaigns: React.FC = () => {
                      return (
                         <div
                            key={c.id}
-                           onClick={() => !isDisabled && setSelectedType(c.id)}
+                           onClick={() => !isDisabled && handleSelectType(c.id)}
                            className={`border rounded-xl p-6 flex flex-col items-center justify-center transition-all relative overflow-hidden ${isDisabled
                                  ? 'bg-gray-50 border-gray-200 cursor-not-allowed opacity-80'
                                  : selectedType === c.id

@@ -64,7 +64,8 @@ export const MessageCenter: React.FC = () => {
                   title: d.title,
                   type: d.type,
                   messageTemplate: d.message_template,
-                  status: d.status
+                  status: d.status,
+                  filters: d.filters
                }));
             }
          }
@@ -221,7 +222,11 @@ export const MessageCenter: React.FC = () => {
                   const { data: contactsData } = await supabase.from('campaign_contacts').select('cliente_id').eq('campaign_id', campToUse.id);
                   if (contactsData) {
                      const tiedPatientIds = contactsData.map((c: any) => String(c.cliente_id));
-                     const filtered = allPatients.filter(p => tiedPatientIds.includes(String(p.id)));
+                     const matchContext = campToUse.filters?.matchContext || {};
+                     const filtered = allPatients.filter(p => tiedPatientIds.includes(String(p.id))).map(p => ({
+                        ...p,
+                        campaignReason: matchContext[p.id] || ''
+                     }));
                      setPatientsList(filtered);
                   } else {
                      setPatientsList([]);
@@ -440,9 +445,14 @@ export const MessageCenter: React.FC = () => {
                                        {patient.age && <p className="text-sm text-gray-500 mt-0.5 font-medium">{patient.age} anos</p>}
                                        {patient.lastVisit && (
                                           <p className="text-[11px] text-amber-600 font-bold bg-amber-100/50 px-2 py-0.5 rounded-md mt-1 w-fit border border-amber-200/50">
-                                             Última consulta: {new Date(patient.lastVisit).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                                             Última consulta: {new Date(patient.lastVisit).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                                           </p>
                                        )}
+                                        {(patient as any).campaignReason && (
+                                           <p className="text-[11px] text-indigo-700 font-bold bg-indigo-50 px-2 py-1 rounded-md mt-1 w-fit border border-indigo-100 line-clamp-2" title={(patient as any).campaignReason}>
+                                              {(patient as any).campaignReason}
+                                           </p>
+                                        )}
                                     </div>
                                  </div>
 
@@ -451,8 +461,8 @@ export const MessageCenter: React.FC = () => {
                                     <div className="mt-auto pt-4 border-t border-gray-100">
                                        <div className="bg-gray-100 text-gray-500 font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm">
                                           <ShieldAlert size={16} /> Já Contatado (Últimos 30 dias)
-                                       </div>
-                                    </div>
+                                        </div>
+                                     </div>
                                  ) : (
                                     <div className="grid grid-cols-2 gap-3 mt-auto pt-4 border-t border-gray-100">
                                        <button
