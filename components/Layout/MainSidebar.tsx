@@ -26,6 +26,7 @@ export const MainSidebar: React.FC<MainSidebarProps> = ({ activePage, onNavigate
     { id: 'patients', label: 'Pacientes', icon: Users },
     { id: 'professionals', label: 'Especialistas', icon: Stethoscope },
     { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
+    { id: 'prosthesis-control', label: 'Próteses', icon: Factory },
   ];
 
   const isSettingsActive = activePage === 'settings';

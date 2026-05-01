@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings' | 'prosthesis-control';
 
 export interface TreatmentItem {
   id: string;
@@ -146,4 +146,47 @@ export interface CampaignLog {
   campaign_id: string;
   cliente_id: string;
   data_envio: string;
+}
+
+export interface ProteseLaboratorio {
+  id: string;
+  empresa_id: number;
+  nome: string;
+  telefone: string;
+  created_at: string;
+}
+
+export type ProteseStatus = 'Solicitação' | 'Enviado para laboratório' | 'Retornado à Clínica' | 'Instalado';
+
+export interface ProteseSolicitacao {
+  id: string;
+  empresa_id: number;
+  paciente_id?: string;
+  paciente_nome: string;
+  responsavel_nome: string;
+  laboratorio_id?: string;
+  dentes?: string;
+  cor?: string;
+  descricao_servico?: string;
+  trabalho_executado?: string;
+  observacoes_internas?: string;
+  status: ProteseStatus;
+  data_envio?: string;
+  prazo_entrega?: string;
+  forma_envio?: string;
+  responsavel_retirada?: string;
+  observacoes_envio?: string;
+  created_at: string;
+  updated_at: string;
+  laboratorio?: ProteseLaboratorio; // Para join
+}
+
+export interface ProteseHistorico {
+  id: string;
+  empresa_id: number;
+  solicitacao_id: string;
+  status_anterior?: string;
+  status_novo: string;
+  usuario_nome: string;
+  created_at: string;
 }

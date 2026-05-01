@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search, Info, MoreVertical, FileDown, ArrowDownSquare, Loader2 } from 'lucide-react';
 import { ManageInventoryModal } from './ManageInventoryModal';
 import { StockOutModal } from './StockOutModal';
@@ -14,6 +15,25 @@ import * as XLSX from 'xlsx';
 export const Inventory: React.FC = () => {
   const { empresaId } = useCompany();
   const [activeTab, setActiveTab] = useState<'produtos' | 'historico'>('produtos');
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const parts = location.pathname.split('/');
+    if (parts[1] === 'estoque' && parts[2]) {
+      const tab = parts[2] as 'produtos' | 'historico';
+      if (['produtos', 'historico'].includes(tab) && activeTab !== tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'produtos' | 'historico') => {
+    setActiveTab(tab);
+    navigate(`/estoque/${tab}`, { replace: true });
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [products, setProducts] = useState<InventoryProduct[]>([]);
@@ -132,7 +152,7 @@ export const Inventory: React.FC = () => {
         {/* Tabs */}
         <div className="flex px-6 border-b border-gray-200 mt-2">
           <button
-            onClick={() => setActiveTab('produtos')}
+            onClick={() => handleTabChange('produtos')}
             className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'produtos' 
                 ? 'border-blue-600 text-blue-600' 
@@ -142,7 +162,7 @@ export const Inventory: React.FC = () => {
             Produtos
           </button>
           <button
-            onClick={() => setActiveTab('historico')}
+            onClick={() => handleTabChange('historico')}
             className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'historico' 
                 ? 'border-blue-600 text-blue-600' 

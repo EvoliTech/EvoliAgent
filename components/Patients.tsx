@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Patient } from '../types';
 import { patientService } from '../services/patientService';
 import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2, ClipboardList } from 'lucide-react';
@@ -20,6 +21,39 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
   // Estado principal dos pacientes
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Sync selected patient from URL
+  useEffect(() => {
+     if (patients.length > 0) {
+        const parts = location.pathname.split('/');
+        if (parts[1] === 'pacientes' && parts[2]) {
+           const id = parts[2];
+           if (!selectedPatient || selectedPatient.id !== id) {
+              const p = patients.find(p => p.id === id);
+              if (p) {
+                 setSelectedPatient(p);
+              }
+           }
+        } else if (parts[1] === 'pacientes' && !parts[2] && selectedPatient) {
+           // URL says no patient, but we have one selected (e.g. back button)
+           setSelectedPatient(null);
+        }
+     }
+  }, [location.pathname, patients]);
+
+  const handleSelectPatient = (patient: Patient) => {
+     setSelectedPatient(patient);
+     navigate(`/pacientes/${patient.id}/visao-geral`);
+  };
+
+  const handleBackFromPatient = () => {
+     setSelectedPatient(null);
+     navigate('/pacientes');
+  };
+
 
   // Estados de controle da interface
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(() => {
@@ -240,7 +274,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
     return (
       <PatientDetails 
         patient={selectedPatient} 
-        onBack={() => setSelectedPatient(null)} 
+        onBack={handleBackFromPatient} 
         onEdit={() => {
           if (onUpdateRegistration) {
             onUpdateRegistration(selectedPatient.id);
@@ -363,7 +397,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
                 <tr 
                   key={patient.id} 
                   className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedPatient(patient)}
+                  onClick={() => handleSelectPatient(patient)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">

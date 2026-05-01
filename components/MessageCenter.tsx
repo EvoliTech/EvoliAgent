@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCompany } from '../contexts/CompanyContext';
 import { patientService } from '../services/patientService';
 import { Patient } from '../types';
@@ -22,8 +23,7 @@ const campaignTypesInfo = [
 export const MessageCenter: React.FC = () => {
    const { empresaId } = useCompany();
    const [activeTab, setActiveTab] = useState<string>('aniversariantes');
-   const [loading, setLoading] = useState(false);
-
+const [loading, setLoading] = useState(false);
    const [activeCampaigns, setActiveCampaigns] = useState<any[]>([]);
    const [selectedInstance, setSelectedInstance] = useState<any | null>(null);
    const [patientsList, setPatientsList] = useState<any[]>([]);
@@ -39,6 +39,49 @@ export const MessageCenter: React.FC = () => {
    // Template Editor State
    const [isEditingTemplate, setIsEditingTemplate] = useState(false);
    const [templateToEdit, setTemplateToEdit] = useState('');
+
+   const location = useLocation();
+   const navigate = useNavigate();
+
+   useEffect(() => {
+      const parts = location.pathname.split('/');
+      if (parts[1] === 'mensagens') {
+         const type = parts[2];
+         const instanceId = parts[3];
+
+         if (type && activeTab !== type) {
+            setActiveTab(type);
+         }
+         
+         if (instanceId && (!selectedInstance || selectedInstance.id !== instanceId)) {
+            if (activeCampaigns.length > 0) {
+               const inst = activeCampaigns.find(c => c.id === instanceId);
+               if (inst) {
+                  setSelectedInstance(inst);
+               }
+            }
+         } else if (!instanceId && selectedInstance) {
+            setSelectedInstance(null);
+         }
+      }
+   }, [location.pathname, activeCampaigns]);
+
+   const handleTabChange = (type: string) => {
+      setActiveTab(type);
+      setSelectedInstance(null);
+      navigate(`/mensagens/${type}`, { replace: true });
+   };
+
+   const handleInstanceChange = (inst: any) => {
+      setSelectedInstance(inst);
+      if (inst) {
+         navigate(`/mensagens/${activeTab}/${inst.id}`, { replace: true });
+      } else {
+         navigate(`/mensagens/${activeTab}`, { replace: true });
+      }
+   };
+
+   
 
    // Base default templates
    const defaultTemplates: Record<string, string> = {
@@ -331,7 +374,7 @@ export const MessageCenter: React.FC = () => {
                   return (
                      <button
                         key={type}
-                        onClick={() => { setActiveTab(type as string); setSelectedInstance(null); }}
+                        onClick={() => handleTabChange(type as string)}
                         className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${isSelected
                               ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30'
                               : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
@@ -372,7 +415,7 @@ export const MessageCenter: React.FC = () => {
                            </div>
                            <div className="mt-auto flex items-center gap-3">
                               <button
-                                 onClick={() => setSelectedInstance(camp)}
+                                 onClick={() => handleInstanceChange(camp)}
                                  className="flex-1 py-2.5 bg-indigo-50 text-indigo-600 font-bold rounded-lg hover:bg-indigo-100 transition-colors shadow-sm"
                               >
                                  Ver Contatos
@@ -405,7 +448,7 @@ export const MessageCenter: React.FC = () => {
                   </div>
                ) : patientsList.length === 0 ? (
                   <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center relative">
-                     <button onClick={() => setSelectedInstance(null)} className="absolute top-6 left-6 text-gray-400 hover:text-gray-600 font-semibold text-sm flex items-center gap-1">
+                     <button onClick={() => handleInstanceChange(null)} className="absolute top-6 left-6 text-gray-400 hover:text-gray-600 font-semibold text-sm flex items-center gap-1">
                         ← Voltar
                      </button>
                      <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
@@ -420,7 +463,7 @@ export const MessageCenter: React.FC = () => {
                   <div className="flex flex-col h-full">
                      <div className="mb-6 flex items-center gap-4">
                         {activeTab !== 'aniversariantes' && (
-                           <button onClick={() => setSelectedInstance(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-4 py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all">
+                           <button onClick={() => handleInstanceChange(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-4 py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all">
                               ← Voltar
                            </button>
                         )}

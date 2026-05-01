@@ -18,11 +18,14 @@ import {
   Image as ImageIcon,
   MessageCircle,
   CircleDollarSign,
-  X
+  X,
+  Stethoscope
 } from 'lucide-react';
 import { PageType } from '../../types';
 import { patientService } from '../../services/patientService';
 import { useCompany } from '../../contexts/CompanyContext';
+import { GlobalSearchModal } from './GlobalSearchModal';
+import { useNavigate } from 'react-router-dom';
 
 interface TopHeaderProps {
   activePage: PageType;
@@ -37,6 +40,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
   const { empresaId } = useCompany();
   const [hasBirthday, setHasBirthday] = useState(false);
   const [showBirthdayToast, setShowBirthdayToast] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkBirthdays = async () => {
@@ -202,6 +207,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                     <ImageIcon className="text-gray-400 shrink-0" size={24} />
                     <span className="text-sm font-medium text-gray-700 leading-tight">Galeria de<br />Fotos</span>
                   </button>
+
+                  {/* Item 5 - Controle de Prótese */}
+                  <button 
+                    onClick={() => { onNavigate('prosthesis-control'); setGridMenuOpen(false); }}
+                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
+                  >
+                    <Stethoscope className="text-gray-400 shrink-0" size={24} />
+                    <span className="text-sm font-medium text-gray-700 leading-tight">Controle de<br />Prótese</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -223,7 +237,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
 
         {/* Action Icons */}
         <div className="flex items-center space-x-2 text-gray-500">
-          <button onClick={() => onNavigate('patients')} className={`p-2 rounded-full transition-colors ${activePage === 'patients' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`} title="Buscar Pacientes"><Search size={20} /></button>
+          <button onClick={() => setIsSearchOpen(true)} className="p-2 rounded-full transition-colors hover:bg-gray-100" title="Busca Global"><Search size={20} /></button>
           
           <button 
             onClick={() => onNavigate('message-center')} 
@@ -295,6 +309,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             </button>
          </div>
       )}
+
+      <GlobalSearchModal 
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
+        onNavigateToPatient={(id) => navigate(`/pacientes/${id}/visao-geral`)}
+      />
     </header>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Patient } from '../types';
 import {
   ChevronLeft, Edit2, MessageCircle, Tag, CheckSquare, Plus,
@@ -54,6 +55,43 @@ export interface Budget {
 
 export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack, onEdit, onNavigateToSchedule }) => {
   const [activeTab, setActiveTab] = React.useState<TabType>('Visão Geral');
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const tabToPath: Record<string, string> = {
+    'Visão Geral': 'visao-geral',
+    'Anamneses': 'anamneses',
+    'Orçamentos': 'orcamentos',
+    'Tratamentos': 'tratamentos',
+    'Pagamentos': 'pagamentos',
+    'Evoluções': 'evolucoes',
+    'Documentos': 'documentos',
+    'Arquivos': 'arquivos'
+  };
+
+  const pathToTab = Object.entries(tabToPath).reduce((acc, [tab, path]) => {
+    acc[path] = tab as TabType;
+    return acc;
+  }, {} as Record<string, TabType>);
+
+  useEffect(() => {
+    const parts = location.pathname.split('/');
+    if (parts[1] === 'pacientes' && parts[2] === patient.id) {
+       const tabPath = parts[3];
+       if (tabPath && pathToTab[tabPath]) {
+          if (activeTab !== pathToTab[tabPath]) {
+             setActiveTab(pathToTab[tabPath]);
+          }
+       }
+    }
+  }, [location.pathname, patient.id]);
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    navigate(`/pacientes/${patient.id}/${tabToPath[tab]}`, { replace: true });
+  };
+
   const { empresaId } = useCompany();
 
   // Tarefas state
@@ -716,7 +754,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           {tabs.map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleTabChange(tab)}
               className={`pb-3 text-[14.5px] font-semibold transition-colors relative whitespace-nowrap ${activeTab === tab
                   ? 'text-[#2563eb]'
                   : 'text-[#64748b] hover:text-[#475569]'

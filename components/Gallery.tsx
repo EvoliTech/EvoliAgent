@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCompany } from '../contexts/CompanyContext';
 import { arquivoService, ArquivoPaciente } from '../services/arquivoService';
 import { patientService } from '../services/patientService';
-import { Folder, Image as ImageIcon, ChevronLeft, Download, Loader2, Search, X } from 'lucide-react';
+import { Folder, Image as ImageIcon, ChevronLeft, Download, Loader2, Search, X, Trash2 } from 'lucide-react';
 
 interface PatientFolder {
   patientId: number;
@@ -91,6 +91,23 @@ export const Gallery: React.FC = () => {
     } catch (error) {
       console.error('Erro ao fazer download:', error);
       alert('Não foi possível fazer o download do arquivo.');
+    }
+  };
+
+  const handleDeleteFolder = async (folder: PatientFolder) => {
+    if (window.confirm(`Tem certeza que deseja excluir TODAS as fotos da pasta de ${folder.patientName}? Essa ação não pode ser desfeita e os arquivos serão apagados da nuvem.`)) {
+      try {
+        if (empresaId) {
+          await arquivoService.deletePatientFiles(empresaId, folder.patientId);
+          setFolders(prev => prev.filter(f => f.patientId !== folder.patientId));
+          if (selectedFolder?.patientId === folder.patientId) {
+            setSelectedFolder(null);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao excluir pasta:", error);
+        alert("Ocorreu um erro ao excluir a pasta.");
+      }
     }
   };
 
@@ -207,6 +224,14 @@ export const Gallery: React.FC = () => {
             <span className="bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full text-xs font-bold ml-2">
               {selectedFolder.files.length} fotos
             </span>
+            <button
+               onClick={() => handleDeleteFolder(selectedFolder)}
+               className="ml-4 flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+               title="Excluir pasta e todas as fotos"
+            >
+               <Trash2 size={18} />
+               Excluir Pasta
+            </button>
           </div>
         </div>
 

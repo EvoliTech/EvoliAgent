@@ -125,4 +125,37 @@ export const arquivoService = {
 
         if (dbError) throw dbError;
     },
+
+    /**
+     * Deleta todos os arquivos de um paciente (Storage e Banco).
+     */
+    async deletePatientFiles(empresaId: number, patientId: number): Promise<void> {
+        const { data: arquivos, error } = await supabase
+            .from('patient_files')
+            .select('*')
+            .eq('IDEmpresa', empresaId)
+            .eq('patient_id', patientId);
+
+        if (error && (error as any).code !== '42P01') {
+            console.error("Error fetching patient files:", error);
+            return;
+        }
+
+        if (arquivos && arquivos.length > 0) {
+            const paths = arquivos.map(a => a.storage_path);
+            const { error: storageError } = await supabase.storage
+                .from(BUCKET_NAME)
+                .remove(paths);
+                
+            if (storageError) console.error("Error deleting files from storage:", storageError);
+            
+            const { error: dbError } = await supabase
+                .from('patient_files')
+                .delete()
+                .eq('IDEmpresa', empresaId)
+                .eq('patient_id', patientId);
+                
+            if (dbError) console.error("Error deleting files from database:", dbError);
+        }
+    },
 };

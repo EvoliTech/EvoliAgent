@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { PageType } from './types';
 import { TopHeader } from './components/Layout/TopHeader';
 import { Dashboard } from './components/Dashboard';
@@ -19,13 +20,101 @@ import { Campaigns } from './components/Campaigns';
 import { MessageCenter } from './components/MessageCenter';
 import { Login } from './components/Login';
 import { PublicAnamnese } from './components/PublicAnamnese';
+import { ProsthesisControl } from './components/ProsthesisControl';
+import { PublicProsthesisView } from './components/PublicProsthesisView';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { useCompany } from './contexts/CompanyContext';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>(() => {
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Mapping logic
+  const pageToPath: Record<PageType, string> = {
+    'dashboard': '/dashboard',
+    'agenda': '/agenda',
+    'appointments': '/agendamentos',
+    'patients': '/pacientes',
+    'patient-registration-update': '/pacientes-cadastro',
+    'inventory': '/estoque',
+    'financeiro': '/financeiro',
+    'gallery': '/galeria',
+    'campaigns': '/campanhas',
+    'message-center': '/mensagens',
+    'professionals': '/profissionais',
+    'settings': '/configuracoes',
+    'clinic-settings': '/configuracoes/clinica',
+    'integrations': '/configuracoes/integracoes',
+    'plans-management': '/configuracoes/planos',
+    'fees-settings': '/configuracoes/taxas',
+    'prosthesis-control': '/proteses',
+    'google-callback': '/settings/callback'
+  };
+
+  const pathToPage = Object.entries(pageToPath).reduce((acc, [page, path]) => {
+    acc[path] = page as PageType;
+    return acc;
+  }, {} as Record<string, PageType>);
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    // Ignore anamnese routing
+    if (path.startsWith('/anamnese/')) return;
+    // Ignore prostese routing
+    if (path.startsWith('/protese/')) return;
+
+    if (path === '/' || path === '') {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    // Identify page from path
+    let matchedPage: PageType = 'dashboard';
+    
+    if (path.startsWith('/pacientes/')) {
+       matchedPage = 'patients';
+       const parts = path.split('/');
+       if (parts[2]) {
+         // Local storage selectedPatient is still used inside Patients.tsx, 
+         // but we can set the id in App.tsx just in case.
+         // Actually, Patients.tsx controls its own selectedPatient state.
+       }
+    } else {
+       // match exactly or startswith
+       const exactMatch = pathToPage[path];
+       if (exactMatch) {
+          matchedPage = exactMatch;
+       } else {
+          // fallback search
+          const found = Object.keys(pathToPage).sort((a,b)=>b.length-a.length).find(p => path.startsWith(p));
+          if (found) matchedPage = pathToPage[found];
+       }
+    }
+
+    if (matchedPage !== currentPage) {
+       _setCurrentPage(matchedPage);
+    }
+  }, [location.pathname]);
+
+  const setCurrentPage = (page: PageType) => {
+    _setCurrentPage(page);
+    const path = pageToPath[page] || '/dashboard';
+    
+    // Preserve patient selection if navigating to patients
+    if (page === 'patients' && selectedPatientId) {
+      navigate(path + '/' + selectedPatientId);
+    } else if (page === 'patient-registration-update' && selectedPatientId) {
+      navigate(path + '/' + selectedPatientId);
+    } else {
+      navigate(path);
+    }
+  };
+
+  const [currentPage, _setCurrentPage] = useState<PageType>(() => {
     try {
       const saved = localStorage.getItem('appState_currentPage');
       if (saved) return saved as PageType;
@@ -150,6 +239,9 @@ export default function App() {
         <div className={currentPage === 'fees-settings' ? 'block' : 'hidden'}>
            <FeesSettings onNavigate={setCurrentPage} />
         </div>
+        <div className={currentPage === 'prosthesis-control' ? 'block w-full h-full' : 'hidden'}>
+           <ProsthesisControl />
+        </div>
         <div className={currentPage === 'google-callback' ? 'block' : 'hidden'}>
            <GoogleCallback onNavigate={setCurrentPage} />
         </div>
@@ -159,6 +251,10 @@ export default function App() {
 
   if (window.location.pathname.startsWith('/anamnese/')) {
     return <PublicAnamnese />;
+  }
+
+  if (window.location.pathname.startsWith('/protese/')) {
+    return <PublicProsthesisView />;
   }
 
   if (loading || (session && companyLoading)) {

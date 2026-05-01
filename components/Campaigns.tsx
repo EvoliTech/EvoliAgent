@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCompany } from '../contexts/CompanyContext';
 import {
    MessageSquare, Gift, ArrowLeft, ArrowRight, UserX,
@@ -23,6 +24,47 @@ export const Campaigns: React.FC = () => {
    const { empresaId } = useCompany();
    const [step, setStep] = useState(1);
    const [selectedType, setSelectedType] = useState<string | null>(null);
+
+   const location = useLocation();
+   const navigate = useNavigate();
+
+   // Sync URL to State
+   useEffect(() => {
+      const parts = location.pathname.split('/');
+      if (parts[1] === 'campanhas') {
+         if (!parts[2]) {
+            if (step !== 1) setStep(1);
+            if (selectedType !== null) setSelectedType(null);
+         } else {
+            const type = parts[2];
+            const action = parts[3];
+            if (selectedType !== type) setSelectedType(type);
+            
+            if (action === 'configurar' && step !== 2) setStep(2);
+            else if (action === 'revisao' && step !== 3) setStep(3);
+            else if (action === 'sucesso' && step !== 4) goStep4(selectedType);
+            else if (!action && step !== 1) setStep(1);
+         }
+      }
+   }, [location.pathname]);
+
+   // Methods to update URL (which will update state via useEffect)
+   const goStep1 = () => { navigate('/campanhas'); };
+   const goStep2 = (type: string) => { navigate(`/campanhas/${type}/configurar`); };
+   const goStep3 = (type: string) => { navigate(`/campanhas/${type}/revisao`); };
+   const goStep4 = (type: string) => { navigate(`/campanhas/${type}/sucesso`); };
+
+   const handleNext = () => {
+      if (step === 1 && selectedType) goStep2(selectedType);
+      else if (step === 2 && message && selectedType) goStep3(selectedType);
+   };
+
+   const handleBack = () => {
+      if (step === 2) goStep1();
+      else if (step === 3 && selectedType) goStep2(selectedType);
+      else if (step === 4) goStep1();
+   };
+
    const [message, setMessage] = useState('');
 
    // Filters
@@ -69,14 +111,7 @@ export const Campaigns: React.FC = () => {
       }
    }, [selectedType]);
 
-   const handleNext = () => {
-      if (step === 1 && selectedType) setStep(2);
-      else if (step === 2 && message) setStep(3);
-   };
 
-   const handleBack = () => {
-      if (step > 1) setStep(step - 1);
-   };
 
    const selectedCampaignInfo = campaignTypes.find(c => c.id === selectedType);
 
@@ -610,13 +645,13 @@ export const Campaigns: React.FC = () => {
 
                <div className="flex gap-4">
                   <button
-                     onClick={() => { setStep(1); setSelectedType(null); setMessage(''); }}
+                     onClick={() => { goStep1(); setMessage(''); }}
                      className="px-6 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 uppercase text-sm transition-colors"
                   >
                      Nova Campanha
                   </button>
                   <button
-                     onClick={() => { window.location.hash = '#message-center'; window.dispatchEvent(new Event('hashchange')); }}
+                     onClick={() => { navigate('/mensagens'); }}
                      className="px-6 py-2.5 bg-[#1ebe5a] text-white font-bold rounded-lg hover:bg-[#1ebd5a] uppercase text-sm transition-colors"
                   >
                      Ir para a Lista (Central)
@@ -637,7 +672,7 @@ export const Campaigns: React.FC = () => {
                <div className="flex gap-4">
                   {step > 1 && (
                      <button
-                        onClick={() => { setStep(1); setSelectedType(null); }}
+                        onClick={() => { goStep1(); }}
                         className="text-sm font-bold text-gray-600 hover:text-gray-800 px-4 py-2 uppercase"
                      >
                         Cancelar

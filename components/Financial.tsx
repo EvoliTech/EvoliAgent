@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, HelpCircle, X, ArrowDownRight, ArrowUpRight, Scale, Calendar, Filter, ArrowUp, Check, MoreVertical, Eye, Settings, Trash2 } from 'lucide-react';
 import { useCompany } from '../contexts/CompanyContext';
 import { specialistService } from '../services/specialistService';
@@ -11,6 +12,25 @@ import { expenseService } from '../services/expenseService';
 
 export const Financial: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes'>('painel');
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const parts = location.pathname.split('/');
+    if (parts[1] === 'financeiro' && parts[2]) {
+      const tab = parts[2] as 'painel' | 'fluxo' | 'comissoes';
+      if (['painel', 'fluxo', 'comissoes'].includes(tab) && activeTab !== tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: 'painel' | 'fluxo' | 'comissoes') => {
+    setActiveTab(tab);
+    navigate(`/financeiro/${tab}`, { replace: true });
+  };
+
   const [filterMonth, setFilterMonth] = useState<string>((new Date().getMonth() + 1).toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedSpecialist, setSelectedSpecialist] = useState<Specialist | null>(null);
@@ -490,7 +510,7 @@ export const Financial: React.FC = () => {
         {/* Tabs */}
         <div className="flex px-8 border-b border-gray-200 pt-2 gap-6">
           <button
-            onClick={() => setActiveTab('painel')}
+            onClick={() => handleTabChange('painel')}
             className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'painel'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
@@ -499,7 +519,7 @@ export const Financial: React.FC = () => {
             Painel
           </button>
           <button
-            onClick={() => setActiveTab('fluxo')}
+            onClick={() => handleTabChange('fluxo')}
             className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'fluxo'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
@@ -508,7 +528,7 @@ export const Financial: React.FC = () => {
             Fluxo de caixa
           </button>
           <button
-            onClick={() => setActiveTab('comissoes')}
+            onClick={() => handleTabChange('comissoes')}
             className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'comissoes'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
@@ -693,7 +713,7 @@ export const Financial: React.FC = () => {
                       ))}
                       {despesas.filter(d => !d.is_paga).length > 4 && (
                         <button
-                          onClick={() => setActiveTab('fluxo')}
+                          onClick={() => handleTabChange('fluxo')}
                           className="w-full mt-2 text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline text-center pt-1"
                         >
                           Ver todas ({despesas.filter(d => !d.is_paga).length})

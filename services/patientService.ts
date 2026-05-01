@@ -2,6 +2,7 @@
 import { supabase } from '../lib/supabase';
 import { Patient, SupabaseCustomer } from '../types';
 import { logService } from './logService';
+import { arquivoService } from './arquivoService';
 
 export const patientService = {
     async fetchPatients(empresaId: number): Promise<Patient[]> {
@@ -175,6 +176,12 @@ export const patientService = {
     },
 
     async deletePatient(empresaId: number, id: string): Promise<void> {
+        try {
+            await arquivoService.deletePatientFiles(empresaId, Number(id));
+        } catch (fileErr) {
+            console.error("Error deleting patient files:", fileErr);
+        }
+
         const { error } = await supabase
             .from('Cliente')
             .delete()
