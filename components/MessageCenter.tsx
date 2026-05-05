@@ -33,6 +33,7 @@ const [loading, setLoading] = useState(false);
 
    // Anti-spam logs
    const [sentLogs, setSentLogs] = useState<{ patientId: string, campaignId: string, timestamp: number }[]>([]);
+   const [subTab, setSubTab] = useState<'prontos' | 'pendentes'>('prontos');
 
    const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
 
@@ -69,11 +70,13 @@ const [loading, setLoading] = useState(false);
    const handleTabChange = (type: string) => {
       setActiveTab(type);
       setSelectedInstance(null);
+      setSubTab('prontos');
       navigate(`/mensagens/${type}`, { replace: true });
    };
 
    const handleInstanceChange = (inst: any) => {
       setSelectedInstance(inst);
+      setSubTab('prontos');
       if (inst) {
          navigate(`/mensagens/${activeTab}/${inst.id}`, { replace: true });
       } else {
@@ -176,6 +179,15 @@ const [loading, setLoading] = useState(false);
             console.error("Failed to log to supabase", e);
          }
       }
+   };
+
+   const isGloballyContacted48h = (patientId: string) => {
+      const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
+      const now = Date.now();
+      return sentLogs.some(log =>
+         log.patientId === patientId &&
+         (now - log.timestamp) < FORTY_EIGHT_HOURS
+      );
    };
 
    const isRecentlyContacted = (patientId: string, campaignId: string) => {
@@ -470,13 +482,13 @@ const [loading, setLoading] = useState(false);
                         <h2 className="font-bold text-xl text-gray-800 tracking-tight">
                            {activeTab === 'aniversariantes' ? 'Aniversariantes' : (selectedInstance ? selectedInstance.title : '')}
                         </h2>
-                        <div className="ml-auto bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-bold">
-                           {patientsList.length} contatos
+                        <div className="ml-auto flex items-center bg-gray-100 rounded-lg p-1"><button onClick={() => setSubTab('prontos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'prontos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Prontos ({patientsList.filter(p => !isGloballyContacted48h(p.id)).length})</button><button onClick={() => setSubTab('pendentes')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'pendentes' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Pendentes 48h ({patientsList.filter(p => isGloballyContacted48h(p.id)).length})</button></div>
+
                         </div>
                      </div>
 
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {patientsList.map(patient => {
+                        {(subTab === 'prontos' ? patientsList.filter(p => !isGloballyContacted48h(p.id)) : patientsList.filter(p => isGloballyContacted48h(p.id))).map(patient => {
                            const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
                            const campId = campToUse ? campToUse.id : activeTab;
                            const isContacted = isRecentlyContacted(patient.id, campId);
@@ -485,7 +497,12 @@ const [loading, setLoading] = useState(false);
                               <div key={patient.id} className={`bg-white border ${isContacted ? 'border-gray-200 opacity-70' : 'border-gray-200 hover:border-indigo-200'} rounded-xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col relative`}>
 
                                  {/* Tags */}
-                                 {patient.birthdayType === 'hoje' && (
+                                 {isGloballyContacted48h(patient.id) && (
+                                    <div className="absolute -top-3 -right-3 bg-amber-100 text-amber-700 border border-amber-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+                                       <ShieldAlert size={12} /> Recente (48h)
+                                    </div>
+                                 )}
+                                 {patient.birthdayType === 'hoje' && !isGloballyContacted48h(patient.id) && (
                                     <div className="absolute -top-3 -right-3 bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
                                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Hoje!
                                     </div>
