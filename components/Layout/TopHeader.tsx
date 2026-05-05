@@ -170,8 +170,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             </button>
 
             {gridMenuOpen && (
-              <div className="absolute top-full mt-3 -left-1/2 transform -translate-x-1/4 w-[400px] bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50">
-                <div className="grid grid-cols-2 gap-4">
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setGridMenuOpen(false)}></div>
+                <div className="absolute top-full mt-3 -left-1/2 transform -translate-x-1/4 w-[400px] bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50">
+                  <div className="grid grid-cols-2 gap-4">
                   {/* Item 1 - Dashboard (Relatórios de Inteligência) */}
                   <button
                     onClick={() => { onNavigate('dashboard'); setGridMenuOpen(false); }}
@@ -217,7 +219,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                     <span className="text-sm font-medium text-gray-700 leading-tight">Controle de<br />Prótese</span>
                   </button>
                 </div>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </nav>
@@ -267,8 +270,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           </button>
 
           {accountMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 focus:outline-none">
-              <div className="px-4 py-2 border-b border-gray-100">
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)}></div>
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                <div className="px-4 py-2 border-b border-gray-100">
                 <p className="text-sm text-gray-900 truncate">{userEmail || 'Usuário'}</p>
               </div>
               <button
@@ -279,6 +284,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                 <span>Sair</span>
               </button>
             </div>
+            </>
           )}
         </div>
       </div>

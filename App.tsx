@@ -180,71 +180,45 @@ export default function App() {
   const renderContent = () => {
     return (
       <div className="w-full h-full relative">
-        <div className={currentPage === 'dashboard' ? 'block' : 'hidden'}>
-           <Dashboard onNavigate={setCurrentPage} />
-        </div>
-        <div className={currentPage === 'agenda' ? 'block' : 'hidden'}>
-           <Agenda />
-        </div>
-        <div className={currentPage === 'appointments' ? 'block' : 'hidden'}>
-           <AppointmentsList />
-        </div>
-        <div className={currentPage === 'patients' ? 'block w-full h-full' : 'hidden'}>
-           <Patients
-             onUpdateRegistration={(id) => {
-               setSelectedPatientId(id);
-               setCurrentPage('patient-registration-update');
-             }}
-             onNavigate={setCurrentPage}
-           />
-        </div>
-        <div className={currentPage === 'patient-registration-update' ? 'block w-full h-full' : 'hidden'}>
-           {selectedPatientId ? (
-             <PatientRegistrationUpdate
-               patientId={selectedPatientId}
-               onBack={() => setCurrentPage('patients')}
-             />
-           ) : null}
-        </div>
-        <div className={currentPage === 'inventory' ? 'block' : 'hidden'}>
-           <Inventory />
-        </div>
-        <div className={currentPage === 'financeiro' ? 'block' : 'hidden'}>
-           <Financial />
-        </div>
-        <div className={currentPage === 'gallery' ? 'block' : 'hidden'}>
-           <Gallery />
-        </div>
-        <div className={currentPage === 'campaigns' ? 'block' : 'hidden'}>
-           <Campaigns />
-        </div>
-        <div className={currentPage === 'message-center' ? 'block' : 'hidden'}>
-           <MessageCenter />
-        </div>
-        <div className={currentPage === 'professionals' ? 'block' : 'hidden'}>
-           <Professionals onBack={() => setCurrentPage('settings')} />
-        </div>
-        <div className={currentPage === 'settings' ? 'block' : 'hidden'}>
-           <Settings onNavigate={setCurrentPage} />
-        </div>
-        <div className={currentPage === 'clinic-settings' ? 'block' : 'hidden'}>
-           <ClinicSettings initialTab="general" onBack={() => setCurrentPage('settings')} />
-        </div>
-        <div className={currentPage === 'integrations' ? 'block' : 'hidden'}>
-           <ClinicSettings initialTab="integrations" onBack={() => setCurrentPage('settings')} />
-        </div>
-        <div className={currentPage === 'plans-management' ? 'block' : 'hidden'}>
-           <PlansManagement onBack={() => setCurrentPage('settings')} />
-        </div>
-        <div className={currentPage === 'fees-settings' ? 'block' : 'hidden'}>
-           <FeesSettings onNavigate={setCurrentPage} />
-        </div>
-        <div className={currentPage === 'prosthesis-control' ? 'block w-full h-full' : 'hidden'}>
-           <ProsthesisControl />
-        </div>
-        <div className={currentPage === 'google-callback' ? 'block' : 'hidden'}>
-           <GoogleCallback onNavigate={setCurrentPage} />
-        </div>
+        {currentPage === 'dashboard' && <Dashboard onNavigate={setCurrentPage} />}
+        {currentPage === 'agenda' && <Agenda />}
+        {currentPage === 'appointments' && <AppointmentsList />}
+        {currentPage === 'patients' && (
+           <div className="w-full h-full">
+              <Patients
+                 onUpdateRegistration={(id) => {
+                    setSelectedPatientId(id);
+                    setCurrentPage('patient-registration-update');
+                 }}
+                 onNavigate={setCurrentPage}
+              />
+           </div>
+        )}
+        {currentPage === 'patient-registration-update' && selectedPatientId && (
+           <div className="w-full h-full">
+              <PatientRegistrationUpdate
+                 patientId={selectedPatientId}
+                 onBack={() => setCurrentPage('patients')}
+              />
+           </div>
+        )}
+        {currentPage === 'inventory' && <Inventory />}
+        {currentPage === 'financeiro' && <Financial />}
+        {currentPage === 'gallery' && <Gallery />}
+        {currentPage === 'campaigns' && <Campaigns />}
+        {currentPage === 'message-center' && <MessageCenter />}
+        {currentPage === 'professionals' && <Professionals onBack={() => setCurrentPage('settings')} />}
+        {currentPage === 'settings' && <Settings onNavigate={setCurrentPage} />}
+        {currentPage === 'clinic-settings' && <ClinicSettings initialTab="general" onBack={() => setCurrentPage('settings')} />}
+        {currentPage === 'integrations' && <ClinicSettings initialTab="integrations" onBack={() => setCurrentPage('settings')} />}
+        {currentPage === 'plans-management' && <PlansManagement onBack={() => setCurrentPage('settings')} />}
+        {currentPage === 'fees-settings' && <FeesSettings onNavigate={setCurrentPage} />}
+        {currentPage === 'prosthesis-control' && (
+           <div className="w-full h-full">
+              <ProsthesisControl />
+           </div>
+        )}
+        {currentPage === 'google-callback' && <GoogleCallback onNavigate={setCurrentPage} />}
       </div>
     );
   };
