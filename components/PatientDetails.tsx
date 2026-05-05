@@ -2081,6 +2081,53 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   }
                   return [saved, ...prev];
                 });
+
+                // Auto-create prosthesis cards if not editing an existing budget
+                if (!budgetToEdit) {
+                  const prosthesisTreatments = saved.treatments.filter((t: any) => 
+                    t.treatmentName?.toLowerCase().includes('prótese') || 
+                    t.treatmentName?.toLowerCase().includes('protese') ||
+                    t.categoria?.toLowerCase().includes('prótese') ||
+                    t.categoria?.toLowerCase().includes('protese')
+                  );
+                  
+                  if (prosthesisTreatments.length > 0) {
+                    try {
+                      const { data: userData } = await supabase.auth.getUser();
+                      const userName = userData.user?.email || 'Usuário';
+
+                      for (const t of prosthesisTreatments) {
+                        const payload = {
+                          empresa_id: empresaId,
+                          paciente_id: patient.id.toString(),
+                          paciente_nome: patient.name,
+                          responsavel_nome: userName,
+                          dentes: t.dente ? `${t.dente}${t.faces ? ` - ${t.faces}` : ''}` : '',
+                          descricao_servico: t.treatmentName,
+                          status: 'Solicitação',
+                          updated_at: new Date().toISOString()
+                        };
+
+                        const { data: insertedCard } = await supabase
+                          .from('protese_solicitacoes')
+                          .insert(payload)
+                          .select()
+                          .single();
+
+                        if (insertedCard) {
+                          await supabase.from('protese_historico').insert({
+                            empresa_id: empresaId,
+                            solicitacao_id: insertedCard.id,
+                            status_novo: 'Solicitação',
+                            usuario_nome: userName
+                          });
+                        }
+                      }
+                    } catch (err) {
+                      console.error("Erro ao criar card de prótese automático:", err);
+                    }
+                  }
+                }
               } else {
                 alert('Erro ao salvar o orçamento no banco de dados!');
               }

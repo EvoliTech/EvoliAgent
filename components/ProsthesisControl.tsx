@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCompany } from '../contexts/CompanyContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ProteseSolicitacao, ProteseLaboratorio, ProteseStatus, Patient, Specialist } from '../types';
-import { Loader2, Plus, Phone, Calendar, Clock, ArrowRight, User, Search, Edit2, Camera, X, Paperclip, Download } from 'lucide-react';
+import { Loader2, Plus, Phone, Calendar, Clock, ArrowRight, User, Search, Edit2, Camera, X, Paperclip, Download, ExternalLink } from 'lucide-react';
 import { patientService } from '../services/patientService';
 import { specialistService } from '../services/specialistService';
 
 const COLUMNS: ProteseStatus[] = [
   'Solicitação',
+  'Reenviado ao Laboratório',
   'Enviado para laboratório',
   'Retornado à Clínica',
   'Instalado'
@@ -15,6 +17,7 @@ const COLUMNS: ProteseStatus[] = [
 
 const COLUMN_COLORS: Record<ProteseStatus, { text: string, bg: string, dot: string, border: string }> = {
   'Solicitação': { text: 'text-blue-600', bg: 'bg-blue-50', dot: 'bg-blue-500', border: 'border-blue-100' },
+  'Reenviado ao Laboratório': { text: 'text-orange-700', bg: 'bg-orange-100', dot: 'bg-orange-600', border: 'border-orange-200' },
   'Enviado para laboratório': { text: 'text-orange-600', bg: 'bg-orange-50', dot: 'bg-orange-500', border: 'border-orange-100' },
   'Retornado à Clínica': { text: 'text-purple-600', bg: 'bg-purple-50', dot: 'bg-purple-500', border: 'border-purple-100' },
   'Instalado': { text: 'text-green-600', bg: 'bg-green-50', dot: 'bg-green-500', border: 'border-green-100' }
@@ -28,6 +31,14 @@ export const ProsthesisControl: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSolicitacao, setSelectedSolicitacao] = useState<ProteseSolicitacao | null>(null);
+
+  const [reenvioPrompt, setReenvioPrompt] = useState<{
+    isOpen: boolean;
+    cardId: string;
+    coluna: ProteseStatus;
+  } | null>(null);
+  const [motivoReenvio, setMotivoReenvio] = useState('');
+  const [nomeReenvio, setNomeReenvio] = useState('');
 
   useEffect(() => {
     if (empresaId) {
@@ -75,15 +86,132 @@ export const ProsthesisControl: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleDragStart = (e: React.DragEvent, card: ProteseSolicitacao) => {
+    e.dataTransfer.setData('cardId', card.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, coluna: ProteseStatus) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData('cardId');
+    if (cardId) {
+      const card = solicitacoes.find(s => s.id === cardId);
+      if (card && card.status !== coluna) {
+        
+          if (coluna === 'Reenviado ao Laboratório') {
+            if (card.status === 'Solicitação') {
+              alert('Um card em "Solicitação" não pode ser movido direto para "Reenviado ao Laboratório". Ele deve primeiro passar pelas etapas adequadas.');
+              return;
+            }
+            if (card.status !== 'Retornado à Clínica' && card.status !== 'Instalado') {
+              alert('Apenas cards que já retornaram à clínica podem ser reenviados ao laboratório.');
+              return;
+            }
+            
+            setReenvioPrompt({ isOpen: true, cardId: card.id, coluna });
+            return;
+          }
+
+          try {
+            const { data: userData } = await supabase.auth.getUser();
+            const userName = userData.user?.email || 'Usuário';
+
+            await supabase.from('protese_solicitacoes').update({ status: coluna }).eq('id', card.id);
+            await supabase.from('protese_historico').insert({
+              empresa_id: empresaId,
+              solicitacao_id: card.id,
+              status_anterior: card.status,
+              status_novo: coluna,
+              usuario_nome: userName
+            });
+            
+            if (card.status === 'Solicitação' && coluna === 'Enviado para laboratório') {
+              const updatedCard = { ...card, status: coluna };
+              setSelectedSolicitacao(updatedCard);
+              setIsModalOpen(true);
+            }
+            
+            fetchData(); // update background
+          } catch (error) {
+            console.error(error);
+          }
+      }
+    }
+  };
+
+  const confirmReenvioDrop = async () => {
+    if (!motivoReenvio.trim() || !nomeReenvio.trim()) {
+      alert("O motivo e o nome são obrigatórios.");
+      return;
+    }
+    const cardId = reenvioPrompt!.cardId;
+    const coluna = reenvioPrompt!.coluna;
+    const card = solicitacoes.find(s => s.id === cardId);
+    if (!card) return;
+
+    try {
+      let newList = [];
+      try {
+        if (card.observacoes_internas) {
+          newList = JSON.parse(card.observacoes_internas);
+        }
+      } catch(e) {}
+      
+      newList.push({
+         text: `Motivo do Reenvio: ${motivoReenvio}`,
+         date: new Date().toISOString(),
+         user: nomeReenvio.trim()
+      });
+      
+      const observacoes_internas = JSON.stringify(newList);
+
+      await supabase.from('protese_solicitacoes').update({ status: coluna, observacoes_internas }).eq('id', card.id);
+      await supabase.from('protese_historico').insert({
+        empresa_id: empresaId,
+        solicitacao_id: card.id,
+        status_anterior: card.status,
+        status_novo: coluna,
+        usuario_nome: nomeReenvio.trim()
+      });
+      
+      setReenvioPrompt(null);
+      setMotivoReenvio('');
+      setNomeReenvio('');
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedSolicitacao(null);
     fetchData(); // Refresh list after closing
   };
 
-  const formatWhatsAppUrl = (phone: string, text: string) => {
-    const cleaned = phone.replace(/\D/g, '');
-    return `https://wa.me/55${cleaned}?text=${encodeURIComponent(text)}`;
+  const handleSolicitarColetaCard = async (card: ProteseSolicitacao) => {
+    let clinicName = "Nossa Clínica";
+    try {
+      const { data } = await supabase.from('empresas').select('Nome').eq('id', empresaId).single();
+      if (data?.Nome) clinicName = data.Nome;
+    } catch (e) {}
+
+    const publicLink = `${window.location.origin}/protese/${card.id}`;
+    const msg = `Olá! Aqui é da Clínica ${clinicName}. Solicitamos a coleta referente ao serviço "${card.descricao_servico || 'Prótese'}". Para visualizar os detalhes da solicitação, clique no link abaixo: ${publicLink}\n\nFicamos no aguardo da confirmação. Obrigado(a)!`;
+
+    const labPhone = card.laboratorio?.telefone || '';
+    const phoneFormatted = labPhone.replace(/\D/g, '');
+    
+    if (!phoneFormatted) {
+      alert('O laboratório vinculado não possui um telefone válido.');
+      return;
+    }
+
+    const waUrl = `https://wa.me/55${phoneFormatted}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
   };
 
   if (loading) {
@@ -127,7 +255,12 @@ export const ProsthesisControl: React.FC = () => {
               const colors = COLUMN_COLORS[coluna];
 
               return (
-                <div key={coluna} className="flex-1 flex flex-col min-w-[280px] max-w-[320px] max-h-full bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div 
+                  key={coluna} 
+                  className="flex-1 flex flex-col min-w-[280px] max-w-[320px] max-h-full bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, coluna)}
+                >
                   <div className={`p-4 border-b ${colors.border} flex items-center justify-between ${colors.bg}`}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${colors.dot}`}></span>
@@ -137,12 +270,14 @@ export const ProsthesisControl: React.FC = () => {
                       {columnCards.length}
                     </span>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/30">
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/30 min-h-[150px]">
                     {columnCards.map((card) => (
                       <div
                         key={card.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, card)}
                         onClick={() => handleOpenModal(card)}
-                        className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all hover:border-blue-300"
+                        className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-grab active:cursor-grabbing transition-all hover:border-blue-300"
                       >
                         <h4 className="font-bold text-slate-800 text-sm mb-1">{card.paciente_nome}</h4>
                         <p className="text-xs text-slate-500 mb-3">
@@ -160,20 +295,34 @@ export const ProsthesisControl: React.FC = () => {
                           </div>
                         </div>
 
-                        {coluna === 'Solicitação' && card.laboratorio?.telefone && (
-                          <a
-                            href={formatWhatsAppUrl(
-                              card.laboratorio.telefone,
-                              `Olá! Gostaria de solicitar uma coleta para o paciente ${card.paciente_nome}.`
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
+                        {coluna === 'Reenviado ao Laboratório' && card.observacoes_internas && (() => {
+                          try {
+                            const obsList = JSON.parse(card.observacoes_internas);
+                            const lastMotivo = [...obsList].reverse().find((o: any) => o.text && o.text.startsWith('Motivo do Reenvio:'));
+                            if (lastMotivo) {
+                              return (
+                                <div className="mt-3 bg-orange-50 border border-orange-100 p-2.5 rounded-md text-xs text-orange-800 animate-in fade-in">
+                                  <span className="font-bold">Motivo do reenvio:</span>
+                                  <p className="mt-0.5 leading-relaxed">{lastMotivo.text.replace('Motivo do Reenvio: ', '')}</p>
+                                  <span className="text-[10px] text-orange-600 font-semibold opacity-80 block mt-1">Por: {lastMotivo.user}</span>
+                                </div>
+                              );
+                            }
+                          } catch (e) {}
+                          return null;
+                        })()}
+
+                        {(coluna === 'Solicitação' || coluna === 'Retornado à Clínica') && card.laboratorio?.telefone && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSolicitarColetaCard(card);
+                            }}
                             className="mt-3 flex items-center gap-1.5 w-max text-green-600 hover:text-green-700 transition-colors text-xs font-medium"
                           >
                             <Phone size={12} />
                             Solicitar Coleta
-                          </a>
+                          </button>
                         )}
                       </div>
                     ))}
@@ -189,6 +338,38 @@ export const ProsthesisControl: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {reenvioPrompt?.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+             <div className="flex items-center gap-3 text-orange-600 mb-2">
+                <span className="text-xl">⚠️</span>
+                <h3 className="font-bold text-slate-800 text-lg">Reenviar ao Laboratório</h3>
+             </div>
+             <p className="text-sm text-slate-600 mb-4 bg-orange-50 border border-orange-100 p-3 rounded-lg">
+               O serviço retornará para a etapa de <strong>"Reenviado ao laboratório"</strong>. Por favor, informe o motivo do retorno e quem está realizando a movimentação:
+             </p>
+             <textarea
+               value={motivoReenvio}
+               onChange={e => setMotivoReenvio(e.target.value)}
+               className="w-full border border-slate-300 rounded-lg p-3 text-sm resize-none mb-3 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+               rows={3}
+               placeholder="Motivo (Ex: Refazer a cor)"
+             />
+             <input
+               type="text"
+               value={nomeReenvio}
+               onChange={e => setNomeReenvio(e.target.value)}
+               className="w-full border border-slate-300 rounded-lg p-3 text-sm mb-4 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+               placeholder="Seu nome (Ex: João Silva)"
+             />
+             <div className="flex justify-end gap-3">
+               <button onClick={() => { setReenvioPrompt(null); setMotivoReenvio(''); setNomeReenvio(''); }} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
+               <button onClick={confirmReenvioDrop} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">Confirmar</button>
+             </div>
+           </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <ProsthesisModal
@@ -212,7 +393,10 @@ interface ProsthesisModalProps {
 }
 
 const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laboratorios, onClose, empresaId }) => {
-  const [activeTab, setActiveTab] = useState<'dados' | 'envio'>('dados');
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'dados' | 'envio'>(
+    solicitacao && solicitacao.status !== 'Solicitação' ? 'envio' : 'dados'
+  );
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState<Partial<ProteseSolicitacao>>(
@@ -232,6 +416,10 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
   const [isCreatingLab, setIsCreatingLab] = useState(false);
   const [newLabName, setNewLabName] = useState('');
   const [newLabPhone, setNewLabPhone] = useState('');
+
+  const [showReenvioPrompt, setShowReenvioPrompt] = useState(false);
+  const [motivoReenvio, setMotivoReenvio] = useState('');
+  const [nomeReenvio, setNomeReenvio] = useState('');
 
   const [historico, setHistorico] = useState<any[]>([]);
   
@@ -298,15 +486,18 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
     (p.cpf && p.cpf.includes(patientSearch))
   ).slice(0, 5);
 
-  const handleStatusChange = async (newStatus: ProteseStatus) => {
+  const handleStatusChange = async (newStatus: ProteseStatus, customUserName?: string) => {
     if (!solicitacao?.id || newStatus === formData.status) return;
 
     handleChange('status', newStatus);
 
     // Auto save status change
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userName = userData.user?.email || 'Usuário';
+      let userName = customUserName;
+      if (!userName) {
+        const { data: userData } = await supabase.auth.getUser();
+        userName = userData.user?.email || 'Usuário';
+      }
 
       await supabase
         .from('protese_solicitacoes')
@@ -444,7 +635,56 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden relative">
+
+      {showReenvioPrompt && (
+        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4 rounded-xl">
+           <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+             <div className="flex items-center gap-3 text-orange-600 mb-2">
+                <span className="text-xl">⚠️</span>
+                <h3 className="font-bold text-slate-800 text-lg">Reenviar ao Laboratório</h3>
+             </div>
+             <p className="text-sm text-slate-600 mb-4 bg-orange-50 border border-orange-100 p-3 rounded-lg">
+               O serviço retornará para a etapa de <strong>"Reenviado ao laboratório"</strong>. Por favor, informe o motivo do retorno e quem está realizando a movimentação:
+             </p>
+             <textarea
+               value={motivoReenvio}
+               onChange={e => setMotivoReenvio(e.target.value)}
+               className="w-full border border-slate-300 rounded-lg p-3 text-sm resize-none mb-3 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+               rows={3}
+               placeholder="Motivo (Ex: Refazer a cor)"
+             />
+             <input
+               type="text"
+               value={nomeReenvio}
+               onChange={e => setNomeReenvio(e.target.value)}
+               className="w-full border border-slate-300 rounded-lg p-3 text-sm mb-4 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+               placeholder="Seu nome (Ex: João Silva)"
+             />
+             <div className="flex justify-end gap-3">
+               <button onClick={() => { setShowReenvioPrompt(false); setMotivoReenvio(''); setNomeReenvio(''); }} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
+               <button onClick={async () => {
+                 if (!motivoReenvio.trim() || !nomeReenvio.trim()) { alert('O motivo e o nome são obrigatórios.'); return; }
+
+                 let newList = [...observacoesList];
+                 newList.push({
+                    text: `Motivo do Reenvio: ${motivoReenvio}`,
+                    date: new Date().toISOString(),
+                    user: nomeReenvio.trim()
+                 });
+                 setObservacoesList(newList);
+                 const observacoes_internas = JSON.stringify(newList);
+
+                 handleChange('observacoes_internas', observacoes_internas);
+                 handleStatusChange('Reenviado ao Laboratório', nomeReenvio.trim());
+                 setShowReenvioPrompt(false);
+                 setMotivoReenvio('');
+                 setNomeReenvio('');
+               }} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">Confirmar</button>
+             </div>
+           </div>
+        </div>
+      )}
 
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center gap-4">
@@ -471,6 +711,23 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
 
           <div className="flex-1 overflow-y-auto p-6 border-r border-slate-200">
 
+            {formData.status === 'Reenviado ao Laboratório' && observacoesList.length > 0 && (() => {
+              const lastMotivo = [...observacoesList].reverse().find((o: any) => o.text && o.text.startsWith('Motivo do Reenvio:'));
+              if (lastMotivo) {
+                return (
+                  <div className="mb-4 bg-orange-50 border border-orange-200 p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95 shadow-sm">
+                    <span className="text-xl mt-0.5">⚠️</span>
+                    <div>
+                      <h4 className="font-bold text-orange-800 text-sm">Serviço Retornado - Motivo:</h4>
+                      <p className="text-sm text-orange-700 mt-1 leading-relaxed">{lastMotivo.text.replace('Motivo do Reenvio: ', '')}</p>
+                      <p className="text-xs text-orange-600/80 mt-1.5 font-bold">Retornado por: {lastMotivo.user || 'Desconhecido'}</p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             <div className="flex gap-2 mb-6 p-1 bg-slate-100 rounded-lg">
               <button
                 onClick={() => setActiveTab('dados')}
@@ -485,6 +742,28 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
                 Dados do envio
               </button>
             </div>
+
+            {activeTab === 'envio' && solicitacao?.paciente_id && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm mb-1">{solicitacao.paciente_nome}</h3>
+                  <p className="text-xs text-slate-500 flex items-center gap-2">
+                    <User size={12} />
+                    Paciente vinculado
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('appState_selectedPatientId', solicitacao.paciente_id!);
+                    navigate(`/pacientes/cadastro/${solicitacao.paciente_id}`);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 shadow-sm rounded-lg text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
+                >
+                  <ExternalLink size={14} />
+                  Abrir Prontuário
+                </button>
+              </div>
+            )}
 
             {activeTab === 'dados' ? (
                 <div className="space-y-4">
@@ -814,13 +1093,42 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-3">
           <div>
             {solicitacao?.id && (
-              <button
-                onClick={handleSolicitarColeta}
-                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium"
-              >
-                <Phone size={16} />
-                Solicitar Coleta
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Tem certeza que deseja excluir esta solicitação? Esta ação não pode ser desfeita.')) {
+                      try {
+                        await supabase.from('protese_solicitacoes').delete().eq('id', solicitacao.id);
+                        onClose();
+                      } catch (e) {
+                        console.error(e);
+                        alert('Erro ao excluir solicitação.');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors flex items-center gap-2 font-medium"
+                >
+                  Excluir
+                </button>
+                {(solicitacao.status === 'Solicitação' || solicitacao.status === 'Retornado à Clínica') && (
+                  <button
+                    onClick={handleSolicitarColeta}
+                    className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium"
+                  >
+                    <Phone size={16} />
+                    Solicitar Coleta
+                  </button>
+                )}
+                {solicitacao.status === 'Retornado à Clínica' && (
+                  <button
+                    onClick={() => setShowReenvioPrompt(true)}
+                    className="px-4 py-2 text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors flex items-center gap-2 font-bold text-sm"
+                  >
+                    <span className="text-lg leading-none">🔄</span>
+                    Reenviar ao laboratório
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <div className="flex gap-3">

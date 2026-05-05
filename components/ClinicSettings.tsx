@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
    Building,
    Calendar,
@@ -36,7 +37,13 @@ interface ClinicSettingsProps {
 
 export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'general', onBack }) => {
    const { empresaId } = useCompany();
+   const navigate = useNavigate();
    const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+
+   useEffect(() => {
+      setActiveTab(initialTab);
+   }, [initialTab]);
+
    const [isSaving, setIsSaving] = useState(false);
    const [isSyncing, setIsSyncing] = useState(false);
    const [googleAccount, setGoogleAccount] = useState<string | null>(null);
@@ -846,7 +853,20 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          <div className="flex flex-col lg:flex-row gap-8">
             <nav className="w-full lg:w-64 space-y-2">
                {tabs.map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-600 hover:bg-white hover:shadow-sm'}`}>
+                  <button 
+                     key={tab.id} 
+                     onClick={() => {
+                        if (tab.id === 'integrations') {
+                           navigate('/configuracoes/integracoes');
+                        } else {
+                           if (window.location.pathname.includes('/integracoes')) {
+                              navigate('/configuracoes/clinica');
+                           }
+                           setActiveTab(tab.id as TabType);
+                        }
+                     }} 
+                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-600 hover:bg-white hover:shadow-sm'}`}
+                  >
                      <tab.icon size={20} />
                      {tab.label}
                   </button>

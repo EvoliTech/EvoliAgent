@@ -156,7 +156,7 @@ export interface ProteseLaboratorio {
   created_at: string;
 }
 
-export type ProteseStatus = 'Solicitação' | 'Enviado para laboratório' | 'Retornado à Clínica' | 'Instalado';
+export type ProteseStatus = 'Solicitação' | 'Reenviado ao Laboratório' | 'Enviado para laboratório' | 'Retornado à Clínica' | 'Instalado';
 
 export interface ProteseSolicitacao {
   id: string;
