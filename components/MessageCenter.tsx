@@ -472,6 +472,7 @@ const [loading, setLoading] = useState(false);
                      </p>
                   </div>
                ) : (
+
                   <div className="flex flex-col h-full">
                      <div className="mb-6 flex items-center gap-4">
                         {activeTab !== 'aniversariantes' && (
@@ -483,8 +484,6 @@ const [loading, setLoading] = useState(false);
                            {activeTab === 'aniversariantes' ? 'Aniversariantes' : (selectedInstance ? selectedInstance.title : '')}
                         </h2>
                         <div className="ml-auto flex items-center bg-gray-100 rounded-lg p-1"><button onClick={() => setSubTab('prontos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'prontos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Prontos ({patientsList.filter(p => !isGloballyContacted48h(p.id)).length})</button><button onClick={() => setSubTab('pendentes')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'pendentes' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Pendentes 48h ({patientsList.filter(p => isGloballyContacted48h(p.id)).length})</button></div>
-
-                        </div>
                      </div>
 
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
