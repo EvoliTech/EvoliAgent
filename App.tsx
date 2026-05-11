@@ -3,36 +3,41 @@ import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-
 import { PageType } from './types';
 import { TopHeader } from './components/Layout/TopHeader';
 import { Dashboard } from './components/Dashboard';
+import { useLocation, useNavigate, Routes, Route } from 'react-router-dom';
+import { PageType } from './types';
+import { TopHeader } from './components/Layout/TopHeader';
+import { Dashboard } from './components/Dashboard';
 import { Agenda } from './components/Agenda';
-import { Professionals } from './components/Professionals';
-import { Patients } from './components/Patients';
-import { ClinicSettings } from './components/ClinicSettings';
-import { PlansManagement } from './components/PlansManagement';
-import { Settings } from './components/Settings';
-import { GoogleCallback } from './components/GoogleCallback';
 import { AppointmentsList } from './components/AppointmentsList';
+import { Patients } from './components/Patients';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
-import { FeesSettings } from './components/FeesSettings';
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
 import { Gallery } from './components/Gallery';
 import { Campaigns } from './components/Campaigns';
 import { MessageCenter } from './components/MessageCenter';
-import { Login } from './components/Login';
-import { PublicAnamnese } from './components/PublicAnamnese';
+import { Professionals } from './components/Professionals';
+import { Settings } from './components/Settings';
+import { ClinicSettings } from './components/ClinicSettings';
+import { PlansManagement } from './components/PlansManagement';
+import { FeesSettings } from './components/FeesSettings';
 import { ProsthesisControl } from './components/ProsthesisControl';
+import { PublicAnamnese } from './components/PublicAnamnese';
 import { PublicProsthesisView } from './components/PublicProsthesisView';
+import { GoogleCallback } from './components/GoogleCallback';
+import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { useCompany } from './contexts/CompanyContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
-
   const location = useLocation();
   const navigate = useNavigate();
+  const { empresaId, loading: companyLoading } = useCompany();
 
-  // Mapping logic
+  // Mapping of logical pages to paths (used for navigation UI)
   const pageToPath: Record<PageType, string> = {
     'dashboard': '/dashboard',
     'agenda': '/agenda',
@@ -54,18 +59,22 @@ export default function App() {
     'google-callback': '/settings/callback'
   };
 
-  const pathToPage = Object.entries(pageToPath).reduce((acc, [page, path]) => {
-    acc[path] = page as PageType;
-    return acc;
-  }, {} as Record<string, PageType>);
-
-  useEffect(() => {
     const path = location.pathname;
     
     // Ignore anamnese routing
     if (path.startsWith('/anamnese/')) return;
     // Ignore prostese routing
     if (path.startsWith('/protese/')) return;
+
+    // Handle explicit login route
+    if (location.pathname === '/login') {
+      if (session) {
+        // User already logged in, redirect to dashboard
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      return;
+    }
 
     if (path === '/' || path === '') {
       navigate('/dashboard', { replace: true });
@@ -229,6 +238,15 @@ export default function App() {
 
   if (window.location.pathname.startsWith('/proteses/')) {
     return <PublicProsthesisView />;
+  }
+
+  // Public login route handling
+  if (location.pathname === '/login') {
+    if (session) {
+      navigate('/dashboard', { replace: true });
+      return null;
+    }
+    return <Login />;
   }
 
   if (loading || (session && companyLoading)) {

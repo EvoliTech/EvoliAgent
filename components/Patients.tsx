@@ -27,31 +27,31 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
 
   // Sync selected patient from URL
   useEffect(() => {
-     if (patients.length > 0) {
-        const parts = location.pathname.split('/');
-        if (parts[1] === 'pacientes' && parts[2]) {
-           const id = parts[2];
-           if (!selectedPatient || selectedPatient.id !== id) {
-              const p = patients.find(p => p.id === id);
-              if (p) {
-                 setSelectedPatient(p);
-              }
-           }
-        } else if (parts[1] === 'pacientes' && !parts[2] && selectedPatient) {
-           // URL says no patient, but we have one selected (e.g. back button)
-           setSelectedPatient(null);
+    if (patients.length > 0) {
+      const parts = location.pathname.split('/');
+      if (parts[1] === 'pacientes' && parts[2]) {
+        const id = parts[2];
+        if (!selectedPatient || selectedPatient.id !== id) {
+          const p = patients.find(p => p.id === id);
+          if (p) {
+            setSelectedPatient(p);
+          }
         }
-     }
+      } else if (parts[1] === 'pacientes' && !parts[2] && selectedPatient) {
+        // URL says no patient, but we have one selected (e.g. back button)
+        setSelectedPatient(null);
+      }
+    }
   }, [location.pathname, patients]);
 
   const handleSelectPatient = (patient: Patient) => {
-     setSelectedPatient(patient);
-     navigate(`/pacientes/${patient.id}/visao-geral`);
+    setSelectedPatient(patient);
+    navigate(`/pacientes/${patient.id}/visao-geral`);
   };
 
   const handleBackFromPatient = () => {
-     setSelectedPatient(null);
-     navigate('/pacientes');
+    setSelectedPatient(null);
+    navigate('/pacientes');
   };
 
 
@@ -60,7 +60,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
     try {
       const saved = localStorage.getItem('appState_patients_selectedPatient');
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -272,14 +272,14 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
 
   if (selectedPatient) {
     return (
-      <PatientDetails 
-        patient={selectedPatient} 
-        onBack={handleBackFromPatient} 
+      <PatientDetails
+        patient={selectedPatient}
+        onBack={handleBackFromPatient}
         onEdit={() => {
           if (onUpdateRegistration) {
             onUpdateRegistration(selectedPatient.id);
           }
-        }} 
+        }}
         onNavigateToSchedule={() => {
           if (onNavigate) {
             onNavigate('agenda');
@@ -295,7 +295,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       {/* Header */}
       <PageHeader
         title="Pacientes"
-        subtitle="Lista sincronizada de clientes (Supabase)."
+        subtitle="Lista sincronizada de clientes."
       >
         <div className="flex gap-2">
           <button
@@ -394,8 +394,8 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
               </tr>
             ) : filteredPatients.length > 0 ? (
               filteredPatients.map((patient) => (
-                <tr 
-                  key={patient.id} 
+                <tr
+                  key={patient.id}
                   className="hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => handleSelectPatient(patient)}
                 >
