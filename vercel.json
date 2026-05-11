@@ -9,10 +9,11 @@
   "trailingSlash": false,
   "builds": [
     {
-      "src": "vite.config.ts",
+      "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "dist",
+        "buildCommand": "npm run build"
       }
     }
   ]
