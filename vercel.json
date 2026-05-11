@@ -4,5 +4,16 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "builds": [
+    {
+      "src": "vite.config.ts",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
   ]
 }
