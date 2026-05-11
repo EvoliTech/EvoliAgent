@@ -291,12 +291,40 @@ export const Campaigns: React.FC = () => {
                         finalContacts = finalContacts.sort(() => 0.5 - Math.random()).slice(0, limit);
                      }
                   }
-
                   if (finalContacts.length > 0) {
+                     const { data: logsData } = await supabase.from('campaign_logs').select('cliente_id, campaign_id, data_envio').eq('empresa_id', empresaId);
+                     const sentLogs = (logsData || []).map((l: any) => ({
+                        patientId: String(l.cliente_id),
+                        campaignId: l.campaign_id,
+                        timestamp: new Date(l.data_envio).getTime()
+                     }));
+
+                     const { data: activeCamps } = await supabase.from('campaigns').select('id').eq('empresa_id', empresaId).eq('status', 'active');
+                     const activeCampIds = (activeCamps || []).map((c: any) => c.id).filter((id: string) => id !== campaignData.id);
+
+                     let otherContacts: any[] = [];
+                     if (activeCampIds.length > 0) {
+                        const { data: oc } = await supabase.from('campaign_contacts').select('cliente_id, campaign_id').in('campaign_id', activeCampIds);
+                        otherContacts = oc || [];
+                     }
+
+                     const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
+                     const now = Date.now();
+
+                     const isPending = (patientId: string) => {
+                        const is48h = sentLogs.some(log => log.patientId === patientId && (now - log.timestamp) < FORTY_EIGHT_HOURS);
+                        if (is48h) return true;
+
+                        return otherContacts.some(c => 
+                           String(c.cliente_id) === String(patientId) && 
+                           !sentLogs.some(log => log.patientId === patientId && log.campaignId === c.campaign_id)
+                        );
+                     };
+
                      const contactsInserts = finalContacts.map(c => ({
                         campaign_id: campaignData.id,
                         cliente_id: c.id,
-                        status: 'pendente'
+                        status: isPending(String(c.id)) ? 'analise' : 'pendente'
                      }));
 
                      const { error: insErr } = await supabase.from('campaign_contacts').insert(contactsInserts);
