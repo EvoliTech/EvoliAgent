@@ -227,7 +227,7 @@ export default function App() {
     return <PublicAnamnese />;
   }
 
-  if (window.location.pathname.startsWith('/protese/')) {
+  if (window.location.pathname.startsWith('/proteses/')) {
     return <PublicProsthesisView />;
   }
 
