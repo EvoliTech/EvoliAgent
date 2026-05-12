@@ -78,10 +78,21 @@ export default function App() {
       return;
     }
 
-    // Find matching page
+    // Find exact matching page
     const match = (Object.entries(pageToPath) as [PageType, string][]).find(([_, p]) => p === path);
     if (match) {
       setCurrentPage(match[0]);
+      return;
+    }
+
+    // Check for subpath prefix match (e.g., /financeiro/fluxo)
+    // Sort by length descending to ensure more specific paths (like /configuracoes/clinica) match before broader ones (/configuracoes)
+    const prefixMatch = (Object.entries(pageToPath) as [PageType, string][])
+      .sort((a, b) => b[1].length - a[1].length)
+      .find(([_, p]) => path.startsWith(p + '/'));
+
+    if (prefixMatch) {
+      setCurrentPage(prefixMatch[0]);
     } else {
       // fuzzy match for nested patient routes
       if (path.startsWith('/pacientes/')) {
