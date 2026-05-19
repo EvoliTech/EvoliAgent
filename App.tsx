@@ -185,7 +185,7 @@ export default function App() {
         subUserRole={subUserRole || 'admin'}
         userEmail={session?.user.email || ''}
       />
-      <div className="flex-1 overflow-auto bg-gray-50 relative flex flex-col">
+      <div className="flex-1 overflow-auto bg-gray-50 relative">
         {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
         {currentPage === 'agenda' && <Agenda />}
         {currentPage === 'appointments' && <AppointmentsList />}
