@@ -125,6 +125,19 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [newEvoTexto, setNewEvoTexto] = React.useState('');
   const [isRecording, setIsRecording] = React.useState(false);
   const [isImproving, setIsImproving] = React.useState(false);
+  const recognitionRef = React.useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.error("Erro ao parar reconhecimento de voz no desmonte:", e);
+        }
+      }
+    };
+  }, []);
 
   // Payments State
   const [payingTreatments, setPayingTreatments] = React.useState<any[]>([]);
@@ -1833,12 +1846,20 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         return;
                       }
                       if (isRecording) {
+                        if (recognitionRef.current) {
+                          try {
+                            recognitionRef.current.stop();
+                          } catch (e) {
+                            console.error("Erro ao parar gravação:", e);
+                          }
+                        }
                         setIsRecording(false);
                         return;
                       }
                       setIsRecording(true);
                       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
                       const recognition = new SpeechRecognition();
+                      recognitionRef.current = recognition;
                       recognition.lang = 'pt-BR';
                       recognition.continuous = true;
                       recognition.interimResults = true;
@@ -1850,9 +1871,21 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         }
                         if (finalMsg) setNewEvoTexto(prev => prev + (prev.endsWith(' ') || prev.length === 0 ? '' : ' ') + finalMsg);
                       };
-                      recognition.onerror = () => setIsRecording(false);
-                      recognition.onend = () => setIsRecording(false);
-                      recognition.start();
+                      recognition.onerror = () => {
+                        setIsRecording(false);
+                        recognitionRef.current = null;
+                      };
+                      recognition.onend = () => {
+                        setIsRecording(false);
+                        recognitionRef.current = null;
+                      };
+                      try {
+                        recognition.start();
+                      } catch (e) {
+                        console.error("Erro ao iniciar gravação:", e);
+                        setIsRecording(false);
+                        recognitionRef.current = null;
+                      }
                     }}
                   >
                     {isRecording ? <Square size={16} fill="currentColor" /> : <Mic size={16} />}
@@ -1881,6 +1914,15 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   onClick={async () => {
                     if (!newEvoTratamentoId) { alert('Selecione um tratamento para vincular a evolução.'); return; }
                     if (!newEvoTexto.trim()) { alert('Digite o texto da evolução.'); return; }
+
+                    if (recognitionRef.current) {
+                      try {
+                        recognitionRef.current.stop();
+                      } catch (e) {
+                        console.error("Erro ao parar gravação ao salvar:", e);
+                      }
+                      setIsRecording(false);
+                    }
 
                     const [bId, tId] = newEvoTratamentoId.split('|||');
                     const b = budgets.find(x => x.id === bId);
