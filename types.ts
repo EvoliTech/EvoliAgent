@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings' | 'prosthesis-control';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings' | 'prosthesis-control' | 'security';
 
 export interface TreatmentItem {
   id: string;

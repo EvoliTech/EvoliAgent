@@ -112,7 +112,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
     { id: 'patients', label: 'Pacientes', icon: User },
-    ...(subUserRole !== 'concierge' ? [{ id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign }] : []),
+    { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
   ];
 
   return (
@@ -138,20 +138,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
+            const isDisabled = item.id === 'financeiro' && subUserRole === 'concierge';
 
             return (
               <button
                 key={item.id}
+                disabled={isDisabled}
                 onClick={() => onNavigate(item.id as PageType)}
                 className={`
                   flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors
-                  ${isActive
-                    ? 'text-blue-600 bg-blue-50'
-                    : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+                  ${isDisabled
+                    ? 'text-gray-300 bg-transparent cursor-not-allowed opacity-50'
+                    : isActive
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
                   }
                 `}
               >
-                <Icon size={18} className={isActive ? 'text-blue-600' : 'text-gray-400'} />
+                <Icon size={18} className={isDisabled ? 'text-gray-300' : isActive ? 'text-blue-600' : 'text-gray-400'} />
                 <span>{item.label}</span>
               </button>
             );

@@ -84,6 +84,7 @@ export default function App() {
     settings: '/configuracoes',
     'clinic-settings': '/configuracoes/clinica',
     integrations: '/configuracoes/integracoes',
+    security: '/configuracoes/seguranca',
     'plans-management': '/configuracoes/planos',
     'fees-settings': '/configuracoes/taxas',
     'prosthesis-control': '/proteses',
@@ -114,6 +115,8 @@ export default function App() {
       setCurrentPage(match[0]);
       return;
     }
+
+
 
     // Check for subpath prefix match (e.g., /financeiro/fluxo)
     // Sort by length descending to ensure more specific paths (like /configuracoes/clinica) match before broader ones (/configuracoes)
@@ -204,8 +207,12 @@ export default function App() {
         {currentPage === 'message-center' && <MessageCenter />}
         {currentPage === 'professionals' && <Professionals onBack={() => navigateTo('settings')} />}
         {currentPage === 'settings' && <Settings onNavigate={navigateTo} />}
-        {currentPage === 'clinic-settings' && <ClinicSettings initialTab="general" onBack={() => navigateTo('settings')} />}
-        {currentPage === 'integrations' && <ClinicSettings initialTab="integrations" onBack={() => navigateTo('settings')} />}
+        {(currentPage === 'clinic-settings' || currentPage === 'integrations' || currentPage === 'security') && (
+          <ClinicSettings 
+            initialTab={currentPage === 'integrations' ? 'integrations' : currentPage === 'security' ? 'security' : 'general'} 
+            onBack={() => navigateTo('settings')} 
+          />
+        )}
         {currentPage === 'plans-management' && <PlansManagement onBack={() => navigateTo('settings')} />}
         {currentPage === 'fees-settings' && <FeesSettings onNavigate={navigateTo} />}
         {currentPage === 'prosthesis-control' && <ProsthesisControl />}

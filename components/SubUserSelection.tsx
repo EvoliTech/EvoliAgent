@@ -125,8 +125,8 @@ export const SubUserSelection: React.FC<SubUserSelectionProps> = ({ empresaId, o
         </p>
 
         {/* Profile Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-3xl">
-          {profileCards.map((p) => {
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-3xl justify-center">
+          {profileCards.filter(p => p.role === 'admin' || !!profiles[p.role]).map((p) => {
             const Icon = p.icon;
             return (
               <div

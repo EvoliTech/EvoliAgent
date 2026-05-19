@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
    Building,
    Calendar,
@@ -15,12 +15,18 @@ import {
    Plus,
    AlertCircle,
    Lock,
-   Mail
+   Mail,
+   Crown,
+   Briefcase,
+   Headphones,
+   Eye,
+   EyeOff,
+   Loader2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
-import { userService, UserProfile } from '../services/userService';
+import { userService, UserProfile, subUserService } from '../services/userService';
 import { Modal } from './ui/Modal';
 import { useCompany } from '../contexts/CompanyContext';
 import { companyService, CompanySettings } from '../services/companyService';
@@ -38,11 +44,26 @@ interface ClinicSettingsProps {
 export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'general', onBack }) => {
    const { empresaId } = useCompany();
    const navigate = useNavigate();
+   const location = useLocation();
+   const subUserRole = localStorage.getItem('clinica_sub_user_role') || 'admin';
    const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
    useEffect(() => {
-      setActiveTab(initialTab);
-   }, [initialTab]);
+      const path = location.pathname;
+      let targetTab = initialTab;
+      if (path === '/configuracoes/seguranca') {
+         targetTab = 'security';
+      } else if (path === '/configuracoes/integracoes') {
+         targetTab = 'integrations';
+      }
+
+      if (subUserRole === 'concierge' && (targetTab === 'integrations' || targetTab === 'security')) {
+         setActiveTab('general');
+         navigate('/configuracoes/clinica', { replace: true });
+      } else {
+         setActiveTab(targetTab);
+      }
+   }, [location.pathname, initialTab, subUserRole]);
 
    const [isSaving, setIsSaving] = useState(false);
    const [isSyncing, setIsSyncing] = useState(false);
@@ -79,7 +100,21 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       can_edit: false,
       can_delete: false
    });
-   const [isAdminLoading, setIsAdminLoading] = useState(true);
+    const [isAdminLoading, setIsAdminLoading] = useState(true);
+    
+    // Sub-users profile password management states
+    const [subUserPasswords, setSubUserPasswords] = useState<{ admin: string; gestor: string | null; concierge: string | null }>({
+       admin: '',
+       gestor: null,
+       concierge: null
+    });
+    const [showSubPass, setShowSubPass] = useState({
+       admin: false,
+       gestor: false,
+       concierge: false
+    });
+    const [savingSubUsers, setSavingSubUsers] = useState(false);
+    const [subUserStatus, setSubUserStatus] = useState('');
    const [alertConfig, setAlertConfig] = useState<{
       isOpen: boolean;
       title: string;
@@ -112,6 +147,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          checkConfigs();
          checkConnection();
          loadUsers();
+         loadSubUsers();
       }
    }, [empresaId]);
 
@@ -213,6 +249,45 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          console.error('Failed to load users', error);
       } finally {
          setIsAdminLoading(false);
+      }
+   };
+
+   const loadSubUsers = async () => {
+      if (!empresaId) return;
+      try {
+         const data = await subUserService.getSubUsers(empresaId);
+         setSubUserPasswords({
+            admin: data.admin?.password || 'admin',
+            gestor: data.gestor ? data.gestor.password : null,
+            concierge: data.concierge ? data.concierge.password : null
+         });
+      } catch (err) {
+         console.error('Erro ao carregar senhas:', err);
+      }
+   };
+
+   const handleSaveSubUsers = async () => {
+      if (!empresaId) return;
+      setSavingSubUsers(true);
+      setSubUserStatus('');
+      try {
+         const config: Record<string, { password: string }> = {
+            admin: { password: subUserPasswords.admin }
+         };
+         if (subUserPasswords.gestor !== null) {
+            config.gestor = { password: subUserPasswords.gestor };
+         }
+         if (subUserPasswords.concierge !== null) {
+            config.concierge = { password: subUserPasswords.concierge };
+         }
+         await subUserService.saveSubUsers(empresaId, config);
+         setSubUserStatus('Senhas dos perfis salvas com sucesso!');
+         setTimeout(() => setSubUserStatus(''), 3000);
+      } catch (err: any) {
+         console.error('Erro ao salvar senhas dos perfis:', err);
+         setSubUserStatus('Erro ao salvar senhas: ' + err.message);
+      } finally {
+         setSavingSubUsers(false);
       }
    };
 
@@ -804,6 +879,182 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                      </table>
                   </div>
 
+                  {/* Gestão de Senhas dos Perfis (Admin e Gestor) */}
+                  {(subUserRole === 'admin' || subUserRole === 'gestor') && (
+                     <div className="pt-8 border-t border-gray-100 space-y-6">
+                        <div>
+                           <h3 className="text-lg font-bold text-gray-900">Senhas de Acesso dos Perfis</h3>
+                           <p className="text-sm text-gray-500">Configure as senhas para a tela de seleção de perfis (Administrador, Gestor e Concierge).</p>
+                        </div>
+                        
+                        {subUserStatus && (
+                           <div className={`p-3 rounded-xl text-center text-xs font-semibold border ${
+                              subUserStatus.includes('sucesso') 
+                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                 : 'bg-red-50 border-red-200 text-red-700'
+                           }`}>
+                              {subUserStatus}
+                           </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           {/* Profile 1: Admin */}
+                           <div className="p-5 rounded-2xl border border-blue-100 bg-blue-50/20 space-y-3 flex flex-col justify-between">
+                              <div className="space-y-3">
+                                 <div className="flex items-center gap-2 text-blue-700 font-bold text-sm">
+                                    <Crown size={16} />
+                                    <span>Administrador</span>
+                                 </div>
+                                 <div className="relative">
+                                    <input
+                                       type={showSubPass.admin ? 'text' : 'password'}
+                                       required
+                                       disabled={subUserRole !== 'admin'}
+                                       value={subUserRole === 'admin' ? subUserPasswords.admin : '••••••••'}
+                                       onChange={e => setSubUserPasswords({ ...subUserPasswords, admin: e.target.value })}
+                                       className="w-full bg-white disabled:bg-gray-100/50 border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10 disabled:cursor-not-allowed"
+                                       placeholder="Senha"
+                                    />
+                                    {subUserRole === 'admin' && (
+                                       <button
+                                          type="button"
+                                          onClick={() => setShowSubPass({ ...showSubPass, admin: !showSubPass.admin })}
+                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                       >
+                                          {showSubPass.admin ? <EyeOff size={16} /> : <Eye size={16} />}
+                                       </button>
+                                    )}
+                                 </div>
+                              </div>
+                              <p className="text-[11px] text-gray-500 leading-normal">
+                                 {subUserRole === 'admin' 
+                                    ? 'Controle total do sistema e gestão das senhas dos perfis.' 
+                                    : 'Apenas o Administrador pode visualizar ou alterar esta senha.'}
+                              </p>
+                           </div>
+
+                           {/* Profile 2: Gestor */}
+                           {subUserPasswords.gestor !== null ? (
+                              <div className="p-5 rounded-2xl border border-emerald-100 bg-emerald-50/20 space-y-3 flex flex-col justify-between">
+                                 <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                       <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                                          <Briefcase size={16} />
+                                          <span>Gestor</span>
+                                       </div>
+                                       <button
+                                          type="button"
+                                          onClick={() => setSubUserPasswords({ ...subUserPasswords, gestor: null })}
+                                          className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                          title="Excluir Perfil"
+                                       >
+                                          <Trash2 size={16} />
+                                       </button>
+                                    </div>
+                                    <div className="relative">
+                                       <input
+                                          type={showSubPass.gestor ? 'text' : 'password'}
+                                          required
+                                          value={subUserPasswords.gestor}
+                                          onChange={e => setSubUserPasswords({ ...subUserPasswords, gestor: e.target.value })}
+                                          className="w-full bg-white border border-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10"
+                                          placeholder="Senha"
+                                       />
+                                       <button
+                                          type="button"
+                                          onClick={() => setShowSubPass({ ...showSubPass, gestor: !showSubPass.gestor })}
+                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                       >
+                                          {showSubPass.gestor ? <EyeOff size={16} /> : <Eye size={16} />}
+                                       </button>
+                                    </div>
+                                 </div>
+                                 <p className="text-[11px] text-gray-500 leading-normal">Acesso liberado a todas as funções e clínicas.</p>
+                              </div>
+                           ) : (
+                              <button
+                                 type="button"
+                                 onClick={() => setSubUserPasswords({ ...subUserPasswords, gestor: 'gestor' })}
+                                 className="p-5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-400 bg-emerald-50/5 hover:bg-emerald-50/10 flex flex-col items-center justify-center gap-2 transition-all min-h-[140px] text-emerald-700 font-bold"
+                              >
+                                 <Plus size={24} />
+                                 <span className="text-sm">Adicionar Perfil Gestor</span>
+                              </button>
+                           )}
+
+                           {/* Profile 3: Concierge */}
+                           {subUserPasswords.concierge !== null ? (
+                              <div className="p-5 rounded-2xl border border-amber-100 bg-amber-50/20 space-y-3 flex flex-col justify-between">
+                                 <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                       <div className="flex items-center gap-2 text-amber-700 font-bold text-sm">
+                                          <Headphones size={16} />
+                                          <span>Concierge</span>
+                                       </div>
+                                       <button
+                                          type="button"
+                                          onClick={() => setSubUserPasswords({ ...subUserPasswords, concierge: null })}
+                                          className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                          title="Excluir Perfil"
+                                       >
+                                          <Trash2 size={16} />
+                                       </button>
+                                    </div>
+                                    <div className="relative">
+                                       <input
+                                          type={showSubPass.concierge ? 'text' : 'password'}
+                                          required
+                                          value={subUserPasswords.concierge}
+                                          onChange={e => setSubUserPasswords({ ...subUserPasswords, concierge: e.target.value })}
+                                          className="w-full bg-white border border-gray-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10"
+                                          placeholder="Senha"
+                                       />
+                                       <button
+                                          type="button"
+                                          onClick={() => setShowSubPass({ ...showSubPass, concierge: !showSubPass.concierge })}
+                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                       >
+                                          {showSubPass.concierge ? <EyeOff size={16} /> : <Eye size={16} />}
+                                       </button>
+                                    </div>
+                                 </div>
+                                 <p className="text-[11px] text-gray-500 leading-normal">Recepção e atendimento. Menu Financeiro e Integrações bloqueados.</p>
+                              </div>
+                           ) : (
+                              <button
+                                 type="button"
+                                 onClick={() => setSubUserPasswords({ ...subUserPasswords, concierge: 'concierge' })}
+                                 className="p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/5 hover:bg-amber-50/10 flex flex-col items-center justify-center gap-2 transition-all min-h-[140px] text-amber-700 font-bold"
+                              >
+                                 <Plus size={24} />
+                                 <span className="text-sm">Adicionar Perfil Concierge</span>
+                              </button>
+                           )}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                           <button
+                              type="button"
+                              onClick={handleSaveSubUsers}
+                              disabled={savingSubUsers}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                           >
+                              {savingSubUsers ? (
+                                 <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span>Salvando...</span>
+                                 </>
+                              ) : (
+                                 <>
+                                    <Save size={16} />
+                                    <span>Salvar Senhas dos Perfis</span>
+                                 </>
+                              )}
+                           </button>
+                        </div>
+                     </div>
+                  )}
+
                   {/* Password Security Section */}
                   <div className="mt-12 bg-gray-50 rounded-3xl p-8 border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6">
                      <div className="flex items-center gap-4">
@@ -852,25 +1103,34 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
 
          <div className="flex flex-col lg:flex-row gap-8">
             <nav className="w-full lg:w-64 space-y-2">
-               {tabs.map(tab => (
-                  <button 
-                     key={tab.id} 
-                     onClick={() => {
-                        if (tab.id === 'integrations') {
-                           navigate('/configuracoes/integracoes');
-                        } else {
-                           if (window.location.pathname.includes('/integracoes')) {
+               {tabs.map(tab => {
+                  const isTabDisabledForConcierge = subUserRole === 'concierge' && (tab.id === 'integrations' || tab.id === 'security');
+                  return (
+                     <button 
+                        key={tab.id} 
+                        disabled={isTabDisabledForConcierge}
+                        onClick={() => {
+                           if (tab.id === 'integrations') {
+                              navigate('/configuracoes/integracoes');
+                           } else if (tab.id === 'security') {
+                              navigate('/configuracoes/seguranca');
+                           } else {
                               navigate('/configuracoes/clinica');
                            }
-                           setActiveTab(tab.id as TabType);
-                        }
-                     }} 
-                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-600 hover:bg-white hover:shadow-sm'}`}
-                  >
-                     <tab.icon size={20} />
-                     {tab.label}
-                  </button>
-               ))}
+                        }} 
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+                           activeTab === tab.id 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+                              : isTabDisabledForConcierge
+                                 ? 'text-gray-300 bg-gray-50/50 cursor-not-allowed opacity-50 font-medium' 
+                                 : 'text-gray-600 hover:bg-white hover:shadow-sm'
+                        }`}
+                     >
+                        <tab.icon size={20} />
+                        {tab.label}
+                     </button>
+                  );
+               })}
             </nav>
             <main className="flex-1 bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 p-8 min-h-[600px]">
                {renderContent()}
