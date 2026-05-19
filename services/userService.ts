@@ -119,3 +119,65 @@ export const userService = {
         return data.google_email || null;
     }
 };
+
+export const subUserService = {
+    async getSubUsers(empresaId: number): Promise<Record<string, { password: string }>> {
+        const { data, error } = await supabase
+            .from('integrations_config')
+            .select('client_secret')
+            .eq('service', 'sub_users')
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching sub-users:', error);
+        }
+
+        if (data?.client_secret) {
+            try {
+                return JSON.parse(data.client_secret);
+            } catch (e) {
+                console.error('Error parsing sub-users:', e);
+            }
+        }
+
+        // Default configurations if not set
+        return {
+            admin: { password: 'admin' },
+            gestor: { password: 'gestor' },
+            concierge: { password: 'concierge' }
+        };
+    },
+
+    async saveSubUsers(empresaId: number, config: Record<string, { password: string }>): Promise<void> {
+        const payload = {
+            IDEmpresa: empresaId,
+            service: 'sub_users',
+            client_secret: JSON.stringify(config),
+            is_active: true
+        };
+
+        // Check if exists
+        const { data: existing } = await supabase
+            .from('integrations_config')
+            .select('id')
+            .eq('service', 'sub_users')
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (existing) {
+            const { error } = await supabase
+                .from('integrations_config')
+                .update(payload)
+                .eq('service', 'sub_users')
+                .eq('IDEmpresa', empresaId);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase
+                .from('integrations_config')
+                .insert([payload]);
+            if (error) throw error;
+        }
+    }
+};
+

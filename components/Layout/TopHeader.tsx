@@ -31,10 +31,12 @@ interface TopHeaderProps {
   activePage: PageType;
   onNavigate: (page: PageType) => void;
   onLogout?: () => void;
+  onSwitchProfile?: () => void;
+  subUserRole: 'admin' | 'gestor' | 'concierge';
   userEmail?: string;
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, userEmail }) => {
+export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, onSwitchProfile, subUserRole, userEmail }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [gridMenuOpen, setGridMenuOpen] = useState(false);
   const { empresaId } = useCompany();
@@ -110,7 +112,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
     { id: 'patients', label: 'Pacientes', icon: User },
-    { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
+    ...(subUserRole !== 'concierge' ? [{ id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign }] : []),
   ];
 
   return (
@@ -262,8 +264,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             onClick={() => setAccountMenuOpen(!accountMenuOpen)}
             className="flex items-center space-x-2 border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50 transition-colors"
           >
-            <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 uppercase">
-              {userEmail ? userEmail.substring(0, 2) : 'US'}
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase ${
+              subUserRole === 'admin' ? 'bg-blue-600' : subUserRole === 'gestor' ? 'bg-emerald-600' : 'bg-amber-500'
+            }`}>
+              {subUserRole ? subUserRole.substring(0, 2) : 'US'}
             </div>
             <span className="text-sm font-medium text-gray-700">Conta</span>
             <ChevronDown size={16} className="text-gray-400" />
@@ -273,17 +277,32 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             <>
               <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)}></div>
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                <p className="text-sm text-gray-900 truncate">{userEmail || 'Usuário'}</p>
+                <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Perfil ativo</p>
+                  <p className={`text-xs font-bold ${
+                    subUserRole === 'admin' ? 'text-blue-600' : subUserRole === 'gestor' ? 'text-emerald-600' : 'text-amber-600'
+                  }`}>
+                    {subUserRole === 'admin' ? 'Administrador' : subUserRole === 'gestor' ? 'Gestor' : 'Concierge'}
+                  </p>
+                  <p className="text-[10px] text-gray-500 truncate mt-1">{userEmail}</p>
+                </div>
+                {onSwitchProfile && (
+                  <button
+                    onClick={() => { setAccountMenuOpen(false); onSwitchProfile(); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 border-b border-gray-100"
+                  >
+                    <User size={16} className="text-gray-400" />
+                    <span>Alterar Perfil</span>
+                  </button>
+                )}
+                <button
+                  onClick={onLogout}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                >
+                  <LogOut size={16} />
+                  <span>Sair</span>
+                </button>
               </div>
-              <button
-                onClick={onLogout}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
-              >
-                <LogOut size={16} />
-                <span>Sair</span>
-              </button>
-            </div>
             </>
           )}
         </div>

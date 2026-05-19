@@ -27,6 +27,7 @@ import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { useCompany } from './contexts/CompanyContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import { SubUserSelection } from './components/SubUserSelection';
 
 export default function App() {
   const location = useLocation();
@@ -37,6 +38,35 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+
+  const [subUserRole, setSubUserRole] = useState<'admin' | 'gestor' | 'concierge' | null>(null);
+  const [subUserName, setSubUserName] = useState<string>('');
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem('clinica_sub_user_role') as 'admin' | 'gestor' | 'concierge' | null;
+    const savedName = localStorage.getItem('clinica_sub_user_name') || '';
+    const isAuthenticated = localStorage.getItem('clinica_sub_user_authenticated') === 'true';
+    if (savedRole && isAuthenticated) {
+      setSubUserRole(savedRole);
+      setSubUserName(savedName);
+    }
+  }, []);
+
+  const handleSubUserLoginSuccess = (role: 'admin' | 'gestor' | 'concierge', name: string) => {
+    localStorage.setItem('clinica_sub_user_role', role);
+    localStorage.setItem('clinica_sub_user_name', name);
+    localStorage.setItem('clinica_sub_user_authenticated', 'true');
+    setSubUserRole(role);
+    setSubUserName(name);
+  };
+
+  const handleSwitchProfile = () => {
+    localStorage.removeItem('clinica_sub_user_role');
+    localStorage.removeItem('clinica_sub_user_name');
+    localStorage.removeItem('clinica_sub_user_authenticated');
+    setSubUserRole(null);
+    setSubUserName('');
+  };
 
   // Map page types to base paths
   const pageToPath: Record<PageType, string> = {
@@ -120,6 +150,11 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('clinica_sub_user_role');
+    localStorage.removeItem('clinica_sub_user_name');
+    localStorage.removeItem('clinica_sub_user_authenticated');
+    setSubUserRole(null);
+    setSubUserName('');
     navigate('/login', { replace: true });
   };
 
@@ -139,7 +174,14 @@ export default function App() {
   // Render main authenticated area
   const renderProtected = () => (
     <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      <TopHeader activePage={currentPage} onNavigate={navigateTo} onLogout={handleLogout} userEmail={session?.user.email || ''} />
+      <TopHeader
+        activePage={currentPage}
+        onNavigate={navigateTo}
+        onLogout={handleLogout}
+        onSwitchProfile={handleSwitchProfile}
+        subUserRole={subUserRole || 'admin'}
+        userEmail={session?.user.email || ''}
+      />
       <div className="flex-1 overflow-auto bg-gray-50 relative flex flex-col">
         {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
         {currentPage === 'agenda' && <Agenda />}
@@ -154,7 +196,9 @@ export default function App() {
           <PatientRegistrationUpdate patientId={selectedPatientId} onBack={() => navigateTo('patients')} />
         )}
         {currentPage === 'inventory' && <Inventory />}
-        {currentPage === 'financeiro' && <Financial />}
+        {currentPage === 'financeiro' && (
+          subUserRole === 'concierge' ? <Navigate to="/dashboard" replace /> : <Financial />
+        )}
         {currentPage === 'gallery' && <Gallery />}
         {currentPage === 'campaigns' && <Campaigns />}
         {currentPage === 'message-center' && <MessageCenter />}
@@ -199,6 +243,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (!subUserRole) {
+    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} />;
   }
 
   // Render protected area inside ProtectedRoute for future extensibility
