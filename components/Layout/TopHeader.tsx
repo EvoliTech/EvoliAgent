@@ -109,170 +109,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
     };
   }, [empresaId]);
 
-  // Remapeando para manter a navegação existente mas parecer com o print
-  const menuItems = [
-    { id: 'agenda', label: 'Agenda', icon: CalendarDays },
-    { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
-    { id: 'patients', label: 'Pacientes', icon: User },
-    { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
-  ];
+  // Navegação movida para o Sidebar
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 flex-shrink-0 z-10 w-full">
-      <div className="flex items-center space-x-8">
-        {/* Brand Logo */}
-        <div className="flex items-center h-full">
-          <img
-            src="/logo.png"
-            onError={(e) => {
-              // fallback if logo.png doesn't exist
-              const target = e.target as HTMLImageElement;
-              target.src = '/logo_sidebar.png';
-            }}
-            alt="Logo"
-            className="h-8 w-auto cursor-pointer"
-            onClick={() => onNavigate('dashboard')}
-          />
-        </div>
-
-        {/* Navigation */}
-        <nav className="hidden md:flex items-center space-x-2">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activePage === item.id;
-            const isDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes(item.id);
-
-            return (
-              <button
-                key={item.id}
-                disabled={isDisabled}
-                onClick={() => onNavigate(item.id as PageType)}
-                className={`
-                  flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors
-                  ${isDisabled
-                    ? 'text-gray-300 bg-transparent cursor-not-allowed opacity-50'
-                    : isActive
-                      ? 'text-blue-600 bg-blue-50'
-                      : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
-                  }
-                `}
-              >
-                <Icon size={18} className={isDisabled ? 'text-gray-300' : isActive ? 'text-blue-600' : 'text-gray-400'} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-
-          <div className="relative">
-            <button
-              onClick={() => setGridMenuOpen(!gridMenuOpen)}
-              className={`
-                flex items-center justify-center p-2 rounded-md transition-colors border
-                ${gridMenuOpen || activePage === 'dashboard'
-                  ? 'text-blue-600 bg-blue-50 border-blue-200'
-                  : 'text-gray-400 border-transparent hover:border-gray-200 hover:text-blue-600 hover:bg-gray-50'
-                }
-              `}
-            >
-              <LayoutGrid size={18} />
-            </button>
-
-            {gridMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setGridMenuOpen(false)}></div>
-                <div className="absolute top-full mt-3 -left-1/2 transform -translate-x-1/4 w-[400px] bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-50">
-                  <div className="grid grid-cols-2 gap-4">
-                  {/* Item 1 - Dashboard (Relatórios de Inteligência) */}
-                  <button
-                    onClick={() => { onNavigate('dashboard'); setGridMenuOpen(false); }}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
-                  >
-                    <PieChart className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Visão geral<br />da Clínica</span>
-                  </button>
-
-                  {/* Item 2 - Controle de Estoque */}
-                  {(() => {
-                    const isInventoryDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('inventory');
-                    return (
-                      <button 
-                        disabled={isInventoryDisabled}
-                        onClick={() => { onNavigate('inventory'); setGridMenuOpen(false); }}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
-                          isInventoryDisabled
-                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
-                            : 'hover:bg-gray-50 hover:border-gray-200'
-                        }`}
-                      >
-                        <Archive className="text-gray-400 shrink-0" size={24} />
-                        <span className={`text-sm font-medium leading-tight ${isInventoryDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Controle de<br />Estoque</span>
-                      </button>
-                    );
-                  })()}
-
-                  {/* Item 3 - Campanhas */}
-                  {(() => {
-                    const isCampaignsDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('campaigns');
-                    return (
-                      <button 
-                        disabled={isCampaignsDisabled}
-                        onClick={() => { onNavigate('campaigns'); setGridMenuOpen(false); }}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
-                          isCampaignsDisabled
-                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
-                            : 'hover:bg-gray-50 hover:border-gray-200'
-                        }`}
-                      >
-                        <MessageSquareIcon className="text-gray-400 shrink-0" size={24} />
-                        <span className={`text-sm font-medium leading-tight ${isCampaignsDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Campanhas<br />automáticas</span>
-                      </button>
-                    );
-                  })()}
-
-                  {/* Item 4 - Galeria */}
-                  {(() => {
-                    const isGalleryDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('gallery');
-                    return (
-                      <button 
-                        disabled={isGalleryDisabled}
-                        onClick={() => { onNavigate('gallery'); setGridMenuOpen(false); }}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
-                          isGalleryDisabled
-                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
-                            : 'hover:bg-gray-50 hover:border-gray-200'
-                        }`}
-                      >
-                        <ImageIcon className="text-gray-400 shrink-0" size={24} />
-                        <span className={`text-sm font-medium leading-tight ${isGalleryDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Galeria de<br />Fotos</span>
-                      </button>
-                    );
-                  })()}
-
-                  {/* Item 5 - Controle de Prótese */}
-                  {(() => {
-                    const isProsthesisDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('prosthesis-control');
-                    return (
-                      <button 
-                        disabled={isProsthesisDisabled}
-                        onClick={() => { onNavigate('prosthesis-control'); setGridMenuOpen(false); }}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
-                          isProsthesisDisabled
-                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
-                            : 'hover:bg-gray-50 hover:border-gray-200'
-                        }`}
-                      >
-                        <Stethoscope className="text-gray-400 shrink-0" size={24} />
-                        <span className={`text-sm font-medium leading-tight ${isProsthesisDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Controle de<br />Prótese</span>
-                      </button>
-                    );
-                  })()}
-                </div>
-                </div>
-              </>
-            )}
-          </div>
-        </nav>
-      </div>
+    <header className="h-16 glass border-b border-gray-200/50 flex items-center justify-end px-4 sm:px-6 flex-shrink-0 z-10 w-full sticky top-0">
+      <div className="flex-1"></div>
 
       {/* Right Side Icons & Account */}
       <div className="flex items-center space-x-4">
@@ -322,7 +163,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           {accountMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)}></div>
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+              <div className="absolute right-0 mt-2 w-48 glass rounded-2xl shadow-glass border border-white/50 py-1 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 overflow-hidden">
                 <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Perfil ativo</p>
                   <p className={`text-xs font-bold ${
@@ -355,7 +196,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
       </div>
       {/* Birthday Toast Popup */}
       {showBirthdayToast && (
-         <div className="fixed bottom-6 right-6 z-[100] bg-white border border-indigo-100 shadow-2xl shadow-indigo-500/10 rounded-2xl p-5 w-80 animate-in slide-in-from-bottom-5 fade-in duration-300">
+         <div className="fixed bottom-6 right-6 z-[100] glass border border-white/50 shadow-glass rounded-2xl p-5 w-80 animate-in slide-in-from-bottom-5 fade-in duration-300">
             <div className="flex items-start justify-between mb-3">
                <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center -mt-1 -ml-1">
                   <Gift className="text-indigo-600 w-5 h-5" />

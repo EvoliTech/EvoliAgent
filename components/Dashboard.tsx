@@ -13,7 +13,7 @@ interface DashboardProps {
 }
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
-  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+  <div className="glass rounded-2xl p-6 shadow-soft border border-white/60 hover:shadow-glass hover:-translate-y-0.5 transition-all duration-300">
     <div className="flex items-start justify-between">
       <div>
         <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -229,7 +229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <h1 className="text-2xl font-bold text-gray-900">Visão Geral</h1>
           <p className="text-gray-500">Bem-vindo ao painel de controle da clínica.</p>
         </div>
-        <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+        <div className="text-sm font-medium text-gray-500 glass px-5 py-2.5 rounded-xl border border-white/60 shadow-soft">
           Hoje, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
       </div>
@@ -265,7 +265,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Main Chart Section */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="lg:col-span-2 glass rounded-3xl shadow-soft border border-white/60 p-8">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Agendamentos no Mês</h3>
           <div className="h-64 w-full relative">
             <div className="absolute inset-0 flex">
@@ -393,7 +393,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="space-y-6">
 
           {/* Insurance Distribution */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="glass rounded-3xl shadow-soft border border-white/60 p-8">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Pacientes por Convênio</h3>
             <div className="flex items-center space-x-6">
               {/* Donut Chart */}
@@ -436,7 +436,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           </div>
 
           {/* Recent Patients List */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="glass rounded-3xl shadow-soft border border-white/60 p-8">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-900">Pacientes Recentes</h3>
               <button

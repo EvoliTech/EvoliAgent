@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { PageType } from './types';
 import { TopHeader } from './components/Layout/TopHeader';
+import { Sidebar } from './components/Layout/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { Agenda } from './components/Agenda';
 import { AppointmentsList } from './components/AppointmentsList';
@@ -201,19 +202,26 @@ export default function App() {
     };
 
     return (
-      <div className="flex flex-col h-screen bg-gray-50 font-sans">
-        <TopHeader
+      <div className="flex h-screen bg-transparent font-sans w-full">
+        <Sidebar
           activePage={currentPage}
           onNavigate={navigateTo}
-          onLogout={handleLogout}
-          onSwitchProfile={handleSwitchProfile}
           subUserRole={subUserRole || 'admin'}
           subUserPermissions={subUserPermissions}
-          subUserName={subUserName}
-          userEmail={session?.user.email || ''}
         />
-        <div className="flex-1 overflow-auto bg-gray-50 relative">
-          {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
+        <div className="flex-1 flex flex-col min-w-0 bg-transparent relative overflow-hidden">
+          <TopHeader
+            activePage={currentPage}
+            onNavigate={navigateTo}
+            onLogout={handleLogout}
+            onSwitchProfile={handleSwitchProfile}
+            subUserRole={subUserRole || 'admin'}
+            subUserPermissions={subUserPermissions}
+            subUserName={subUserName}
+            userEmail={session?.user.email || ''}
+          />
+          <main className="flex-1 overflow-auto bg-transparent relative p-2 lg:p-4">
+            {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
           {currentPage === 'agenda' && (
             !hasAccess('agenda') ? <Navigate to="/dashboard" replace /> : <Agenda />
           )}
@@ -259,7 +267,8 @@ export default function App() {
           {currentPage === 'prosthesis-control' && (
             !hasAccess('prosthesis-control') ? <Navigate to="/dashboard" replace /> : <ProsthesisControl />
           )}
-          {currentPage === 'google-callback' && <GoogleCallback onNavigate={navigateTo} />}
+            {currentPage === 'google-callback' && <GoogleCallback onNavigate={navigateTo} />}
+          </main>
         </div>
       </div>
     );
@@ -276,7 +285,7 @@ export default function App() {
   // Loading / auth guards
   if (loading || companyLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
         <p className="text-gray-500 text-sm animate-pulse">{loading ? 'Carregando sessão...' : 'Carregando dados da empresa...'}</p>
       </div>
@@ -286,7 +295,7 @@ export default function App() {
   if (!session) return <Login />;
   if (!empresaId) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-gray-50 p-4">
+      <div className="h-screen w-full flex items-center justify-center bg-transparent p-4">
         <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-100 max-w-md text-center">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Acesso Restrito</h2>
           <p className="text-gray-600 mb-4">Seu usuário não possui uma empresa vinculada. Entre em contato com o administrador.</p>
