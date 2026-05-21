@@ -945,7 +945,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                                        </div>
                                        <div className="relative">
                                           <input
-                                             type={showPasswordText ? 'text' : 'password'}
+                                             type="text"
+                                             style={{ WebkitTextSecurity: showPasswordText ? 'none' : 'disc' } as React.CSSProperties}
                                              readOnly
                                              value={profile.password}
                                              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 outline-none select-all font-semibold"
@@ -1085,7 +1086,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                   <label className="block text-sm font-bold text-gray-700 mb-1">Senha de Acesso <span className="text-red-500">*</span></label>
                   <div className="relative">
                      <input 
-                        type={showModalPassword ? 'text' : 'password'} 
+                        type="text"
+                        style={{ WebkitTextSecurity: showModalPassword ? 'none' : 'disc' } as React.CSSProperties} 
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold pr-10" 
                         value={profilePassword} 
                         onChange={e => setProfilePassword(e.target.value)} 

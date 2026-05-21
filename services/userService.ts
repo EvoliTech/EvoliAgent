@@ -225,7 +225,7 @@ export const subUserService = {
         // Check if exists
         const { data: existing } = await supabase
             .from('integrations_config')
-            .select('id')
+            .select('service')
             .eq('service', 'sub_users')
             .eq('IDEmpresa', empresaId)
             .maybeSingle();

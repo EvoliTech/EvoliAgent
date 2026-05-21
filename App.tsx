@@ -297,7 +297,7 @@ export default function App() {
   }
 
   if (!subUserRole) {
-    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} />;
+    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} onLogout={handleLogout} />;
   }
 
   // Render protected area inside ProtectedRoute for future extensibility
