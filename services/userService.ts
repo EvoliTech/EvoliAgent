@@ -11,6 +11,14 @@ export interface UserProfile {
     created_at?: string;
 }
 
+export interface SubUserProfile {
+    id: string;
+    name: string;
+    password: string;
+    icon: 'crown' | 'briefcase' | 'headphones' | 'stethoscope' | 'user' | 'shield';
+    permissions: string[];
+}
+
 export const userService = {
     async fetchUsers(empresaId: number): Promise<UserProfile[]> {
         const { data, error } = await supabase
@@ -121,7 +129,7 @@ export const userService = {
 };
 
 export const subUserService = {
-    async getSubUsers(empresaId: number): Promise<Record<string, { password: string }>> {
+    async getSubUsers(empresaId: number): Promise<Record<string, SubUserProfile>> {
         const { data, error } = await supabase
             .from('integrations_config')
             .select('client_secret')
@@ -133,27 +141,84 @@ export const subUserService = {
             console.error('Error fetching sub-users:', error);
         }
 
+        let parsed: any = null;
         if (data?.client_secret) {
             try {
-                return JSON.parse(data.client_secret);
+                parsed = JSON.parse(data.client_secret);
             } catch (e) {
                 console.error('Error parsing sub-users:', e);
             }
         }
 
-        // Default configurations if not set
-        return {
-            admin: { password: 'admin' },
-            gestor: { password: 'gestor' },
-            concierge: { password: 'concierge' }
-        };
+        return this.sanitizeSubUsers(parsed);
     },
 
-    async saveSubUsers(empresaId: number, config: Record<string, { password: string }>): Promise<void> {
+    sanitizeSubUsers(data: any): Record<string, SubUserProfile> {
+        const defaults: Record<string, SubUserProfile> = {
+            admin: {
+                id: 'admin',
+                name: 'Administrador',
+                password: 'admin',
+                icon: 'crown',
+                permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
+            },
+            gestor: {
+                id: 'gestor',
+                name: 'Gestor',
+                password: 'gestor',
+                icon: 'briefcase',
+                permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
+            },
+            concierge: {
+                id: 'concierge',
+                name: 'Concierge',
+                password: 'concierge',
+                icon: 'headphones',
+                permissions: ['agenda', 'appointments', 'patients']
+            }
+        };
+
+        if (!data || typeof data !== 'object') {
+            return defaults;
+        }
+
+        const sanitized: Record<string, SubUserProfile> = {};
+
+        Object.keys(data).forEach(key => {
+            const item = data[key];
+            if (!item) return;
+
+            sanitized[key] = {
+                id: key,
+                name: item.name || (key === 'admin' ? 'Administrador' : key === 'gestor' ? 'Gestor' : key === 'concierge' ? 'Concierge' : key),
+                password: item.password || '',
+                icon: item.icon || (key === 'admin' ? 'crown' : key === 'gestor' ? 'briefcase' : key === 'concierge' ? 'headphones' : 'user'),
+                permissions: Array.isArray(item.permissions)
+                    ? item.permissions
+                    : (key === 'concierge' ? ['agenda', 'appointments', 'patients'] : ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security'])
+            };
+        });
+
+        // Ensure admin always exists and is fully enabled
+        if (!sanitized.admin) {
+            sanitized.admin = defaults.admin;
+        } else {
+            sanitized.admin.permissions = defaults.admin.permissions;
+            sanitized.admin.name = 'Administrador';
+            sanitized.admin.icon = 'crown';
+        }
+
+        return sanitized;
+    },
+
+    async saveSubUsers(empresaId: number, config: Record<string, any>): Promise<void> {
+        const sanitized = this.sanitizeSubUsers(config);
+
         const payload = {
             IDEmpresa: empresaId,
             service: 'sub_users',
-            client_secret: JSON.stringify(config),
+            client_id: 'sub_users',
+            client_secret: JSON.stringify(sanitized),
             is_active: true
         };
 

@@ -7,6 +7,13 @@ interface SettingsProps {
 
 export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
   const subUserRole = localStorage.getItem('clinica_sub_user_role') || 'admin';
+  const savedPerms = localStorage.getItem('clinica_sub_user_permissions');
+  const subUserPermissions: string[] = savedPerms ? JSON.parse(savedPerms) : [];
+
+  const hasAccess = (permission: string) => {
+    if (subUserRole === 'admin') return true;
+    return subUserPermissions.includes(permission);
+  };
 
   const settingsOptions = [
     {
@@ -29,10 +36,10 @@ export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
       description: 'Conecte sua clínica a ferramentas e serviços externos para automatizar tarefas e melhorar o atendimento.',
       iconPath: '/integracoes.svg',
       action: () => {
-        if (subUserRole === 'concierge') return;
+        if (!hasAccess('integrations')) return;
         onNavigate('integrations');
       },
-      disabled: subUserRole === 'concierge'
+      disabled: !hasAccess('integrations')
     },
     {
       id: 'plans-management',
@@ -48,11 +55,11 @@ export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
       iconPath: '/financeiro.svg',
       action: () => onNavigate('fees-settings')
     },
-    // Conditionally show Access Control panel to Admin and Gestor
-    ...(subUserRole === 'admin' || subUserRole === 'gestor' ? [{
+    // Conditionally show Access Control panel to profiles with security permission
+    ...(hasAccess('security') ? [{
       id: 'access-control',
       title: 'Gestão de Usuários e Senhas',
-      description: 'Defina e altere as senhas de acesso para os perfis de Administrador, Gestor e Concierge.',
+      description: 'Defina e altere as senhas de acesso para os perfis cadastrados no sistema.',
       iconPath: '/gestaodeprofissionais.svg',
       action: () => onNavigate('security')
     }] : [])

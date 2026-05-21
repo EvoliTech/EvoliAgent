@@ -39,33 +39,49 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
-  const [subUserRole, setSubUserRole] = useState<'admin' | 'gestor' | 'concierge' | null>(null);
+  const [subUserRole, setSubUserRole] = useState<string | null>(null);
   const [subUserName, setSubUserName] = useState<string>('');
+  const [subUserPermissions, setSubUserPermissions] = useState<string[]>([]);
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('clinica_sub_user_role') as 'admin' | 'gestor' | 'concierge' | null;
+    const savedRole = localStorage.getItem('clinica_sub_user_role');
     const savedName = localStorage.getItem('clinica_sub_user_name') || '';
     const isAuthenticated = localStorage.getItem('clinica_sub_user_authenticated') === 'true';
+    const savedPerms = localStorage.getItem('clinica_sub_user_permissions');
+    
     if (savedRole && isAuthenticated) {
       setSubUserRole(savedRole);
       setSubUserName(savedName);
+      if (savedPerms) {
+        try {
+          setSubUserPermissions(JSON.parse(savedPerms));
+        } catch (e) {
+          console.error("Erro ao analisar permissões do sub-usuário:", e);
+        }
+      } else if (savedRole === 'admin') {
+        setSubUserPermissions(['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']);
+      }
     }
   }, []);
 
-  const handleSubUserLoginSuccess = (role: 'admin' | 'gestor' | 'concierge', name: string) => {
+  const handleSubUserLoginSuccess = (role: string, name: string, permissions: string[]) => {
     localStorage.setItem('clinica_sub_user_role', role);
     localStorage.setItem('clinica_sub_user_name', name);
+    localStorage.setItem('clinica_sub_user_permissions', JSON.stringify(permissions));
     localStorage.setItem('clinica_sub_user_authenticated', 'true');
     setSubUserRole(role);
     setSubUserName(name);
+    setSubUserPermissions(permissions);
   };
 
   const handleSwitchProfile = () => {
     localStorage.removeItem('clinica_sub_user_role');
     localStorage.removeItem('clinica_sub_user_name');
+    localStorage.removeItem('clinica_sub_user_permissions');
     localStorage.removeItem('clinica_sub_user_authenticated');
     setSubUserRole(null);
     setSubUserName('');
+    setSubUserPermissions([]);
   };
 
   // Map page types to base paths
@@ -155,9 +171,11 @@ export default function App() {
     await supabase.auth.signOut();
     localStorage.removeItem('clinica_sub_user_role');
     localStorage.removeItem('clinica_sub_user_name');
+    localStorage.removeItem('clinica_sub_user_permissions');
     localStorage.removeItem('clinica_sub_user_authenticated');
     setSubUserRole(null);
     setSubUserName('');
+    setSubUserPermissions([]);
     navigate('/login', { replace: true });
   };
 
@@ -175,51 +193,77 @@ export default function App() {
   };
 
   // Render main authenticated area
-  const renderProtected = () => (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      <TopHeader
-        activePage={currentPage}
-        onNavigate={navigateTo}
-        onLogout={handleLogout}
-        onSwitchProfile={handleSwitchProfile}
-        subUserRole={subUserRole || 'admin'}
-        userEmail={session?.user.email || ''}
-      />
-      <div className="flex-1 overflow-auto bg-gray-50 relative">
-        {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
-        {currentPage === 'agenda' && <Agenda />}
-        {currentPage === 'appointments' && <AppointmentsList />}
-        {currentPage === 'patients' && (
-          <Patients
-            onUpdateRegistration={id => { setSelectedPatientId(id); navigateTo('patient-registration-update'); }}
-            onNavigate={navigateTo}
-          />
-        )}
-        {currentPage === 'patient-registration-update' && selectedPatientId && (
-          <PatientRegistrationUpdate patientId={selectedPatientId} onBack={() => navigateTo('patients')} />
-        )}
-        {currentPage === 'inventory' && <Inventory />}
-        {currentPage === 'financeiro' && (
-          subUserRole === 'concierge' ? <Navigate to="/dashboard" replace /> : <Financial />
-        )}
-        {currentPage === 'gallery' && <Gallery />}
-        {currentPage === 'campaigns' && <Campaigns />}
-        {currentPage === 'message-center' && <MessageCenter />}
-        {currentPage === 'professionals' && <Professionals onBack={() => navigateTo('settings')} />}
-        {currentPage === 'settings' && <Settings onNavigate={navigateTo} />}
-        {(currentPage === 'clinic-settings' || currentPage === 'integrations' || currentPage === 'security') && (
-          <ClinicSettings 
-            initialTab={currentPage === 'integrations' ? 'integrations' : currentPage === 'security' ? 'security' : 'general'} 
-            onBack={() => navigateTo('settings')} 
-          />
-        )}
-        {currentPage === 'plans-management' && <PlansManagement onBack={() => navigateTo('settings')} />}
-        {currentPage === 'fees-settings' && <FeesSettings onNavigate={navigateTo} />}
-        {currentPage === 'prosthesis-control' && <ProsthesisControl />}
-        {currentPage === 'google-callback' && <GoogleCallback onNavigate={navigateTo} />}
+  const renderProtected = () => {
+    const hasAccess = (permission: string) => {
+      if (!subUserRole) return false;
+      if (subUserRole === 'admin') return true;
+      return subUserPermissions.includes(permission);
+    };
+
+    return (
+      <div className="flex flex-col h-screen bg-gray-50 font-sans">
+        <TopHeader
+          activePage={currentPage}
+          onNavigate={navigateTo}
+          onLogout={handleLogout}
+          onSwitchProfile={handleSwitchProfile}
+          subUserRole={subUserRole || 'admin'}
+          subUserPermissions={subUserPermissions}
+          subUserName={subUserName}
+          userEmail={session?.user.email || ''}
+        />
+        <div className="flex-1 overflow-auto bg-gray-50 relative">
+          {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
+          {currentPage === 'agenda' && (
+            !hasAccess('agenda') ? <Navigate to="/dashboard" replace /> : <Agenda />
+          )}
+          {currentPage === 'appointments' && (
+            !hasAccess('appointments') ? <Navigate to="/dashboard" replace /> : <AppointmentsList />
+          )}
+          {currentPage === 'patients' && (
+            !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : (
+              <Patients
+                onUpdateRegistration={id => { setSelectedPatientId(id); navigateTo('patient-registration-update'); }}
+                onNavigate={navigateTo}
+              />
+            )
+          )}
+          {currentPage === 'patient-registration-update' && selectedPatientId && (
+            !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : (
+              <PatientRegistrationUpdate patientId={selectedPatientId} onBack={() => navigateTo('patients')} />
+            )
+          )}
+          {currentPage === 'inventory' && (
+            !hasAccess('inventory') ? <Navigate to="/dashboard" replace /> : <Inventory />
+          )}
+          {currentPage === 'financeiro' && (
+            !hasAccess('financeiro') ? <Navigate to="/dashboard" replace /> : <Financial />
+          )}
+          {currentPage === 'gallery' && (
+            !hasAccess('gallery') ? <Navigate to="/dashboard" replace /> : <Gallery />
+          )}
+          {currentPage === 'campaigns' && (
+            !hasAccess('campaigns') ? <Navigate to="/dashboard" replace /> : <Campaigns />
+          )}
+          {currentPage === 'message-center' && <MessageCenter />}
+          {currentPage === 'professionals' && <Professionals onBack={() => navigateTo('settings')} />}
+          {currentPage === 'settings' && <Settings onNavigate={navigateTo} />}
+          {(currentPage === 'clinic-settings' || currentPage === 'integrations' || currentPage === 'security') && (
+            <ClinicSettings 
+              initialTab={currentPage === 'integrations' ? 'integrations' : currentPage === 'security' ? 'security' : 'general'} 
+              onBack={() => navigateTo('settings')} 
+            />
+          )}
+          {currentPage === 'plans-management' && <PlansManagement onBack={() => navigateTo('settings')} />}
+          {currentPage === 'fees-settings' && <FeesSettings onNavigate={navigateTo} />}
+          {currentPage === 'prosthesis-control' && (
+            !hasAccess('prosthesis-control') ? <Navigate to="/dashboard" replace /> : <ProsthesisControl />
+          )}
+          {currentPage === 'google-callback' && <GoogleCallback onNavigate={navigateTo} />}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Public routes (anamnese, prosthesis view, login)
   if (window.location.pathname.startsWith('/anamnese/')) return <PublicAnamnese />;

@@ -32,11 +32,13 @@ interface TopHeaderProps {
   onNavigate: (page: PageType) => void;
   onLogout?: () => void;
   onSwitchProfile?: () => void;
-  subUserRole: 'admin' | 'gestor' | 'concierge';
+  subUserRole: string;
+  subUserPermissions?: string[];
+  subUserName?: string;
   userEmail?: string;
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, onSwitchProfile, subUserRole, userEmail }) => {
+export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, onSwitchProfile, subUserRole, subUserPermissions, subUserName, userEmail }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [gridMenuOpen, setGridMenuOpen] = useState(false);
   const { empresaId } = useCompany();
@@ -138,7 +140,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
-            const isDisabled = item.id === 'financeiro' && subUserRole === 'concierge';
+            const isDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes(item.id);
 
             return (
               <button
@@ -190,40 +192,80 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                   </button>
 
                   {/* Item 2 - Controle de Estoque */}
-                  <button 
-                    onClick={() => { onNavigate('inventory'); setGridMenuOpen(false); }}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
-                  >
-                    <Archive className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Controle de<br />Estoque</span>
-                  </button>
+                  {(() => {
+                    const isInventoryDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('inventory');
+                    return (
+                      <button 
+                        disabled={isInventoryDisabled}
+                        onClick={() => { onNavigate('inventory'); setGridMenuOpen(false); }}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
+                          isInventoryDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
+                            : 'hover:bg-gray-50 hover:border-gray-200'
+                        }`}
+                      >
+                        <Archive className="text-gray-400 shrink-0" size={24} />
+                        <span className={`text-sm font-medium leading-tight ${isInventoryDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Controle de<br />Estoque</span>
+                      </button>
+                    );
+                  })()}
 
                   {/* Item 3 - Campanhas */}
-                  <button 
-                    onClick={() => { onNavigate('campaigns'); setGridMenuOpen(false); }}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
-                  >
-                    <MessageSquareIcon className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Campanhas<br />automáticas</span>
-                  </button>
+                  {(() => {
+                    const isCampaignsDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('campaigns');
+                    return (
+                      <button 
+                        disabled={isCampaignsDisabled}
+                        onClick={() => { onNavigate('campaigns'); setGridMenuOpen(false); }}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
+                          isCampaignsDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
+                            : 'hover:bg-gray-50 hover:border-gray-200'
+                        }`}
+                      >
+                        <MessageSquareIcon className="text-gray-400 shrink-0" size={24} />
+                        <span className={`text-sm font-medium leading-tight ${isCampaignsDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Campanhas<br />automáticas</span>
+                      </button>
+                    );
+                  })()}
 
                   {/* Item 4 - Galeria */}
-                  <button 
-                    onClick={() => { onNavigate('gallery'); setGridMenuOpen(false); }}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
-                  >
-                    <ImageIcon className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Galeria de<br />Fotos</span>
-                  </button>
+                  {(() => {
+                    const isGalleryDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('gallery');
+                    return (
+                      <button 
+                        disabled={isGalleryDisabled}
+                        onClick={() => { onNavigate('gallery'); setGridMenuOpen(false); }}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
+                          isGalleryDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
+                            : 'hover:bg-gray-50 hover:border-gray-200'
+                        }`}
+                      >
+                        <ImageIcon className="text-gray-400 shrink-0" size={24} />
+                        <span className={`text-sm font-medium leading-tight ${isGalleryDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Galeria de<br />Fotos</span>
+                      </button>
+                    );
+                  })()}
 
                   {/* Item 5 - Controle de Prótese */}
-                  <button 
-                    onClick={() => { onNavigate('prosthesis-control'); setGridMenuOpen(false); }}
-                    className="flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 hover:border-gray-200 transition-all text-left"
-                  >
-                    <Stethoscope className="text-gray-400 shrink-0" size={24} />
-                    <span className="text-sm font-medium text-gray-700 leading-tight">Controle de<br />Prótese</span>
-                  </button>
+                  {(() => {
+                    const isProsthesisDisabled = subUserRole !== 'admin' && subUserPermissions && !subUserPermissions.includes('prosthesis-control');
+                    return (
+                      <button 
+                        disabled={isProsthesisDisabled}
+                        onClick={() => { onNavigate('prosthesis-control'); setGridMenuOpen(false); }}
+                        className={`flex items-center space-x-3 p-3 rounded-lg border border-gray-100 bg-white transition-all text-left ${
+                          isProsthesisDisabled
+                            ? 'opacity-40 cursor-not-allowed bg-gray-50/50'
+                            : 'hover:bg-gray-50 hover:border-gray-200'
+                        }`}
+                      >
+                        <Stethoscope className="text-gray-400 shrink-0" size={24} />
+                        <span className={`text-sm font-medium leading-tight ${isProsthesisDisabled ? 'text-gray-300' : 'text-gray-700'}`}>Controle de<br />Prótese</span>
+                      </button>
+                    );
+                  })()}
                 </div>
                 </div>
               </>
@@ -269,9 +311,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             className="flex items-center space-x-2 border border-gray-200 rounded-full px-3 py-1.5 hover:bg-gray-50 transition-colors"
           >
             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase ${
-              subUserRole === 'admin' ? 'bg-blue-600' : subUserRole === 'gestor' ? 'bg-emerald-600' : 'bg-amber-500'
+              subUserRole === 'admin' ? 'bg-blue-600' : subUserRole === 'gestor' ? 'bg-emerald-600' : subUserRole === 'concierge' ? 'bg-amber-500' : 'bg-purple-600'
             }`}>
-              {subUserRole ? subUserRole.substring(0, 2) : 'US'}
+              {subUserName ? subUserName.substring(0, 2) : (subUserRole ? subUserRole.substring(0, 2) : 'US')}
             </div>
             <span className="text-sm font-medium text-gray-700">Conta</span>
             <ChevronDown size={16} className="text-gray-400" />
@@ -284,9 +326,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
                 <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Perfil ativo</p>
                   <p className={`text-xs font-bold ${
-                    subUserRole === 'admin' ? 'text-blue-600' : subUserRole === 'gestor' ? 'text-emerald-600' : 'text-amber-600'
+                    subUserRole === 'admin' ? 'text-blue-600' : subUserRole === 'gestor' ? 'text-emerald-600' : subUserRole === 'concierge' ? 'text-amber-600' : 'text-purple-600'
                   }`}>
-                    {subUserRole === 'admin' ? 'Administrador' : subUserRole === 'gestor' ? 'Gestor' : 'Concierge'}
+                    {subUserName || (subUserRole === 'admin' ? 'Administrador' : subUserRole === 'gestor' ? 'Gestor' : subUserRole === 'concierge' ? 'Concierge' : subUserRole)}
                   </p>
                   <p className="text-[10px] text-gray-500 truncate mt-1">{userEmail}</p>
                 </div>

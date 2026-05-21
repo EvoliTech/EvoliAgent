@@ -21,12 +21,14 @@ import {
    Headphones,
    Eye,
    EyeOff,
-   Loader2
+   Loader2,
+   Stethoscope,
+   User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
-import { userService, UserProfile, subUserService } from '../services/userService';
+import { userService, subUserService, SubUserProfile } from '../services/userService';
 import { Modal } from './ui/Modal';
 import { useCompany } from '../contexts/CompanyContext';
 import { companyService, CompanySettings } from '../services/companyService';
@@ -35,6 +37,79 @@ import { AlertModal } from './ui/AlertModal';
 import { logService } from '../services/logService';
 
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
+
+const iconConfig: Record<string, { icon: React.ComponentType<any>; bgColor: string; borderColor: string; textColor: string; colorClass: string; iconColor: string }> = {
+  crown: {
+    icon: Crown,
+    bgColor: 'bg-blue-50/20',
+    borderColor: 'border-blue-100',
+    textColor: 'text-blue-700',
+    colorClass: 'bg-blue-600/10 text-blue-400 border-blue-500/30 group-hover:border-blue-400 group-hover:bg-blue-600/20 group-hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]',
+    iconColor: 'text-blue-500 group-hover:scale-110 transition-transform'
+  },
+  briefcase: {
+    icon: Briefcase,
+    bgColor: 'bg-emerald-50/20',
+    borderColor: 'border-emerald-100',
+    textColor: 'text-emerald-700',
+    colorClass: 'bg-emerald-600/10 text-emerald-400 border-emerald-500/30 group-hover:border-emerald-400 group-hover:bg-emerald-600/20 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]',
+    iconColor: 'text-emerald-500 group-hover:scale-110 transition-transform'
+  },
+  headphones: {
+    icon: Headphones,
+    bgColor: 'bg-amber-50/20',
+    borderColor: 'border-amber-100',
+    textColor: 'text-amber-700',
+    colorClass: 'bg-amber-600/10 text-amber-400 border-amber-500/30 group-hover:border-amber-400 group-hover:bg-amber-600/20 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]',
+    iconColor: 'text-amber-500 group-hover:scale-110 transition-transform'
+  },
+  stethoscope: {
+     icon: Stethoscope,
+     bgColor: 'bg-rose-50/20',
+     borderColor: 'border-rose-100',
+     textColor: 'text-rose-700',
+     colorClass: 'bg-rose-600/10 text-rose-400 border-rose-500/30 group-hover:border-rose-400 group-hover:bg-rose-600/20 group-hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]',
+     iconColor: 'text-rose-500 group-hover:scale-110 transition-transform'
+  },
+  user: {
+     icon: User,
+     bgColor: 'bg-purple-50/20',
+     borderColor: 'border-purple-100',
+     textColor: 'text-purple-700',
+     colorClass: 'bg-purple-600/10 text-purple-400 border-purple-500/30 group-hover:border-purple-400 group-hover:bg-purple-600/20 group-hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]',
+     iconColor: 'text-purple-500 group-hover:scale-110 transition-transform'
+  },
+  shield: {
+     icon: Shield,
+     bgColor: 'bg-cyan-50/20',
+     borderColor: 'border-cyan-100',
+     textColor: 'text-cyan-700',
+     colorClass: 'bg-cyan-600/10 text-cyan-400 border-cyan-500/30 group-hover:border-cyan-400 group-hover:bg-cyan-600/20 group-hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]',
+     iconColor: 'text-cyan-500 group-hover:scale-110 transition-transform'
+  }
+};
+
+const permissionOptions = [
+  { key: 'agenda', label: 'Agenda' },
+  { key: 'appointments', label: 'Agendamentos' },
+  { key: 'patients', label: 'Pacientes' },
+  { key: 'financeiro', label: 'Financeiro' },
+  { key: 'campaigns', label: 'Campanhas' },
+  { key: 'inventory', label: 'Estoque' },
+  { key: 'gallery', label: 'Galeria' },
+  { key: 'prosthesis-control', label: 'Controle de Prótese' },
+  { key: 'integrations', label: 'Integrações' },
+  { key: 'security', label: 'Segurança & Acessos' }
+];
+
+const iconChoices: { key: 'crown' | 'briefcase' | 'headphones' | 'stethoscope' | 'user' | 'shield'; icon: React.ComponentType<any>; label: string }[] = [
+  { key: 'crown', icon: Crown, label: 'Coroa' },
+  { key: 'briefcase', icon: Briefcase, label: 'Maleta' },
+  { key: 'headphones', icon: Headphones, label: 'Fone' },
+  { key: 'stethoscope', icon: Stethoscope, label: 'Estetoscópio' },
+  { key: 'user', icon: User, label: 'Usuário' },
+  { key: 'shield', icon: Shield, label: 'Escudo' }
+];
 
 interface ClinicSettingsProps {
    initialTab?: TabType;
@@ -92,29 +167,19 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
    });
 
    // Security & Access states
-   const [users, setUsers] = useState<UserProfile[]>([]);
-   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-   const [currentUser, setCurrentUser] = useState<Partial<UserProfile>>({
-      role: 'user',
-      can_create: false,
-      can_edit: false,
-      can_delete: false
-   });
-    const [isAdminLoading, setIsAdminLoading] = useState(true);
-    
-    // Sub-users profile password management states
-    const [subUserPasswords, setSubUserPasswords] = useState<{ admin: string; gestor: string | null; concierge: string | null }>({
-       admin: '',
-       gestor: null,
-       concierge: null
-    });
-    const [showSubPass, setShowSubPass] = useState({
-       admin: false,
-       gestor: false,
-       concierge: false
-    });
-    const [savingSubUsers, setSavingSubUsers] = useState(false);
-    const [subUserStatus, setSubUserStatus] = useState('');
+   const [adminEmail, setAdminEmail] = useState('');
+   const [profiles, setProfiles] = useState<Record<string, SubUserProfile>>({});
+   const [showSubPass, setShowSubPass] = useState<Record<string, boolean>>({});
+
+
+   // Profile Modal states
+   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+   const [editingProfile, setEditingProfile] = useState<SubUserProfile | null>(null);
+   const [profileName, setProfileName] = useState('');
+   const [profilePassword, setProfilePassword] = useState('');
+   const [profileIcon, setProfileIcon] = useState<'crown' | 'briefcase' | 'headphones' | 'stethoscope' | 'user' | 'shield'>('user');
+   const [profilePermissions, setProfilePermissions] = useState<string[]>([]);
+   const [showModalPassword, setShowModalPassword] = useState(false);
    const [alertConfig, setAlertConfig] = useState<{
       isOpen: boolean;
       title: string;
@@ -223,32 +288,12 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
    const loadUsers = async () => {
       if (!empresaId) return;
       try {
-         const data = await userService.fetchUsers(empresaId);
          const { data: { user } } = await supabase.auth.getUser();
-
          if (user?.email) {
-            const adminIdx = data.findIndex(u => u.email === user.email && u.role === 'admin');
-            if (adminIdx === -1) {
-               const adminProfile: UserProfile = {
-                  id: user.id,
-                  email: user.email,
-                  name: user.user_metadata?.full_name || 'Administrador',
-                  role: 'admin',
-                  can_create: true,
-                  can_edit: true,
-                  can_delete: true
-               };
-               setUsers([adminProfile, ...data]);
-            } else {
-               setUsers(data);
-            }
-         } else {
-            setUsers(data);
+            setAdminEmail(user.email);
          }
       } catch (error) {
-         console.error('Failed to load users', error);
-      } finally {
-         setIsAdminLoading(false);
+         console.error('Failed to load admin email', error);
       }
    };
 
@@ -256,94 +301,83 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       if (!empresaId) return;
       try {
          const data = await subUserService.getSubUsers(empresaId);
-         setSubUserPasswords({
-            admin: data.admin?.password || 'admin',
-            gestor: data.gestor ? data.gestor.password : null,
-            concierge: data.concierge ? data.concierge.password : null
-         });
+         setProfiles(data);
       } catch (err) {
-         console.error('Erro ao carregar senhas:', err);
+         console.error('Erro ao carregar perfis:', err);
       }
    };
 
-   const handleSaveSubUsers = async () => {
-      if (!empresaId) return;
-      setSavingSubUsers(true);
-      setSubUserStatus('');
-      try {
-         const config: Record<string, { password: string }> = {
-            admin: { password: subUserPasswords.admin }
-         };
-         if (subUserPasswords.gestor !== null) {
-            config.gestor = { password: subUserPasswords.gestor };
-         }
-         if (subUserPasswords.concierge !== null) {
-            config.concierge = { password: subUserPasswords.concierge };
-         }
-         await subUserService.saveSubUsers(empresaId, config);
-         setSubUserStatus('Senhas dos perfis salvas com sucesso!');
-         setTimeout(() => setSubUserStatus(''), 3000);
-      } catch (err: any) {
-         console.error('Erro ao salvar senhas dos perfis:', err);
-         setSubUserStatus('Erro ao salvar senhas: ' + err.message);
-      } finally {
-         setSavingSubUsers(false);
-      }
-   };
 
-   const handleOpenUserModal = (user?: UserProfile) => {
-      if (user) {
-         setCurrentUser({ ...user });
+
+   const handleOpenProfileModal = (profile?: SubUserProfile) => {
+      if (profile) {
+         setEditingProfile(profile);
+         setProfileName(profile.name);
+         setProfilePassword(profile.password);
+         setProfileIcon(profile.icon);
+         setProfilePermissions(profile.permissions);
       } else {
-         setCurrentUser({
-            name: '',
-            role: 'user',
-            can_create: false,
-            can_edit: false,
-            can_delete: false
-         });
+         setEditingProfile(null);
+         setProfileName('');
+         setProfilePassword('');
+         setProfileIcon('user');
+         setProfilePermissions(['agenda', 'appointments', 'patients']); // reasonable defaults
       }
-      setIsUserModalOpen(true);
+      setShowModalPassword(false);
+      setIsProfileModalOpen(true);
    };
 
-   const handleSaveUser = async () => {
-      if (!empresaId) return;
-
-      try {
-         if (currentUser.id) {
-            await userService.updateUser(empresaId, currentUser.id, {
-               ...currentUser,
-               name: currentUser.name
-            });
-         } else {
-            if (!currentUser.name) {
-               showAlert('Campo Obrigatório', 'Por favor, insira o título/nome do usuário.', 'warning');
-               return;
-            }
-            await userService.createUser(empresaId, currentUser);
-         }
-         setIsUserModalOpen(false);
-         loadUsers();
-         showAlert('Sucesso', 'Usuário salvo com sucesso!', 'success');
-      } catch (error: any) {
-         showAlert('Erro', 'Erro ao salvar usuário: ' + error.message, 'error');
+   const handleSaveProfile = () => {
+      if (!profileName.trim()) {
+         showAlert('Campo Obrigatório', 'Por favor, insira o nome do perfil.', 'warning');
+         return;
       }
+      if (!profilePassword.trim()) {
+         showAlert('Campo Obrigatório', 'Por favor, insira a senha do perfil.', 'warning');
+         return;
+      }
+
+      const newProfiles = { ...profiles };
+      if (editingProfile) {
+         // Editing existing
+         newProfiles[editingProfile.id] = {
+            ...editingProfile,
+            name: profileName,
+            password: profilePassword,
+            icon: profileIcon,
+            permissions: editingProfile.id === 'admin' ? newProfiles.admin.permissions : profilePermissions
+         };
+      } else {
+         // Creating new
+         const id = 'profile_' + Date.now();
+         newProfiles[id] = {
+            id,
+            name: profileName,
+            password: profilePassword,
+            icon: profileIcon,
+            permissions: profilePermissions
+         };
+      }
+
+      setProfiles(newProfiles);
+      setIsProfileModalOpen(false);
+      showAlert('Sucesso', 'Perfil atualizado localmente! Clique em "Salvar Senhas dos Perfis" ou "Salvar Alterações" no topo para persistir no banco de dados.', 'success');
    };
 
-   const handleDeleteUser = async (id: string) => {
+   const handleDeleteProfile = (id: string) => {
+      if (id === 'admin') {
+         showAlert('Erro', 'O perfil Administrador não pode ser excluído.', 'error');
+         return;
+      }
       showAlert(
          'Confirmar Exclusão',
-         'Tem certeza que deseja excluir este usuário?',
+         `Tem certeza que deseja excluir o perfil "${profiles[id]?.name}"?`,
          'confirm',
-         async () => {
-            if (!empresaId) return;
-            try {
-               await userService.deleteUser(empresaId, id);
-               loadUsers();
-               showAlert('Excluído', 'Usuário removido com sucesso!', 'success');
-            } catch (error: any) {
-               showAlert('Erro', error.message, 'error');
-            }
+         () => {
+            const newProfiles = { ...profiles };
+            delete newProfiles[id];
+            setProfiles(newProfiles);
+            showAlert('Excluído', 'Perfil removido! Clique em "Salvar Alterações" no topo para salvar definitivamente.', 'success');
          }
       );
    };
@@ -586,18 +620,19 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       }
    };
 
-   const saveConfigs = async () => {
-      if (!empresaId) return;
-      setIsSaving(true);
-      try {
-         await companyService.updateCompany(empresaId, company);
-         showAlert('Sucesso', 'Configurações salvas com sucesso!', 'success');
-      } catch (error: any) {
-         showAlert('Erro', 'Erro ao salvar as configurações: ' + error.message, 'error');
-      } finally {
-         setIsSaving(false);
-      }
-   };
+    const saveConfigs = async () => {
+       if (!empresaId) return;
+       setIsSaving(true);
+       try {
+          await companyService.updateCompany(empresaId, company);
+          await subUserService.saveSubUsers(empresaId, profiles);
+          showAlert('Sucesso', 'Configurações e perfis salvos com sucesso!', 'success');
+       } catch (error: any) {
+          showAlert('Erro', 'Erro ao salvar as configurações: ' + error.message, 'error');
+       } finally {
+          setIsSaving(false);
+       }
+    };
 
    const renderContent = () => {
       switch (activeTab) {
@@ -818,239 +853,131 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="flex justify-between items-end">
                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">Usuários e Permissões</h3>
-                        <p className="text-sm text-gray-500">Gerencie quem pode acessar o sistema.</p>
+                        <h3 className="text-lg font-bold text-gray-900">Usuários e Permissões</h3>
+                        <p className="text-sm text-gray-500">Gerencie a conta principal da clínica.</p>
                      </div>
-                     <button onClick={() => handleOpenUserModal()} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-all">
-                        <Plus size={16} /> Novo Usuário
+                     <button onClick={() => handleOpenProfileModal()} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700 transition-all shadow-sm">
+                        <Plus size={16} /> Novo Perfil
                      </button>
                   </div>
-                  <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+                  
+                  {/* Static Clinic Owner Row Table */}
+                  <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                      <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
-                           <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              <th className="px-6 py-3">Usuário</th>
-                              <th className="px-6 py-3">Função</th>
-                              <th className="px-6 py-3">Permissões</th>
-                              <th className="px-6 py-3 text-right">Ações</th>
+                           <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-4">Usuário</th>
+                              <th className="px-6 py-4">Função</th>
+                              <th className="px-6 py-4">Permissões</th>
                            </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                           {users.map(user => (
-                              <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                       <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold mr-3 ${user.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                          {(user.name || 'U')[0].toUpperCase()}
-                                       </div>
-                                       <div>
-                                          <div className="text-sm font-bold">{user.name}</div>
-                                          {user.email && <div className="text-xs text-gray-500">{user.email}</div>}
-                                       </div>
+                           <tr className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                 <div className="flex items-center">
+                                    <div className="h-10 w-10 rounded-full flex items-center justify-center font-bold mr-3 bg-blue-100 text-blue-700">
+                                       {(company.nome || 'C')[0].toUpperCase()}
                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700'}`}>
-                                       {user.role === 'admin' ? 'Admin' : 'Usuário'}
-                                    </span>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                    <div className="flex gap-1">
-                                       {user.role === 'admin' ? (
-                                          <span className="text-[10px] uppercase font-bold text-blue-600">Acesso Total</span>
-                                       ) : (
-                                          <>
-                                             {user.can_create && <span className="text-[10px] bg-green-50 text-green-700 px-1 border border-green-100 rounded">Criar</span>}
-                                             {user.can_edit && <span className="text-[10px] bg-blue-50 text-blue-700 px-1 border border-blue-100 rounded">Editar</span>}
-                                             {user.can_delete && <span className="text-[10px] bg-red-50 text-red-700 px-1 border border-red-100 rounded">Excluir</span>}
-                                          </>
-                                       )}
+                                    <div>
+                                       <div className="text-sm font-bold text-gray-800">{company.nome || 'Minha Clínica'}</div>
+                                       {adminEmail && <div className="text-xs text-gray-500">{adminEmail}</div>}
                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                    <button onClick={() => handleOpenUserModal(user)} className="text-blue-600 hover:underline mr-4 text-sm font-bold">Editar</button>
-                                    {user.role !== 'admin' && (
-                                       <button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16} className="inline" /></button>
-                                    )}
-                                 </td>
-                              </tr>
-                           ))}
+                                 </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                    Administrador Principal
+                                 </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                 <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2.5 py-1 border border-blue-100 rounded">Acesso Total</span>
+                              </td>
+                           </tr>
                         </tbody>
                      </table>
                   </div>
 
-                  {/* Gestão de Senhas dos Perfis (Admin e Gestor) */}
+                  {/* Gestão de Senhas dos Perfis Dinâmicos */}
                   {(subUserRole === 'admin' || subUserRole === 'gestor') && (
                      <div className="pt-8 border-t border-gray-100 space-y-6">
                         <div>
                            <h3 className="text-lg font-bold text-gray-900">Senhas de Acesso dos Perfis</h3>
-                           <p className="text-sm text-gray-500">Configure as senhas para a tela de seleção de perfis (Administrador, Gestor e Concierge).</p>
+                           <p className="text-sm text-gray-500">Configure as senhas e as permissões de acesso para os perfis na tela de seleção.</p>
                         </div>
                         
-                        {subUserStatus && (
-                           <div className={`p-3 rounded-xl text-center text-xs font-semibold border ${
-                              subUserStatus.includes('sucesso') 
-                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                 : 'bg-red-50 border-red-200 text-red-700'
-                           }`}>
-                              {subUserStatus}
-                           </div>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           {/* Profile 1: Admin */}
-                           <div className="p-5 rounded-2xl border border-blue-100 bg-blue-50/20 space-y-3 flex flex-col justify-between">
-                              <div className="space-y-3">
-                                 <div className="flex items-center gap-2 text-blue-700 font-bold text-sm">
-                                    <Crown size={16} />
-                                    <span>Administrador</span>
-                                 </div>
-                                 <div className="relative">
-                                    <input
-                                       type={showSubPass.admin ? 'text' : 'password'}
-                                       required
-                                       disabled={subUserRole !== 'admin'}
-                                       value={subUserRole === 'admin' ? subUserPasswords.admin : '••••••••'}
-                                       onChange={e => setSubUserPasswords({ ...subUserPasswords, admin: e.target.value })}
-                                       className="w-full bg-white disabled:bg-gray-100/50 border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10 disabled:cursor-not-allowed"
-                                       placeholder="Senha"
-                                    />
-                                    {subUserRole === 'admin' && (
-                                       <button
-                                          type="button"
-                                          onClick={() => setShowSubPass({ ...showSubPass, admin: !showSubPass.admin })}
-                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                                       >
-                                          {showSubPass.admin ? <EyeOff size={16} /> : <Eye size={16} />}
-                                       </button>
-                                    )}
-                                 </div>
-                              </div>
-                              <p className="text-[11px] text-gray-500 leading-normal">
-                                 {subUserRole === 'admin' 
-                                    ? 'Controle total do sistema e gestão das senhas dos perfis.' 
-                                    : 'Apenas o Administrador pode visualizar ou alterar esta senha.'}
-                              </p>
-                           </div>
-
-                           {/* Profile 2: Gestor */}
-                           {subUserPasswords.gestor !== null ? (
-                              <div className="p-5 rounded-2xl border border-emerald-100 bg-emerald-50/20 space-y-3 flex flex-col justify-between">
-                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                       <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
-                                          <Briefcase size={16} />
-                                          <span>Gestor</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                           {Object.values(profiles).map(profile => {
+                              const config = iconConfig[profile.icon] || iconConfig.user;
+                              const Icon = config.icon;
+                              const showPasswordText = !!showSubPass[profile.id];
+                              
+                              return (
+                                 <div 
+                                    key={profile.id} 
+                                    className={`p-5 rounded-2xl border ${config.borderColor} ${config.bgColor} space-y-4 flex flex-col justify-between hover:shadow-md transition-all duration-350 group`}
+                                 >
+                                    <div className="space-y-3">
+                                       <div className="flex items-center justify-between">
+                                          <div className={`flex items-center gap-2 ${config.textColor} font-bold text-sm`}>
+                                             <Icon size={18} className="group-hover:scale-110 transition-transform duration-300" />
+                                             <span className="truncate max-w-[120px]" title={profile.name}>{profile.name}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                             <button
+                                                type="button"
+                                                onClick={() => handleOpenProfileModal(profile)}
+                                                className="text-blue-500 hover:text-blue-600 hover:bg-white/80 p-1.5 rounded-lg transition-all"
+                                                title="Editar Perfil"
+                                             >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                             </button>
+                                             {profile.id !== 'admin' && (
+                                                <button
+                                                   type="button"
+                                                   onClick={() => handleDeleteProfile(profile.id)}
+                                                   className="text-red-400 hover:text-red-600 hover:bg-white/80 p-1.5 rounded-lg transition-all"
+                                                   title="Excluir Perfil"
+                                                >
+                                                   <Trash2 size={15} />
+                                                </button>
+                                             )}
+                                          </div>
                                        </div>
-                                       <button
-                                          type="button"
-                                          onClick={() => setSubUserPasswords({ ...subUserPasswords, gestor: null })}
-                                          className="text-red-400 hover:text-red-600 transition-colors p-1"
-                                          title="Excluir Perfil"
-                                       >
-                                          <Trash2 size={16} />
-                                       </button>
-                                    </div>
-                                    <div className="relative">
-                                       <input
-                                          type={showSubPass.gestor ? 'text' : 'password'}
-                                          required
-                                          value={subUserPasswords.gestor}
-                                          onChange={e => setSubUserPasswords({ ...subUserPasswords, gestor: e.target.value })}
-                                          className="w-full bg-white border border-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10"
-                                          placeholder="Senha"
-                                       />
-                                       <button
-                                          type="button"
-                                          onClick={() => setShowSubPass({ ...showSubPass, gestor: !showSubPass.gestor })}
-                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                                       >
-                                          {showSubPass.gestor ? <EyeOff size={16} /> : <Eye size={16} />}
-                                       </button>
-                                    </div>
-                                 </div>
-                                 <p className="text-[11px] text-gray-500 leading-normal">Acesso liberado a todas as funções e clínicas.</p>
-                              </div>
-                           ) : (
-                              <button
-                                 type="button"
-                                 onClick={() => setSubUserPasswords({ ...subUserPasswords, gestor: 'gestor' })}
-                                 className="p-5 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-400 bg-emerald-50/5 hover:bg-emerald-50/10 flex flex-col items-center justify-center gap-2 transition-all min-h-[140px] text-emerald-700 font-bold"
-                              >
-                                 <Plus size={24} />
-                                 <span className="text-sm">Adicionar Perfil Gestor</span>
-                              </button>
-                           )}
-
-                           {/* Profile 3: Concierge */}
-                           {subUserPasswords.concierge !== null ? (
-                              <div className="p-5 rounded-2xl border border-amber-100 bg-amber-50/20 space-y-3 flex flex-col justify-between">
-                                 <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                       <div className="flex items-center gap-2 text-amber-700 font-bold text-sm">
-                                          <Headphones size={16} />
-                                          <span>Concierge</span>
+                                       <div className="relative">
+                                          <input
+                                             type={showPasswordText ? 'text' : 'password'}
+                                             readOnly
+                                             value={profile.password}
+                                             className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 outline-none select-all font-semibold"
+                                          />
+                                          <button
+                                             type="button"
+                                             onClick={() => setShowSubPass({ ...showSubPass, [profile.id]: !showSubPass[profile.id] })}
+                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                                          >
+                                             {showPasswordText ? <EyeOff size={15} /> : <Eye size={15} />}
+                                          </button>
                                        </div>
-                                       <button
-                                          type="button"
-                                          onClick={() => setSubUserPasswords({ ...subUserPasswords, concierge: null })}
-                                          className="text-red-400 hover:text-red-600 transition-colors p-1"
-                                          title="Excluir Perfil"
-                                       >
-                                          <Trash2 size={16} />
-                                       </button>
                                     </div>
-                                    <div className="relative">
-                                       <input
-                                          type={showSubPass.concierge ? 'text' : 'password'}
-                                          required
-                                          value={subUserPasswords.concierge}
-                                          onChange={e => setSubUserPasswords({ ...subUserPasswords, concierge: e.target.value })}
-                                          className="w-full bg-white border border-gray-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none transition-all pr-10"
-                                          placeholder="Senha"
-                                       />
-                                       <button
-                                          type="button"
-                                          onClick={() => setShowSubPass({ ...showSubPass, concierge: !showSubPass.concierge })}
-                                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
-                                       >
-                                          {showSubPass.concierge ? <EyeOff size={16} /> : <Eye size={16} />}
-                                       </button>
+                                    <div className="space-y-1 pt-2 border-t border-gray-100/50">
+                                       <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wider">Permissões ({profile.permissions.length})</p>
+                                       <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-0.5">
+                                          {profile.id === 'admin' ? (
+                                             <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">ACESSO TOTAL</span>
+                                          ) : profile.permissions.length === 0 ? (
+                                             <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-bold">NENHUMA</span>
+                                          ) : (
+                                             profile.permissions.map(perm => (
+                                                <span key={perm} className="text-[8px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                                                   {perm === 'prosthesis-control' ? 'Prótese' : perm}
+                                                </span>
+                                             ))
+                                          )}
+                                       </div>
                                     </div>
                                  </div>
-                                 <p className="text-[11px] text-gray-500 leading-normal">Recepção e atendimento. Menu Financeiro e Integrações bloqueados.</p>
-                              </div>
-                           ) : (
-                              <button
-                                 type="button"
-                                 onClick={() => setSubUserPasswords({ ...subUserPasswords, concierge: 'concierge' })}
-                                 className="p-5 rounded-2xl border-2 border-dashed border-amber-300 hover:border-amber-400 bg-amber-50/5 hover:bg-amber-50/10 flex flex-col items-center justify-center gap-2 transition-all min-h-[140px] text-amber-700 font-bold"
-                              >
-                                 <Plus size={24} />
-                                 <span className="text-sm">Adicionar Perfil Concierge</span>
-                              </button>
-                           )}
-                        </div>
-
-                        <div className="flex justify-end pt-2">
-                           <button
-                              type="button"
-                              onClick={handleSaveSubUsers}
-                              disabled={savingSubUsers}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                           >
-                              {savingSubUsers ? (
-                                 <>
-                                    <Loader2 size={16} className="animate-spin" />
-                                    <span>Salvando...</span>
-                                 </>
-                              ) : (
-                                 <>
-                                    <Save size={16} />
-                                    <span>Salvar Senhas dos Perfis</span>
-                                 </>
-                              )}
-                           </button>
+                              );
+                           })}
                         </div>
                      </div>
                   )}
@@ -1058,12 +985,12 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                   {/* Password Security Section */}
                   <div className="mt-12 bg-gray-50 rounded-3xl p-8 border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6">
                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-gray-100">
                            <Lock size={24} />
                         </div>
                         <div>
                            <h3 className="text-lg font-bold text-gray-900">Segurança da Conta</h3>
-                           <p className="text-sm text-gray-500">Deseja alterar sua senha? Enviaremos um link de confirmação para o seu e-mail.</p>
+                           <p className="text-sm text-gray-500">Deseja alterar a senha da conta master? Enviaremos um link de confirmação para o seu e-mail.</p>
                         </div>
                      </div>
                      <button
@@ -1137,33 +1064,113 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
             </main>
          </div>
 
-         <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={currentUser.id ? "Editar Usuário" : "Novo Usuário"}>
+         <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title={editingProfile ? "Editar Perfil de Acesso" : "Criar Novo Perfil de Acesso"}>
             <div className="space-y-6">
                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Título/Nome <span className="text-red-500">*</span></label>
-                  <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500" value={currentUser.name || ''} onChange={e => setCurrentUser({ ...currentUser, name: e.target.value })} />
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Nome do Perfil <span className="text-red-500">*</span></label>
+                  <input 
+                     type="text" 
+                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold" 
+                     value={profileName} 
+                     onChange={e => setProfileName(e.target.value)} 
+                     disabled={editingProfile?.id === 'admin'}
+                     placeholder="Ex: Recepcionista, Dr. João, etc."
+                  />
+                  {editingProfile?.id === 'admin' && (
+                     <p className="text-[10px] text-gray-400 mt-1">O nome do perfil administrador master não pode ser alterado.</p>
+                  )}
                </div>
-               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-4">
-                  <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest"><Shield size={16} className="text-blue-600" /> Permissões</h4>
-                  <div className="space-y-3">
-                     {[
-                        { key: 'can_create' as const, label: 'Pode Criar', icon: Plus },
-                        { key: 'can_edit' as const, label: 'Pode Editar', icon: RefreshCw },
-                        { key: 'can_delete' as const, label: 'Pode Excluir', icon: Trash2 }
-                     ].map(p => (
-                        <label key={p.key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 cursor-pointer">
-                           <div className="flex items-center gap-3">
-                              <p.icon size={16} className="text-gray-400" />
-                              <span className="text-sm font-bold">{p.label}</span>
-                           </div>
-                           <input type="checkbox" disabled={currentUser.role === 'admin'} checked={currentUser.role === 'admin' ? true : !!currentUser[p.key]} onChange={e => setCurrentUser({ ...currentUser, [p.key]: e.target.checked })} className="w-5 h-5 text-blue-600 rounded" />
-                        </label>
-                     ))}
+
+               <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Senha de Acesso <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                     <input 
+                        type={showModalPassword ? 'text' : 'password'} 
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold pr-10" 
+                        value={profilePassword} 
+                        onChange={e => setProfilePassword(e.target.value)} 
+                        placeholder="Digite a senha de acesso"
+                     />
+                     <button
+                        type="button"
+                        onClick={() => setShowModalPassword(!showModalPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                     >
+                        {showModalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                     </button>
                   </div>
                </div>
-               <div className="flex gap-4 pt-4">
-                  <button onClick={() => setIsUserModalOpen(false)} className="flex-1 px-4 py-3 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
-                  <button onClick={handleSaveUser} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-100">Salvar</button>
+
+               <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Escolha um Ícone Visual</label>
+                  <div className="grid grid-cols-6 gap-2">
+                     {iconChoices.map(choice => {
+                        const IconComponent = choice.icon;
+                        const isSelected = profileIcon === choice.key;
+                        const isChoiceDisabled = editingProfile?.id === 'admin' && choice.key !== 'crown';
+                        return (
+                           <button
+                              key={choice.key}
+                              type="button"
+                              disabled={isChoiceDisabled}
+                              onClick={() => setProfileIcon(choice.key)}
+                              title={choice.label}
+                              className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all
+                                 ${isSelected 
+                                    ? 'bg-blue-600/10 border-blue-500 text-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.2)]' 
+                                    : isChoiceDisabled
+                                       ? 'opacity-30 cursor-not-allowed border-gray-105 text-gray-300'
+                                       : 'border-gray-200 text-gray-500 hover:border-blue-200 hover:bg-gray-50 hover:text-blue-500'
+                                 }`}
+                           >
+                              <IconComponent size={20} />
+                           </button>
+                        );
+                     })}
+                  </div>
+                  {editingProfile?.id === 'admin' && (
+                     <p className="text-[10px] text-gray-400 mt-1">O ícone do perfil administrador master é fixo como Coroa.</p>
+                  )}
+               </div>
+
+               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-4">
+                  <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-gray-700">
+                     <Shield size={16} className="text-blue-600" /> Permissões de Acesso
+                  </h4>
+                  
+                  {editingProfile?.id === 'admin' ? (
+                     <div className="p-3 bg-blue-50/50 border border-blue-100 text-blue-700 rounded-xl text-xs font-semibold leading-relaxed">
+                        Este é o perfil administrador orquestrador e sempre possui acesso total e irrestrito a todas as funcionalidades e telas do aplicativo.
+                     </div>
+                  ) : (
+                     <div className="grid grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                        {permissionOptions.map(p => {
+                           const isChecked = profilePermissions.includes(p.key);
+                           return (
+                              <label key={p.key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-blue-100 cursor-pointer select-none transition-all">
+                                 <span className="text-xs font-bold text-gray-700">{p.label}</span>
+                                 <input 
+                                    type="checkbox" 
+                                    checked={isChecked} 
+                                    onChange={e => {
+                                       if (e.target.checked) {
+                                          setProfilePermissions([...profilePermissions, p.key]);
+                                       } else {
+                                          setProfilePermissions(profilePermissions.filter(k => k !== p.key));
+                                       }
+                                    }}
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition-all" 
+                                 />
+                              </label>
+                           );
+                        })}
+                     </div>
+                  )}
+               </div>
+
+               <div className="flex gap-4 pt-4 border-t border-gray-100">
+                  <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 px-4 py-3 border rounded-xl font-bold text-gray-600 hover:bg-gray-50 text-sm transition-colors">Cancelar</button>
+                  <button onClick={handleSaveProfile} className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all text-sm">Salvar Perfil</button>
                </div>
             </div>
          </Modal>
