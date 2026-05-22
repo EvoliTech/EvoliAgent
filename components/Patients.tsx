@@ -290,14 +290,14 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
 
       {/* Header */}
       <PageHeader
         title="Pacientes"
         subtitle="Lista sincronizada de clientes."
       >
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`
@@ -358,7 +358,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 hidden md:block">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -513,6 +513,47 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card List */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
+            <p className="text-gray-500">Sincronizando com Supabase...</p>
+          </div>
+        ) : filteredPatients.length > 0 ? (
+          filteredPatients.map((patient) => (
+            <div
+              key={patient.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 active:bg-gray-50 transition-colors cursor-pointer"
+              onClick={() => handleSelectPatient(patient)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase text-sm shrink-0">
+                  {patient.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{patient.name}</p>
+                    <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded-full shrink-0 ${patient.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {patient.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                    <Phone size={12} className="text-gray-400" />
+                    <span>{patient.phone ? patient.phone.replace(/^55(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : 'Sem telefone'}</span>
+                  </div>
+                  {patient.plano && (
+                    <p className="text-xs text-gray-400 mt-0.5">Plano: {patient.plano}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-10 text-gray-500">Nenhum paciente encontrado.</div>
+        )}
       </div>
 
       {/* Create Patient Modal */}

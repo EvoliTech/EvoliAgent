@@ -19,7 +19,8 @@ import {
   MessageCircle,
   CircleDollarSign,
   X,
-  Stethoscope
+  Stethoscope,
+  Menu
 } from 'lucide-react';
 import { PageType } from '../../types';
 import { patientService } from '../../services/patientService';
@@ -35,10 +36,12 @@ interface TopHeaderProps {
   subUserRole: string;
   subUserPermissions?: string[];
   subUserName?: string;
+  subUserName?: string;
   userEmail?: string;
+  onMenuClick?: () => void;
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, onSwitchProfile, subUserRole, subUserPermissions, subUserName, userEmail }) => {
+export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, onLogout, onSwitchProfile, subUserRole, subUserPermissions, subUserName, userEmail, onMenuClick }) => {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [gridMenuOpen, setGridMenuOpen] = useState(false);
   const { empresaId } = useCompany();
@@ -112,8 +115,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
   // Navegação movida para o Sidebar
 
   return (
-    <header className="h-16 glass border-b border-gray-200/50 flex items-center justify-end px-4 sm:px-6 flex-shrink-0 z-10 w-full sticky top-0">
-      <div className="flex-1"></div>
+    <header className="h-16 glass border-b border-gray-200/50 flex items-center justify-between px-4 sm:px-6 flex-shrink-0 z-10 w-full sticky top-0">
+      <div className="flex items-center md:hidden">
+        {onMenuClick && (
+          <button onClick={onMenuClick} className="p-2 -ml-2 text-gray-600 hover:text-indigo-600 hover:bg-white/50 rounded-lg transition-all">
+            <Menu size={24} />
+          </button>
+        )}
+      </div>
+      <div className="hidden md:block flex-1"></div>
 
       {/* Right Side Icons & Account */}
       <div className="flex items-center space-x-4">

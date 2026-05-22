@@ -157,18 +157,18 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
    if (loading) return <div className="p-8 text-center text-gray-500">Carregando questionários...</div>;
 
    const renderList = () => (
-       <div className="flex flex-col gap-6 p-8 overflow-y-auto">
-           <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-6 p-4 md:p-8 overflow-y-auto">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 md:mb-4 gap-4">
                <div>
                    <h3 className="text-xl font-bold text-gray-800">Histórico de Anamneses</h3>
                    <p className="text-sm text-gray-500">Listagem de todas as anamneses preenchidas</p>
                </div>
                <div className="flex items-center gap-3">
-                   <button onClick={handleCopyLink} className="flex items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 shadow-sm transition-colors text-sm">
+                    <button onClick={handleCopyLink} className="flex w-full sm:w-auto justify-center items-center gap-2 px-5 py-2.5 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 shadow-sm transition-colors text-sm">
                        {copiedLink ? <Check size={16} className="text-emerald-500" /> : <Link size={16} />} 
                        {copiedLink ? 'Link Copiado!' : 'Copiar Link Externo'}
                    </button>
-                   <button onClick={() => { setIsCreating(true); setRespostas({}); setViewingAnamnese(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors text-sm">
+                    <button onClick={() => { setIsCreating(true); setRespostas({}); setViewingAnamnese(null); }} className="flex w-full sm:w-auto justify-center items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors text-sm">
                        <Plus size={16} /> Nova Anamnese
                    </button>
                </div>
@@ -243,7 +243,7 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
        
        return (
            <div className="flex flex-col h-full bg-white animate-in slide-in-from-right-4 relative">
-               <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-slate-50 rounded-t-2xl sticky top-0 z-10">
+                <div className="px-4 md:px-8 py-4 md:py-5 border-b border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 rounded-t-2xl sticky top-0 z-10">
                    <div className="flex items-center gap-4">
                       <div onClick={() => { setIsCreating(false); setViewingAnamnese(null); }} className="flex items-center gap-2 cursor-pointer text-gray-400 hover:text-gray-700 transition">
                           <ChevronLeft size={20} />
@@ -255,21 +255,21 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
                       </h2>
                    </div>
                    
-                   <div className="flex items-center gap-3">
+                   <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full md:w-auto">
                        {isReadonly && (
-                           <button onClick={() => handlePrint(viewingAnamnese.respostas)} className="flex items-center gap-2 px-5 py-2 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 shadow-sm transition-colors text-sm">
+                            <button onClick={() => handlePrint(viewingAnamnese.respostas)} className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-5 py-2 border border-gray-200 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 shadow-sm transition-colors text-sm">
                                <Printer size={16} /> Imprimir
                            </button>
                        )}
                        {!isReadonly && (
-                           <button onClick={handleSave} disabled={saving || !allAnswered} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleSave} disabled={saving || !allAnswered} className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-6 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
                                <Save size={16} /> {saving ? 'Salvando...' : 'Salvar dados'}
                            </button>
                        )}
                    </div>
                </div>
     
-               <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
+               <div className="p-4 md:p-8 overflow-y-auto flex-1 custom-scrollbar">
                    <div className="max-w-4xl mx-auto flex flex-col gap-8">
                        {!allAnswered && !isReadonly && (
                            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-xl text-sm font-medium flex items-center justify-between">
@@ -284,7 +284,7 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
                                    <label className="text-[15px] font-bold text-slate-800">{q.label} {!isReadonly && <span className="text-red-500">*</span>}</label>
                                    
                                    {q.type !== 'text_only' && (
-                                       <div className="flex items-center gap-6">
+                                       <div className="flex w-full sm:w-auto items-center gap-3 mt-2 sm:mt-0">
                                            {['Sim', 'Não', 'Não sei'].map(opt => (
                                                <label key={opt} className={`flex items-center gap-2 group ${isReadonly ? 'cursor-default opacity-80' : 'cursor-pointer'}`} onClick={() => {
                                                    if (isReadonly) return;
@@ -336,7 +336,7 @@ export const AnamneseTab = ({ empresaId, patient, onBack }: { empresaId: number,
    };
 
    return (
-       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full animate-in fade-in" style={{ height: 'calc(100vh - 150px)' }}>
+       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full animate-in fade-in" style={{ minHeight: 'calc(100vh - 150px)' }}>
            {(isCreating || viewingAnamnese) ? renderForm() : renderList()}
        </div>
    );

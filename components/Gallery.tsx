@@ -267,7 +267,7 @@ export const Gallery: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[1920px] mx-auto p-4 md:p-8 font-sans bg-gray-50 min-h-screen">
+    <div className="w-full max-w-[1920px] mx-auto p-4 md:p-8 font-sans bg-gray-50 min-h-full">
       {selectedFolder ? renderPhotosView() : renderFoldersView()}
       {renderLightBox()}
     </div>

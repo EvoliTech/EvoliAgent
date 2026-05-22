@@ -390,47 +390,43 @@ const [loading, setLoading] = useState(false);
    const currentCampId = currentCampToUseGlobal ? currentCampToUseGlobal.id : activeTab;
 
    return (
-      <div className="w-full max-w-[1920px] mx-auto p-4 md:p-8 font-sans bg-gray-50 min-h-screen flex flex-col">
-         <div className="flex items-center space-x-3 mb-8">
-            <div className="p-3 bg-indigo-100 rounded-xl">
-               <MessageCircle className="text-indigo-600 w-6 h-6" />
-            </div>
-            <div>
-               <h1 className="text-2xl font-bold text-gray-800">Central de Mensagens</h1>
-               <p className="text-sm text-gray-500 mt-1">Gerencie os alertas ativos para envio de mensagens automáticas.</p>
+      <div className="w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 font-sans bg-gray-50 min-h-full flex flex-col">
+         <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-3 mb-8">
+            <div className="flex items-center space-x-3">
+               <div className="p-3 bg-indigo-100 rounded-xl">
+                  <MessageCircle className="text-indigo-600 w-6 h-6" />
+               </div>
+               <div>
+                  <h1 className="text-2xl font-bold text-gray-800">Central de Mensagens</h1>
+                  <p className="text-sm text-gray-500 mt-1">Gerencie os alertas ativos para envio de mensagens automáticas.</p>
+               </div>
             </div>
          </div>
 
-         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col">
-            {/* Dynamic Tabs based on campaign Types */}
-            <div className="flex border-b border-gray-200 px-6 overflow-x-auto no-scrollbar">
-               {Array.from(new Set(activeCampaigns.map(c => c.type))).map(type => {
-                  const info = campaignTypesInfo.find(c => c.id === type) || { title: type, icon: MessageCircle };
-                  const Icon = info.icon;
-                  const isSelected = activeTab === type;
-                  return (
-                     <button
-                        key={type}
-                        onClick={() => handleTabChange(type as string)}
-                        className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${isSelected
-                              ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30'
-                              : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50'
-                           }`}
-                     >
-                        <Icon size={18} />
-                        {info.title}
-                     </button>
-                  );
-               })}
-
-               {activeCampaigns.length === 0 && (
-                  <div className="px-6 py-4 text-sm font-medium text-gray-400">Nenhuma campanha ativa</div>
-               )}
-
-               <div className="flex-1"></div>
+         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col p-4 md:p-6 lg:p-8">
+            {/* Missing Tabs for Message Center */}
+            <div className="flex overflow-x-auto gap-3 mb-6 pb-2 hide-scrollbar -mx-4 md:mx-0 px-4 md:px-0 relative">
+               {campaignTypesInfo.filter(type => activeCampaigns.some(c => c.type === type.id)).map(type => (
+                  <button
+                     key={type.id}
+                     onClick={() => handleTabChange(type.id)}
+                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl whitespace-nowrap text-sm font-bold transition-all shadow-sm shrink-0 border ${
+                        activeTab === type.id
+                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200'
+                           : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                     }`}
+                  >
+                     <type.icon size={18} />
+                     {type.title}
+                  </button>
+               ))}
+               {/* Seta indicativa (fade effect) no mobile para mostrar que há mais abas */}
+               <div className="md:hidden absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none flex items-center justify-end pr-1 text-gray-400">
+                  ▶
+               </div>
             </div>
 
-            <div className="p-6 flex-1 bg-slate-50/30">
+            <div className="p-4 md:p-6 flex-1 bg-slate-50/30">
                {activeCampaigns.length === 0 ? (
                   <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center">
                      <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
@@ -499,19 +495,24 @@ const [loading, setLoading] = useState(false);
                ) : (
 
                   <div className="flex flex-col h-full">
-                     <div className="mb-6 flex items-center gap-4">
-                        {activeTab !== 'aniversariantes' && (
-                           <button onClick={() => handleInstanceChange(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-4 py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all">
-                              ← Voltar
-                           </button>
-                        )}
-                        <h2 className="font-bold text-xl text-gray-800 tracking-tight">
-                           {activeTab === 'aniversariantes' ? 'Aniversariantes' : (selectedInstance ? selectedInstance.title : '')}
-                        </h2>
-                        <div className="ml-auto flex items-center bg-gray-100 rounded-lg p-1"><button onClick={() => setSubTab('prontos')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'prontos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Prontos ({patientsList.filter(p => !isPending(p.id, currentCampId)).length})</button><button onClick={() => setSubTab('pendentes')} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'pendentes' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Pendentes ({patientsList.filter(p => isPending(p.id, currentCampId)).length})</button></div>
+                     <div className="mb-6 flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex items-center gap-3 w-full md:w-auto">
+                           {activeTab !== 'aniversariantes' && (
+                              <button onClick={() => handleInstanceChange(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-3 md:px-4 py-2 md:py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all shrink-0">
+                                 ← Voltar
+                              </button>
+                           )}
+                           <h2 className="font-bold text-lg md:text-xl text-gray-800 tracking-tight truncate">
+                              {activeTab === 'aniversariantes' ? 'Aniversariantes' : (selectedInstance ? selectedInstance.title : '')}
+                           </h2>
+                        </div>
+                        <div className="w-full md:w-auto md:ml-auto flex items-center bg-gray-100 rounded-lg p-1 shrink-0">
+                           <button onClick={() => setSubTab('prontos')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'prontos' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Prontos ({patientsList.filter(p => !isPending(p.id, currentCampId)).length})</button>
+                           <button onClick={() => setSubTab('pendentes')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${subTab === 'pendentes' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Pendentes ({patientsList.filter(p => isPending(p.id, currentCampId)).length})</button>
+                        </div>
                      </div>
 
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                         {(subTab === 'prontos' ? patientsList.filter(p => !isPending(p.id, currentCampId)) : patientsList.filter(p => isPending(p.id, currentCampId))).map(patient => {
                            const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
                            const campId = campToUse ? campToUse.id : activeTab;

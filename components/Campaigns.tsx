@@ -356,7 +356,7 @@ export const Campaigns: React.FC = () => {
 
 
    return (
-      <div className="w-full max-w-[1920px] mx-auto p-4 md:p-8 font-sans bg-gray-50 flex flex-col min-h-screen">
+      <div className="w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 font-sans bg-gray-50 flex flex-col min-h-full">
          <div className="flex items-center space-x-3 mb-8">
             <div className="p-3 bg-blue-100 rounded-xl">
                <MessageSquare className="text-blue-600 w-6 h-6" />
@@ -369,19 +369,19 @@ export const Campaigns: React.FC = () => {
 
          {/* Wizard Header (Hide on Step 4 - Success) */}
          {step < 4 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-center p-4">
-               <div className="flex items-center space-x-4">
-                  <div className={`flex items-center space-x-2 ${step >= 1 ? 'text-emerald-600' : 'text-gray-400'}`}>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 flex justify-start md:justify-center p-3 md:p-4 overflow-x-auto hide-scrollbar -mx-4 md:mx-0">
+               <div className="flex items-center space-x-3 md:space-x-4 whitespace-nowrap px-4 md:px-0">
+                  <div className={`flex items-center space-x-2 shrink-0 ${step >= 1 ? 'text-emerald-600' : 'text-gray-400'}`}>
                      <CheckCircle2 className="w-5 h-5" />
                      <span className="font-semibold text-sm">Definir tipo de campanha</span>
                   </div>
-                  <div className="h-[2px] w-8 bg-gray-200" />
-                  <div className={`flex items-center space-x-2 ${step >= 2 ? (step > 2 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+                  <div className="h-[2px] w-8 bg-gray-200 shrink-0" />
+                  <div className={`flex items-center space-x-2 shrink-0 ${step >= 2 ? (step > 2 ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs text-white ${step >= 2 ? (step > 2 ? 'bg-emerald-600' : 'bg-blue-600') : 'bg-gray-300'}`}>2</div>
                      <span className="font-semibold text-sm">Definir público</span>
                   </div>
-                  <div className="h-[2px] w-8 bg-gray-200" />
-                  <div className={`flex items-center space-x-2 ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
+                  <div className="h-[2px] w-8 bg-gray-200 shrink-0" />
+                  <div className={`flex items-center space-x-2 shrink-0 ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs text-white ${step >= 3 ? 'bg-blue-600' : 'bg-gray-300'}`}>3</div>
                      <span className="font-semibold text-sm">Resumo e ativação</span>
                   </div>
@@ -391,7 +391,7 @@ export const Campaigns: React.FC = () => {
 
          {/* Step 1 */}
          {step === 1 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 flex-1">
                <h2 className="text-lg font-bold text-gray-800 mb-1">Tipo de campanha</h2>
                <p className="text-sm text-gray-500 mb-6">Selecione o modelo de campanha de marketing que você deseja enviar para seus pacientes.</p>
 
@@ -440,7 +440,7 @@ export const Campaigns: React.FC = () => {
 
          {/* Step 2 */}
          {step === 2 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col lg:flex-row gap-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 flex-1 flex flex-col lg:flex-row gap-6 md:gap-8">
                <div className="flex-1">
                   <h2 className="text-lg font-bold text-gray-800 mb-1">Definir público</h2>
                   <p className="text-sm text-gray-500 mb-6">Define o público que você deseja alcançar com a campanha de <strong>{selectedCampaignInfo?.title}</strong>.</p>
@@ -512,7 +512,7 @@ export const Campaigns: React.FC = () => {
                         )}
                      </div>
 
-                     <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
                         <div>
                            <label className="block text-xs font-semibold text-gray-500 mb-1">Plano</label>
                            <select value={plano} onChange={e => setPlano(e.target.value)} className="w-full border border-gray-300 rounded-md text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -591,12 +591,12 @@ export const Campaigns: React.FC = () => {
 
          {/* Step 3 */}
          {step === 3 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex-1 flex flex-col lg:flex-row gap-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 flex-1 flex flex-col lg:flex-row gap-6 md:gap-8">
                <div className="flex-1">
                   <h2 className="text-lg font-bold text-gray-800 mb-1">Resumo e ativação da campanha de {selectedCampaignInfo?.title}</h2>
                   <p className="text-sm text-gray-500 mb-8">Estamos quase lá! Confira se as informações estão de acordo antes de ativar a campanha. Caso precise fazer alguma alteração, você pode retornar aos passos anteriores.</p>
 
-                  <div className="grid grid-cols-2 gap-8 mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8 mb-6 md:mb-8">
                      <div className="flex gap-4">
                         <Phone className="w-6 h-6 text-emerald-500 mt-1" />
                         <div>

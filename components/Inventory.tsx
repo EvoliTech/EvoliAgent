@@ -133,9 +133,9 @@ export const Inventory: React.FC = () => {
   const hasLowStock = products.some(p => p.stock <= p.min_stock);
 
   return (
-    <div className="w-full max-w-[1920px] mx-auto p-6 md:p-8 font-sans bg-gray-50 flex flex-col">
+    <div className="w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8 font-sans bg-gray-50 flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Estoque</h1>
         <button 
           onClick={() => setIsManageModalOpen(true)}
@@ -150,7 +150,7 @@ export const Inventory: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col">
         
         {/* Tabs */}
-        <div className="flex px-6 border-b border-gray-200 mt-2">
+        <div className="flex overflow-x-auto px-4 md:px-6 border-b border-gray-200 mt-2 hide-scrollbar">
           <button
             onClick={() => handleTabChange('produtos')}
             className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors ${
@@ -174,7 +174,7 @@ export const Inventory: React.FC = () => {
         </div>
 
         {/* Tab Content */}
-        <div className="p-6 flex flex-col gap-6">
+        <div className="p-4 md:p-6 flex flex-col gap-6">
           {activeTab === 'produtos' ? (
             isLoading ? (
               <div className="flex items-center justify-center py-10">

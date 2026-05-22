@@ -755,7 +755,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
             return (
                <div className="space-y-8">
                   <div className="bg-white border rounded-xl p-6 shadow-sm">
-                     <div className="flex items-center justify-between mb-6">
+                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                         <div className="flex items-center gap-4">
                            <img className="w-10 h-10" src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" />
                            <div>
@@ -774,12 +774,12 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                         )}
                      </div>
                      {googleAccount && (
-                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center justify-between">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                            <div>
                               <p className="text-sm text-blue-900 font-medium">Sincronizar Profissionais</p>
                               <p className="text-xs text-blue-700">Importar calendários do Google como especialistas.</p>
                            </div>
-                           <button onClick={handleSyncCalendars} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                           <button onClick={handleSyncCalendars} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center w-full md:w-auto justify-center gap-2">
                               {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                               Re-sincronizar agora
                            </button>
@@ -787,7 +787,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                      )}
                   </div>
                    <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
-                     <div className="flex items-center justify-between">
+                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <h3 className="font-bold flex items-center gap-2">
                            <img className="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" />
                            Credenciais do Google (API)
@@ -807,8 +807,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            <label className="block text-sm font-medium text-gray-700">Client Secret</label>
                            <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Oculto" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm" />
                         </div>
-                        <div className="pt-2 flex items-center justify-between">
-                           <button onClick={saveGoogleConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200">Salvar Credenciais do Google</button>
+                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                           <button onClick={saveGoogleConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 w-full sm:w-auto text-center">Salvar Credenciais do Google</button>
                            {isGoogleConfigSaved ? (
                               <button onClick={disconnectGoogleConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
                            ) : clientId ? (
@@ -819,7 +819,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                   </div>
 
                   <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
-                     <div className="flex items-center justify-between">
+                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <h3 className="font-bold flex items-center gap-2">
                            <span className="text-xl">✨</span>
                            Inteligência Artificial (OpenAI)
@@ -836,8 +836,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            <label className="block text-sm font-medium text-gray-700">OpenAI API Key (sk-...)</label>
                            <input type="password" value={openaiApiKey} onChange={e => setOpenaiApiKey(e.target.value)} placeholder="Oculto" className="mt-1 block w-full rounded-md border-gray-300 py-2 px-3 border shadow-sm" />
                         </div>
-                        <div className="pt-2 flex items-center justify-between">
-                           <button onClick={saveOpenAIConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 shadow-sm transition-all border border-gray-200">Salvar Credencial da IA</button>
+                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+                           <button onClick={saveOpenAIConfig} className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 shadow-sm transition-all border border-gray-200 w-full sm:w-auto text-center">Salvar Credencial da IA</button>
                            {isOpenAiConfigSaved ? (
                               <button onClick={disconnectOpenAIConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
                            ) : openaiApiKey ? (

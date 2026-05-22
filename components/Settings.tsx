@@ -66,7 +66,7 @@ export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <h1 className="text-2xl font-semibold text-gray-800 mb-8 tracking-tight">Configurações gerais</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -76,7 +76,7 @@ export const Settings: React.FC<SettingsProps> = ({ onNavigate }) => {
             <div 
               key={option.id}
               onClick={isDisabled ? undefined : option.action}
-              className={`bg-white border border-gray-100 rounded-xl p-6 flex flex-col items-center text-center justify-center min-h-[250px] transition-all
+              className={`bg-white border border-gray-100 rounded-xl p-4 md:p-6 flex flex-col items-center text-center justify-center min-h-[200px] md:min-h-[250px] transition-all
                 ${isDisabled 
                   ? 'opacity-40 cursor-not-allowed filter grayscale' 
                   : 'shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-blue-100 cursor-pointer group'

@@ -221,15 +221,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500">
 
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-8 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Visão Geral</h1>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Visão Geral</h2>
           <p className="text-gray-500">Bem-vindo ao painel de controle da clínica.</p>
         </div>
-        <div className="text-sm font-medium text-gray-500 glass px-5 py-2.5 rounded-xl border border-white/60 shadow-soft">
+        <div className="text-sm font-medium text-gray-500 glass px-5 py-2.5 rounded-xl border border-white/60 shadow-soft self-start md:self-auto">
           Hoje, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
       </div>

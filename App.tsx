@@ -39,6 +39,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [subUserRole, setSubUserRole] = useState<string | null>(null);
   const [subUserName, setSubUserName] = useState<string>('');
@@ -111,7 +112,7 @@ export default function App() {
   // Sync URL to currentPage
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith('/anamnese/') || path.startsWith('/proteses/')) return; // public routes handled later
+    if (path.startsWith('/anamnese/') || path.startsWith('/proteses/') || path.startsWith('/protese/')) return; // public routes handled later
 
     if (path === '/login') {
       if (session) {
@@ -205,9 +206,11 @@ export default function App() {
       <div className="flex h-screen bg-transparent font-sans w-full">
         <Sidebar
           activePage={currentPage}
-          onNavigate={navigateTo}
+          onNavigate={(page) => { navigateTo(page); setIsMobileMenuOpen(false); }}
           subUserRole={subUserRole || 'admin'}
           subUserPermissions={subUserPermissions}
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
         />
         <div className="flex-1 flex flex-col min-w-0 bg-transparent relative overflow-hidden">
           <TopHeader
@@ -219,6 +222,7 @@ export default function App() {
             subUserPermissions={subUserPermissions}
             subUserName={subUserName}
             userEmail={session?.user.email || ''}
+            onMenuClick={() => setIsMobileMenuOpen(true)}
           />
           <main className="flex-1 overflow-auto bg-transparent relative p-2 lg:p-4">
             {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
@@ -276,7 +280,7 @@ export default function App() {
 
   // Public routes (anamnese, prosthesis view, login)
   if (window.location.pathname.startsWith('/anamnese/')) return <PublicAnamnese />;
-  if (window.location.pathname.startsWith('/proteses/')) return <PublicProsthesisView />;
+  if (window.location.pathname.startsWith('/proteses/') || window.location.pathname.startsWith('/protese/')) return <PublicProsthesisView />;
   if (location.pathname === '/login') {
     if (session) return <Navigate to="/dashboard" replace />;
     return <Login />;

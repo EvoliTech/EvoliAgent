@@ -201,7 +201,7 @@ export const Agenda: React.FC = () => {
     const days = [];
     // Padding
     for (let i = 0; i < paddingDays; i++) {
-      days.push(<div key={`pad-${i}`} className="h-24 sm:h-32 border-b border-r bg-gray-50/30"></div>);
+      days.push(<div key={`pad-${i}`} className="h-16 md:h-24 lg:h-32 border-b border-r bg-gray-50/30"></div>);
     }
     // Days
     for (let day = 1; day <= daysInMonth; day++) {
@@ -215,15 +215,15 @@ export const Agenda: React.FC = () => {
       });
 
       days.push(
-        <div key={day} className="h-24 sm:h-32 border-b border-r p-1 transition-colors hover:bg-gray-50 flex flex-col gap-1 relative group">
-          <span className={`text-sm font-medium p-1 w-6 h-6 flex items-center justify-center rounded-full ${day === new Date().getDate() && month === new Date().getMonth() ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
+        <div key={day} className="h-16 md:h-24 lg:h-32 border-b border-r p-0.5 md:p-1 transition-colors hover:bg-gray-50 flex flex-col gap-0.5 md:gap-1 relative group">
+          <span className={`text-[10px] md:text-sm font-medium p-0.5 md:p-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full ${day === new Date().getDate() && month === new Date().getMonth() ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
             {day}
           </span>
 
           {/* Events list */}
           <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
             {dayEvents.map((ev, idx) => (
-              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-xs px-2 py-1 rounded truncate cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`} title={ev.summary}>
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[9px] md:text-xs px-1 md:px-2 py-0.5 md:py-1 rounded truncate cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`} title={ev.summary}>
                 {ev.start?.dateTime
                   ? `${new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${ev.summary}`
                   : `[Dia Todo] ${ev.summary}`
@@ -249,7 +249,7 @@ export const Agenda: React.FC = () => {
     <div className="flex h-full bg-gray-50 overflow-hidden">
 
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0">
         <div className="p-6">
           <button
             onClick={() => handleNewAppointmentClick()}
@@ -289,12 +289,20 @@ export const Agenda: React.FC = () => {
         </div>
       </aside>
 
+      {/* Mobile FAB */}
+      <button
+        onClick={() => handleNewAppointmentClick()}
+        className={`md:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all transform active:scale-95 ${adminEmail ? 'bg-blue-600 text-white' : 'bg-gray-400 text-white cursor-not-allowed'}`}
+      >
+        <Plus size={24} className="stroke-[3]" />
+      </button>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-white">
         {/* Header */}
-        <header className="h-16 border-b border-gray-100 flex items-center justify-between px-6 shrink-0">
+        <header className="min-h-[4rem] border-b border-gray-100 flex flex-wrap items-center justify-between px-3 md:px-6 py-2 shrink-0 gap-2">
           <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900 capitalize">
+            <h1 className="text-lg md:text-2xl font-bold text-gray-900 capitalize">
               {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </h1>
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
@@ -336,7 +344,7 @@ export const Agenda: React.FC = () => {
             const isToday = i === currentDayAdjusted;
 
             return (
-              <div key={day} className={`py-3 text-center text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div key={day} className={`py-2 md:py-3 text-center text-[10px] md:text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
                 {day}
               </div>
             );

@@ -118,8 +118,8 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
         className="flex flex-col items-center gap-1 cursor-pointer group"
         onClick={() => handleToothClick(num)}
       >
-        {!isUpper && <span className="text-[13px] font-semibold text-gray-600 mb-1">{num}</span>}
-        <div className={`relative w-10 h-16 flex items-center justify-center rounded-xl border-2 transition-colors overflow-hidden ${hasProcedure ? 'border-orange-500 bg-orange-50' : 'border-transparent hover:border-blue-400 bg-transparent'}`}>
+        {!isUpper && <span className="text-[10px] md:text-[13px] font-semibold text-gray-600 mb-0.5 md:mb-1">{num}</span>}
+        <div className={`relative w-7 h-12 md:w-10 md:h-16 flex items-center justify-center rounded-lg md:rounded-xl border-2 transition-colors overflow-hidden ${hasProcedure ? 'border-orange-500 bg-orange-50' : 'border-transparent hover:border-blue-400 bg-transparent'}`}>
           {/* Tooth Image (Use user uploaded PNG for all) */}
           <img 
             src={`/${num}.png`} 
@@ -143,24 +143,24 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
             </div>
           )}
         </div>
-        {isUpper && <span className="text-[13px] font-semibold text-gray-600 mt-1">{num}</span>}
+        {isUpper && <span className="text-[10px] md:text-[13px] font-semibold text-gray-600 mt-0.5 md:mt-1">{num}</span>}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col items-center w-full gap-8 bg-white p-6 rounded-2xl">
+    <div className="flex flex-col items-center w-full gap-4 md:gap-8 bg-white p-3 md:p-6 rounded-2xl">
       
       {/* Segmented Control */}
       <div className="flex bg-gray-50 border border-gray-200 p-1 rounded-lg shadow-inner">
         <button 
-           className={`px-8 py-2 rounded-md text-[14px] font-semibold transition-all ${archMode === 'permanentes' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+           className={`px-4 md:px-8 py-1.5 md:py-2 rounded-md text-[13px] md:text-[14px] font-semibold transition-all ${archMode === 'permanentes' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
            onClick={() => setArchMode('permanentes')}
         >
            Permanentes
         </button>
         <button 
-           className={`px-8 py-2 rounded-md text-[14px] font-semibold transition-all ${archMode === 'deciduos' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+           className={`px-4 md:px-8 py-1.5 md:py-2 rounded-md text-[13px] md:text-[14px] font-semibold transition-all ${archMode === 'deciduos' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
            onClick={() => setArchMode('deciduos')}
         >
            Decíduos
@@ -169,13 +169,13 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
 
       {archMode === 'permanentes' && (
         <div className="flex flex-col w-full items-center gap-6 mt-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex gap-2 justify-center w-full">
+          <div className="flex gap-1 md:gap-2 justify-start md:justify-center w-full overflow-x-auto hide-scrollbar px-2 pb-2 -mx-4 md:mx-0">
             {upperPermanent.map(n => renderTooth(n, true))}
           </div>
 
           <div className="w-full max-w-3xl border-t border-dashed border-gray-300"></div>
 
-          <div className="flex gap-2 justify-center w-full">
+          <div className="flex gap-1 md:gap-2 justify-start md:justify-center w-full overflow-x-auto hide-scrollbar px-2 pb-2 -mx-4 md:mx-0">
             {lowerPermanent.map(n => renderTooth(n, false))}
           </div>
         </div>
@@ -183,13 +183,13 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
 
       {archMode === 'deciduos' && (
         <div className="flex flex-col w-full items-center gap-6 mt-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex gap-3 justify-center w-full">
+          <div className="flex gap-2 md:gap-3 justify-start md:justify-center w-full overflow-x-auto hide-scrollbar px-2 pb-2 -mx-4 md:mx-0">
             {upperDeciduous.map(n => renderTooth(n, true))}
           </div>
 
           <div className="w-full max-w-xl border-t border-dashed border-gray-300"></div>
 
-          <div className="flex gap-3 justify-center w-full">
+          <div className="flex gap-2 md:gap-3 justify-start md:justify-center w-full overflow-x-auto hide-scrollbar px-2 pb-2 -mx-4 md:mx-0">
             {lowerDeciduous.map(n => renderTooth(n, false))}
           </div>
         </div>

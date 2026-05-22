@@ -215,19 +215,19 @@ export const AppointmentsList: React.FC = () => {
         <div className="flex flex-col h-full bg-white transition-all duration-500 animate-in fade-in">
 
             {/* Header */}
-            <header className="px-8 py-6 flex items-center justify-between border-b border-gray-100">
+            <header className="px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Agendamentos do Dia</h1>
+                    <h1 className="text-xl md:text-2xl font-bold text-slate-800">Agendamentos do Dia</h1>
                     <p className="text-sm text-slate-500">Gerencie os compromissos em formato de lista</p>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 w-full md:w-auto">
                     <div className="relative">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <select
                             value={selectedSpecialistId}
                             onChange={(e) => setSelectedSpecialistId(e.target.value)}
-                            className="pl-10 pr-4 py-2 bg-slate-100 border-none rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 appearance-none min-w-[200px]"
+                            className="pl-10 pr-4 py-2 bg-slate-100 border-none rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-blue-500 appearance-none min-w-0 md:min-w-[200px] flex-1 md:flex-auto"
                         >
                             <option value="all">Todos Especialistas</option>
                             {specialists.map(s => (
@@ -238,7 +238,7 @@ export const AppointmentsList: React.FC = () => {
 
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 transition-all active:scale-95 shrink-0"
                     >
                         <Plus size={20} />
                         Novo
@@ -247,7 +247,7 @@ export const AppointmentsList: React.FC = () => {
             </header>
 
             {/* Date Selector */}
-            <div className="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+            <div className="px-4 md:px-8 py-4 md:py-6 border-b border-gray-50 bg-gray-50/30">
                 <div className="flex items-center gap-2">
                     <button className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 hover:shadow-sm" onClick={() => {
                         const d = new Date(currentDate);
@@ -263,7 +263,7 @@ export const AppointmentsList: React.FC = () => {
                                 key={idx}
                                 onClick={() => setCurrentDate(new Date(date))}
                                 className={`
-                  flex flex-col items-center justify-center min-w-[70px] py-3 px-2 rounded-2xl transition-all
+                  flex flex-col items-center justify-center min-w-[56px] md:min-w-[70px] py-2 md:py-3 px-1.5 md:px-2 rounded-2xl transition-all
                   ${isSelected(date)
                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105'
                                         : 'bg-white border border-gray-100 text-slate-400 hover:border-blue-300 hover:text-blue-500'
@@ -290,7 +290,7 @@ export const AppointmentsList: React.FC = () => {
             </div>
 
             {/* Appointment List */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4 bg-gray-50/30">
+            <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-6 space-y-3 md:space-y-4 bg-gray-50/30">
                 {loading ? (
                     <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-3">
                         <RefreshCw className="animate-spin" size={32} />
@@ -334,11 +334,11 @@ export const AppointmentsList: React.FC = () => {
                             <div
                                 key={event.id}
                                 onClick={() => handleEventClick(event)}
-                                className="group bg-white rounded-3xl border border-gray-100 p-6 flex gap-8 items-center cursor-pointer hover:shadow-xl hover:shadow-gray-100 transition-all active:scale-[0.99]"
+                                className="group bg-white rounded-2xl md:rounded-3xl border border-gray-100 p-4 md:p-6 flex flex-col md:flex-row gap-3 md:gap-8 md:items-center cursor-pointer hover:shadow-xl hover:shadow-gray-100 transition-all active:scale-[0.99]"
                             >
                                 {/* Time Section */}
-                                <div className="w-32 flex flex-col items-center justify-center border-r border-gray-100 px-4">
-                                    <span className="text-2xl font-black text-slate-800">
+                                <div className="w-full md:w-32 flex flex-row md:flex-col items-center md:justify-center gap-2 md:gap-0 border-b md:border-b-0 md:border-r border-gray-100 pb-3 md:pb-0 md:px-4">
+                                    <span className="text-lg md:text-2xl font-black text-slate-800">
                                         {startTime ? startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Dia'}
                                     </span>
                                     <span className="text-xs font-bold text-slate-400 mb-2">
@@ -366,7 +366,7 @@ export const AppointmentsList: React.FC = () => {
 
                                 {/* Patient & Details */}
                                 <div className="flex-1 flex flex-col gap-2">
-                                    <h3 className="text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
+                                    <h3 className="text-base md:text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
                                         {patientRaw}
                                     </h3>
                                     <div className="flex flex-wrap items-center gap-4">

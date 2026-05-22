@@ -18,9 +18,11 @@ interface SidebarProps {
   onNavigate: (page: PageType) => void;
   subUserRole: string;
   subUserPermissions?: string[];
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUserRole, subUserPermissions }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUserRole, subUserPermissions, isOpen, onClose }) => {
   const hasAccess = (permission: string) => {
     if (subUserRole === 'admin') return true;
     return subUserPermissions?.includes(permission);
@@ -42,8 +44,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
   ];
 
   return (
-    <aside className="w-64 glass border-r border-white/50 flex flex-col h-screen flex-shrink-0 relative z-20">
-      {/* Logo Area */}
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
+      
+      <aside className={`
+        fixed md:relative top-0 left-0 h-screen w-64 glass border-r border-white/50 flex flex-col flex-shrink-0 z-50
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        {/* Logo Area */}
       <div className="h-20 flex items-center px-6 border-b border-gray-200/30">
         <img
           src="/logo.png"
@@ -131,5 +146,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
 
       </div>
     </aside>
+    </>
   );
 };

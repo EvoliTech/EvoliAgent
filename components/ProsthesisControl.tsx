@@ -224,22 +224,22 @@ export const ProsthesisControl: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
-      <div className="flex items-center justify-between p-6 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-600">Controle de Prótese</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 md:gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
               placeholder="Paciente, laboratório ou responsável"
-              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg w-80 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="pl-10 pr-4 py-2 border border-slate-200 rounded-lg w-full sm:w-80 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />
           </div>
           <button
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap shrink-0"
           >
             <Plus size={18} />
             Nova solicitação
@@ -247,8 +247,8 @@ export const ProsthesisControl: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto px-6 pb-6">
-        <div className="flex justify-center h-full">
+      <div className="flex-1 overflow-x-auto px-4 md:px-6 pb-4 md:pb-6 hide-scrollbar -mx-4 md:mx-0">
+        <div className="flex justify-start md:justify-center h-full min-w-max md:min-w-0 px-4 md:px-0">
           <div className="flex gap-4 w-full max-w-7xl">
             {COLUMNS.map((coluna) => {
               const columnCards = solicitacoes.filter(s => s.status === coluna);
@@ -686,8 +686,8 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
         </div>
       )}
 
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex items-center gap-4">
+        <div className="px-4 md:px-6 py-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between bg-slate-50 gap-3 relative">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 pr-8 md:pr-0">
             <h2 className="text-xl font-bold text-slate-800">
               Detalhes da Solicitação
             </h2>
@@ -702,14 +702,14 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
               </select>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2">
+          <button onClick={onClose} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-2">
             X
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
-          <div className="flex-1 overflow-y-auto p-6 border-r border-slate-200">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 md:border-r border-slate-200">
 
             {formData.status === 'Reenviado ao Laboratório' && observacoesList.length > 0 && (() => {
               const lastMotivo = [...observacoesList].reverse().find((o: any) => o.text && o.text.startsWith('Motivo do Reenvio:'));
@@ -1063,7 +1063,7 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
             )}
           </div>
 
-          <div className="w-80 bg-slate-50 p-6 flex flex-col">
+          <div className="w-full md:w-80 bg-slate-50 p-4 md:p-6 flex flex-col min-h-[300px] md:min-h-0 border-t md:border-t-0 border-slate-200">
             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <Clock size={18} />
               Histórico
@@ -1090,8 +1090,8 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
 
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center gap-3">
-          <div>
+        <div className="px-4 md:px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col-reverse md:flex-row justify-between items-stretch md:items-center gap-3">
+          <div className="flex flex-col md:flex-row gap-3">
             {solicitacao?.id && (
               <div className="flex items-center gap-3">
                 <button
@@ -1131,7 +1131,7 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
               </div>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col md:flex-row gap-3">
             <button
               onClick={onClose}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-100 transition-colors font-medium"

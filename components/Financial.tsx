@@ -498,7 +498,7 @@ export const Financial: React.FC = () => {
   const notConfiguredSpecialists = specialists.filter(s => !commissionedSpecialists[s.id]);
 
   return (
-    <div className="w-full max-w-[1920px] mx-auto p-6 md:p-8 font-sans bg-slate-50 flex flex-col min-h-full">
+    <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-500 min-h-full">
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Financeiro</h1>
@@ -508,7 +508,7 @@ export const Financial: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col flex-1">
 
         {/* Tabs */}
-        <div className="flex px-8 border-b border-gray-200 pt-2 gap-6">
+        <div className="flex overflow-x-auto px-4 md:px-8 border-b border-gray-200 pt-2 gap-4 md:gap-6 hide-scrollbar">
           <button
             onClick={() => handleTabChange('painel')}
             className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'painel'
@@ -540,10 +540,10 @@ export const Financial: React.FC = () => {
 
         {/* Tab Content */}
         {activeTab === 'painel' && (
-          <div className="flex-1 flex flex-col p-8">
+          <div className="flex-1 flex flex-col p-4 md:p-8">
 
             {/* Header Content */}
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6 md:mb-8">
               <h2 className="text-[1.1rem] font-medium text-gray-800">Visão Geral</h2>
               {renderDateFilters()}
             </div>
@@ -552,7 +552,7 @@ export const Financial: React.FC = () => {
             <div className="flex flex-col border-b border-gray-200 pb-8 mb-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
                 {/* Entradas */}
-                <div className="flex flex-col px-6 border-r border-gray-200 first:pl-0">
+                <div className="flex flex-col px-0 md:px-6 border-b md:border-b-0 md:border-r border-gray-200 first:pl-0 pb-4 md:pb-0">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-sm font-medium text-gray-800">Entradas</h3>
                     <button onClick={() => setShowDetails('entradas')} className="text-sm font-medium text-blue-600 hover:underline">Ver detalhes</button>
@@ -574,7 +574,7 @@ export const Financial: React.FC = () => {
                 </div>
 
                 {/* Saídas */}
-                <div className="flex flex-col px-6 border-r border-gray-200">
+                <div className="flex flex-col px-0 md:px-6 border-b md:border-b-0 md:border-r border-gray-200 pb-4 md:pb-0 pt-4 md:pt-0">
                   <div className="flex justify-between items-center mb-6">
                     <h3 className="text-sm font-medium text-gray-800">Saídas</h3>
                     <button onClick={() => setShowDetails('saidas')} className="text-sm font-medium text-blue-600 hover:underline">Ver detalhes</button>
@@ -596,7 +596,7 @@ export const Financial: React.FC = () => {
                 </div>
 
                 {/* Taxas pagas / Planos */}
-                <div className="flex flex-col px-6">
+                <div className="flex flex-col px-0 md:px-6 pt-4 md:pt-0">
                   <div className="flex flex-col items-start justify-start mb-6 w-full">
                     <h3 className="text-sm font-medium text-gray-800">Taxas e Deduções</h3>
                     <span className="text-xs text-gray-400 mt-1">Custos retidos por operadoras e maquininhas</span>
@@ -615,7 +615,7 @@ export const Financial: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 flex-1">
 
               {/* Aguardando Repasse */}
-              <div className="flex flex-col px-6 border-r border-gray-200 first:pl-0 min-h-[160px] h-full overflow-hidden">
+              <div className="flex flex-col px-0 md:px-6 border-b md:border-b-0 md:border-r border-gray-200 first:pl-0 min-h-[160px] h-full overflow-hidden pb-4 md:pb-0">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-sm font-medium text-gray-800 w-full">Aguardando repasse (A receber)</h3>
                   <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded whitespace-nowrap">
@@ -645,7 +645,7 @@ export const Financial: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col px-6 border-r border-gray-200">
+              <div className="flex flex-col px-0 md:px-6 border-b md:border-b-0 md:border-r border-gray-200 pb-4 md:pb-0 pt-4 md:pt-0">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-sm font-medium text-gray-800">Histórico de Comissões</h3>
                   <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded">
@@ -678,7 +678,7 @@ export const Financial: React.FC = () => {
               </div>
 
               {/* Proximas Despesas */}
-              <div className="flex flex-col px-6 pr-0 min-h-[160px]">
+              <div className="flex flex-col px-0 md:px-6 md:pr-0 min-h-[160px] pt-4 md:pt-0">
                 <h3 className="text-sm font-medium text-gray-800 mb-6">Próximas despesas</h3>
                 <div className="flex-1 flex flex-col justify-center">
                   {despesas.filter(d => !d.is_paga).length === 0 ? (
@@ -733,7 +733,7 @@ export const Financial: React.FC = () => {
 
             {/* Nova Seção: Saúde da Clínica */}
             <div className="pt-10 flex flex-col">
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6">
                 <h2 className="text-[1.1rem] font-medium text-gray-800">Saúde da clínica</h2>
                 {renderDateFilters()}
               </div>
@@ -788,11 +788,11 @@ export const Financial: React.FC = () => {
         )}
 
         {activeTab === 'fluxo' && (
-          <div className="flex-1 flex flex-col p-8 bg-[#fafafa]">
+          <div className="flex-1 flex flex-col p-4 md:p-8 bg-[#fafafa]">
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 mt-2">
-              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-6 flex flex-col justify-between min-h-[140px]">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8 mt-2">
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-4 md:p-6 flex flex-col justify-between min-h-[120px] md:min-h-[140px]">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-emerald-500 font-medium text-[17px]">Receitas</h3>
                   <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
@@ -800,12 +800,12 @@ export const Financial: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {financialStats.paidTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div className="text-xl md:text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {financialStats.paidTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                   <div className="text-[13px] font-medium text-gray-400 leading-tight">A receber R$ {financialStats.pendingTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-6 flex flex-col justify-between min-h-[140px]">
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-4 md:p-6 flex flex-col justify-between min-h-[120px] md:min-h-[140px]">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-red-500 font-medium text-[17px]">Despesas</h3>
                   <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-500">
@@ -813,12 +813,12 @@ export const Financial: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {despesas.filter(d => d.is_paga).reduce((a, b) => a + (b.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div className="text-xl md:text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {despesas.filter(d => d.is_paga).reduce((a, b) => a + (b.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                   <div className="text-[13px] font-medium text-gray-400 leading-tight">A pagar R$ {despesas.filter(d => !d.is_paga).reduce((a, b) => a + (b.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-6 flex flex-col justify-between min-h-[140px]">
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-gray-100 p-4 md:p-6 flex flex-col justify-between min-h-[120px] md:min-h-[140px]">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-[#3b82f6] font-medium text-[17px]">Saldo Total (Bruto)</h3>
                   <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-[#3b82f6]">
@@ -826,14 +826,14 @@ export const Financial: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <div className="text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {(financialStats.paidTotal - despesas.filter(d => d.is_paga).reduce((a, b) => a + (b.valor || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div className="text-xl md:text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {(financialStats.paidTotal - despesas.filter(d => d.is_paga).reduce((a, b) => a + (b.valor || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                   <div className="text-[13px] font-medium text-gray-400 leading-tight">Todo o período</div>
                 </div>
               </div>
             </div>
 
             {/* Filters & Actions */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
               {renderDateFilters()}
               <button
                 onClick={() => setShowDetails('addDespesa')}
@@ -842,8 +842,8 @@ export const Financial: React.FC = () => {
               </button>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm">
-              <div className="flex items-center justify-between px-6 py-4 text-xs font-bold text-gray-800 border-b border-gray-100">
+            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm overflow-x-auto">
+              <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-800 border-b border-gray-100 min-w-[700px]">
                 <div className="flex-1 pl-12">Descrição</div>
                 <div className="flex items-center justify-between w-[48%] pl-8">
                   <div className="w-16"></div>
@@ -854,7 +854,7 @@ export const Financial: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-[700px]">
                 {financialStats.transactions.filter(tx => tx.isPaid).length === 0 ? (
                   <div className="p-8 text-center text-sm text-gray-500">Nenhuma movimentação financeira encontrada.</div>
                 ) : financialStats.transactions.filter(tx => tx.isPaid).map((tx, idx) => (
@@ -912,8 +912,8 @@ export const Financial: React.FC = () => {
             </div>
 
             {/* === DESPESAS (Saídas) === */}
-            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-8">
-              <div className="flex items-center justify-between px-6 py-4 text-xs font-bold text-gray-800 border-b border-gray-100">
+            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-6 md:mt-8 overflow-x-auto">
+              <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-800 border-b border-gray-100 min-w-[700px]">
                 <div className="flex-1 pl-12">Despesa</div>
                 <div className="flex items-center justify-between w-[55%] pl-4">
                   <div className="w-[18%]">Categoria</div>
@@ -924,7 +924,7 @@ export const Financial: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col">
+              <div className="flex flex-col min-w-[700px]">
                 {despesasAgrupadas.length === 0 ? (
                   <div className="p-8 text-center text-sm text-gray-500">Nenhuma despesa registrada. Clique em "Adicionar Despesa" para começar.</div>
                 ) : despesasAgrupadas.map((entry, idx) => {

@@ -611,27 +611,26 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
       .filter((t: any) => (t.status === 'Em andamento' || t.status === 'Finalizado') && t.paymentStatus !== 'Pago')
       .length;
   }, [budgets]);
-
   const ageText = getAgeText(patient.dataNascimento);
   const displayPhone = getFormattedPhone(patient.phone);
 
   return (
-    <div className="animate-in fade-in zoom-in-95 duration-300 w-full h-full flex flex-col bg-[#f1f5f9] min-h-screen pb-10">
+    <div className="animate-in fade-in zoom-in-95 duration-300 w-full h-full flex flex-col bg-[#f1f5f9] min-h-full pb-10 overflow-x-hidden">
       {/* Top Banner & Header */}
-      <div className="bg-white px-6 pt-6 pb-0 border-b border-gray-200">
+      <div className="bg-white px-4 md:px-6 pt-4 md:pt-6 pb-0 border-b border-gray-200">
         <button onClick={onBack} className="flex items-center text-[#64748b] hover:text-[#334155] text-[13px] font-medium mb-4 transition-colors">
           <ChevronLeft size={16} className="mr-1" />
           Voltar para lista
         </button>
 
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="h-16 w-16 bg-[#f1f5f9] text-[#cbd5e1] rounded-full flex items-center justify-center border-2 border-white shadow-sm overflow-hidden shrink-0">
+            <div className="h-12 w-12 md:h-16 md:w-16 bg-[#f1f5f9] text-[#cbd5e1] rounded-full flex items-center justify-center border-2 border-white shadow-sm overflow-hidden shrink-0">
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 mt-4"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
             </div>
 
             <div className="flex flex-col pt-0.5 relative">
-              <h1 className="text-xl font-bold text-[#1e293b] flex items-center gap-3">
+              <h1 className="text-lg md:text-xl font-bold text-[#1e293b] flex flex-wrap items-center gap-2 md:gap-3">
                 {patient.name}
                 {healthAlerts.length > 0 && (
                   <div className="relative group flex items-center">
@@ -755,7 +754,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
           <button
             onClick={onEdit}
-            className="flex items-center border border-[#cbd5e1] text-[#475569] px-3 py-1.5 rounded-md hover:bg-[#f8fafc] transition-colors space-x-2 text-[13px] font-semibold"
+            className="flex items-center border border-[#cbd5e1] text-[#475569] px-3 py-1.5 rounded-md hover:bg-[#f8fafc] transition-colors space-x-2 text-[13px] font-semibold self-start md:self-auto"
           >
             <Edit2 size={14} />
             <span>Editar</span>
@@ -763,34 +762,56 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         </div>
 
         {/* Tabs */}
-        <div className="flex overflow-x-auto gap-8 mt-8 border-b border-white hide-scrollbar">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => handleTabChange(tab)}
-              className={`pb-3 text-[14.5px] font-semibold transition-colors relative whitespace-nowrap ${activeTab === tab
-                  ? 'text-[#2563eb]'
-                  : 'text-[#64748b] hover:text-[#475569]'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                {tab}
-                {tab === 'Pagamentos' && pendingPaymentsCount > 0 && (
-                  <span className="flex items-center justify-center bg-red-100 text-red-600 font-bold text-[11px] h-5 min-w-[20px] px-1.5 rounded-full">
-                    {pendingPaymentsCount}
-                  </span>
+        <div className="relative flex items-center mt-4 md:mt-8 -mx-4 md:mx-0">
+          {/* Left Arrow */}
+          <button
+            className="md:hidden flex items-center justify-center w-7 h-7 shrink-0 text-gray-400 hover:text-gray-700 bg-gradient-to-r from-white via-white to-transparent z-10"
+            onClick={() => {
+              const el = document.getElementById('patient-tabs-scroll');
+              if (el) el.scrollBy({ left: -120, behavior: 'smooth' });
+            }}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div id="patient-tabs-scroll" className="flex overflow-x-auto gap-4 md:gap-8 border-b border-white hide-scrollbar px-2 md:px-0 flex-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => handleTabChange(tab)}
+                className={`pb-3 text-[13px] md:text-[14.5px] font-semibold transition-colors relative whitespace-nowrap ${activeTab === tab
+                    ? 'text-[#2563eb]'
+                    : 'text-[#64748b] hover:text-[#475569]'
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  {tab}
+                  {tab === 'Pagamentos' && pendingPaymentsCount > 0 && (
+                    <span className="flex items-center justify-center bg-red-100 text-red-600 font-bold text-[11px] h-5 min-w-[20px] px-1.5 rounded-full">
+                      {pendingPaymentsCount}
+                    </span>
+                  )}
+                </div>
+                {activeTab === tab && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2563eb] rounded-t-full" />
                 )}
-              </div>
-              {activeTab === tab && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2563eb] rounded-t-full" />
-              )}
-            </button>
-          ))}
+              </button>
+            ))}
+          </div>
+          {/* Right Arrow */}
+          <button
+            className="md:hidden flex items-center justify-center w-7 h-7 shrink-0 text-gray-400 hover:text-gray-700 bg-gradient-to-l from-white via-white to-transparent z-10"
+            onClick={() => {
+              const el = document.getElementById('patient-tabs-scroll');
+              if (el) el.scrollBy({ left: 120, behavior: 'smooth' });
+            }}
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="p-6">
+      <div className="p-3 md:p-6">
         {activeTab === 'Anamneses' && (
           <AnamneseTab
             empresaId={empresaId!}
@@ -1500,7 +1521,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 if (ausentes.length === 0) return null;
                 return (
                   <div className="mt-8 pt-8 border-t border-gray-100 animate-in fade-in">
-                    <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <h4 className="text-lg font-bold text-gray-800 flex flex-wrap items-center gap-2 mb-4">
                       <X size={20} className="text-red-500" />
                       Dentes Ausentes / Removidos
                       <span className="text-xs text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-full font-bold">
@@ -1596,7 +1617,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               </div>
 
               {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-6 text-sm font-semibold text-gray-600 mt-2">
+              <div className="hidden md:grid grid-cols-12 gap-4 px-6 text-sm font-semibold text-gray-600 mt-2">
                 <div className="col-span-1 flex items-center">
                   <input type="checkbox"
                     checked={paymentTreatments.length > 0 && selectedPayments.length === paymentTreatments.length}
@@ -1615,6 +1636,24 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 <div className="col-span-1 text-center text-[13px]">Aprovado em</div>
                 <div className="col-span-2 text-center">Status</div>
                 <div className="col-span-3 text-right pr-12">Valor</div>
+              </div>
+              
+              {/* Mobile Select All */}
+              <div className="md:hidden flex items-center gap-2 px-2 mt-2 mb-2">
+                  <input type="checkbox"
+                    id="selectAllMobile"
+                    checked={paymentTreatments.length > 0 && selectedPayments.length === paymentTreatments.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const allIds = paymentTreatments.map(t => t.id);
+                        setSelectedPayments(allIds);
+                      } else {
+                        setSelectedPayments([]);
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="selectAllMobile" className="text-sm font-semibold text-gray-600">Selecionar todos</label>
               </div>
 
               {/* List */}
@@ -1703,17 +1742,17 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       {mappedTreatments.length === 0 ? (
                         <div className="text-center py-12 text-sm text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">Nenhum pagamento correspondente para "{pagamentosFilter}".</div>
                       ) : mappedTreatments.map(t => (
-                        <div key={t.id || Math.random()} className={`bg-white border rounded-xl p-4 flex items-center grid grid-cols-12 gap-4 transition-colors shadow-sm relative ${selectedPayments.includes(t.id) ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 hover:border-blue-300'}`}>
-                          <div className="col-span-1 flex items-center pl-2">
+                        <div key={t.id || Math.random()} className={`bg-white border rounded-xl p-4 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 transition-colors shadow-sm relative ${selectedPayments.includes(t.id) ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 hover:border-blue-300'}`}>
+                          <div className="col-span-1 flex items-center pl-0 md:pl-2">
                             <input type="checkbox"
                               checked={selectedPayments.includes(t.id)}
                               onChange={(e) => setSelectedPayments(prev => e.target.checked ? [...prev, t.id] : prev.filter(id => id !== t.id))}
-                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              className="w-5 h-5 md:w-4 md:h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
                           </div>
                           <div className="col-span-5 flex flex-col justify-center">
-                            <span className="text-[14px] font-semibold text-gray-800">{t.treatmentName || t.tratamento}</span>
-                            <div className="flex flex-col mt-1 gap-0.5">
+                            <span className="text-[14px] font-semibold text-gray-800 leading-tight">{t.treatmentName || t.tratamento}</span>
+                            <div className="flex flex-col mt-1.5 gap-1">
                               {t.isPaid && t.paymentDate && (
                                 <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded w-fit mb-1">Pago em {t.paymentDate.toLocaleDateString('pt-BR')}</span>
                               )}
@@ -1728,53 +1767,60 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                               </div>
                             )}
                           </div>
-                          <div className="col-span-1 flex flex-col items-center justify-center text-center">
+                          <div className="col-span-1 flex md:flex-col items-center justify-between md:justify-center text-center w-full">
+                            <span className="md:hidden text-xs text-gray-500 font-semibold">Aprovado em:</span>
                             {t.approvalDate ? (
-                              <span className="text-[12px] font-semibold text-gray-700">{t.approvalDate.toLocaleDateString('pt-BR')}</span>
+                              <span className="text-[12px] md:text-[13px] font-semibold text-gray-700">{t.approvalDate.toLocaleDateString('pt-BR')}</span>
                             ) : (
                               <span className="text-[12px] text-gray-400">--</span>
                             )}
                           </div>
-                          <div className="col-span-2 flex items-center justify-center gap-3">
-                            {!t.isPaid && (
-                              <button
-                                className="flex items-center gap-2 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
-                                onClick={() => setPayingTreatments([t])}
-                              >
-                                <CreditCard size={14} /> Pagar
-                              </button>
-                            )}
-                            <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                              {t.isPaid ? 'Pago' : t.isLate ? 'Em atraso' : 'Em aberto'}
-                            </span>
+                          <div className="col-span-2 flex items-center justify-between md:justify-center gap-3 w-full">
+                            <span className="md:hidden text-xs text-gray-500 font-semibold">Status:</span>
+                            <div className="flex items-center gap-2">
+                               {!t.isPaid && (
+                                 <button
+                                   className="flex items-center gap-2 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
+                                   onClick={() => setPayingTreatments([t])}
+                                 >
+                                   <CreditCard size={14} /> Pagar
+                                 </button>
+                               )}
+                               <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                 {t.isPaid ? 'Pago' : t.isLate ? 'Em atraso' : 'Em aberto'}
+                               </span>
+                            </div>
                           </div>
-                          <div className="col-span-3 flex items-center justify-end gap-3">
-                            <span className="font-bold text-gray-800">
-                              R$ {parseFloat(t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                            <div className="relative">
-                              <button
-                                className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
-                                onClick={() => setOpenPaymentMenuId(openPaymentMenuId === t.id ? null : t.id)}
-                              >
-                                <MoreVertical size={18} />
-                              </button>
+                          <div className="col-span-3 flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-0 border-gray-100 w-full mt-1 md:mt-0">
+                            <span className="md:hidden text-xs text-gray-500 font-semibold">Valor:</span>
+                            <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-800">
+                                  R$ {parseFloat(t.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                                <div className="relative">
+                                  <button
+                                    className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
+                                    onClick={() => setOpenPaymentMenuId(openPaymentMenuId === t.id ? null : t.id)}
+                                  >
+                                    <MoreVertical size={18} />
+                                  </button>
 
-                              {openPaymentMenuId === t.id && (
-                                <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
-                                  <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                                    onClick={() => { setEditingPaymentBudget(t.budget); setOpenPaymentMenuId(null); }}
-                                  >
-                                    <Edit2 size={16} className="text-gray-400" /> Editar e Detalhes
-                                  </button>
-                                  <div className="h-px bg-gray-100 my-1"></div>
-                                  <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5"
-                                    onClick={() => { setCancelingPayments([t]); setOpenPaymentMenuId(null); }}
-                                  >
-                                    <X size={16} className="text-red-400" /> Cancelar pagamento
-                                  </button>
+                                  {openPaymentMenuId === t.id && (
+                                    <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
+                                      <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                        onClick={() => { setEditingPaymentBudget(t.budget); setOpenPaymentMenuId(null); }}
+                                      >
+                                        <Edit2 size={16} className="text-gray-400" /> Editar e Detalhes
+                                      </button>
+                                      <div className="h-px bg-gray-100 my-1"></div>
+                                      <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5"
+                                        onClick={() => { setCancelingPayments([t]); setOpenPaymentMenuId(null); }}
+                                      >
+                                        <X size={16} className="text-red-400" /> Cancelar pagamento
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -2230,7 +2276,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               <Trash2 size={24} className="text-red-600" />
               <h2 className="text-xl font-bold text-gray-800">Cancelar {cancelingPayments.length > 1 ? `${cancelingPayments.length} pagamentos` : 'pagamento'}</h2>
             </div>
-            <div className="p-6">
+            <div className="p-3 md:p-6">
               <p className="text-gray-600 text-[14px] leading-relaxed mb-4">
                 Tem certeza que deseja cancelar {cancelingPayments.length > 1 ? 'os pagamentos selecionados' : 'este pagamento'}?
                 Essa ação removerá os registros financeiros e precisará de uma justificativa.
