@@ -84,6 +84,7 @@ export const Agenda: React.FC = () => {
         const day = start.getDay();
         const diff = start.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
         start.setDate(diff); // Monday
+        end.setTime(start.getTime());
         end.setDate(start.getDate() + 6); // Sunday
       }
 
@@ -216,7 +217,7 @@ export const Agenda: React.FC = () => {
 
       days.push(
         <div key={day} className="h-16 md:h-24 lg:h-32 border-b border-r p-0.5 md:p-1 transition-colors hover:bg-gray-50 flex flex-col gap-0.5 md:gap-1 relative group">
-          <span className={`text-[10px] md:text-sm font-medium p-0.5 md:p-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full ${day === new Date().getDate() && month === new Date().getMonth() ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
+          <span className={`text-[10px] md:text-sm font-medium p-0.5 md:p-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full ${day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear() ? 'bg-blue-600 text-white' : 'text-gray-700'}`}>
             {day}
           </span>
 
@@ -242,6 +243,55 @@ export const Agenda: React.FC = () => {
       );
     }
 
+    return days;
+  }
+
+  const renderWeekGrid = () => {
+    // Generate 7 days for the current week
+    const startOfWeek = new Date(currentDate);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDay = new Date(startOfWeek);
+      currentDay.setDate(startOfWeek.getDate() + i);
+      const dateStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
+      
+      const dayEvents = events.filter(e => {
+        if (!e.start) return false;
+        if (e.start.dateTime) return e.start.dateTime.startsWith(dateStr);
+        if (e.start.date) return e.start.date === dateStr;
+        return false;
+      });
+
+      days.push(
+        <div key={i} className="h-40 md:h-64 border-b border-r p-1 transition-colors hover:bg-gray-50 flex flex-col gap-1 relative group">
+          <div className="flex justify-between items-center mb-1">
+            <span className={`text-xs font-bold ${currentDay.getDate() === new Date().getDate() && currentDay.getMonth() === new Date().getMonth() && currentDay.getFullYear() === new Date().getFullYear() ? 'text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full' : 'text-gray-700'}`}>
+              {currentDay.getDate()} {currentDay.toLocaleDateString('pt-BR', { month: 'short' })}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto no-scrollbar space-y-1.5">
+            {dayEvents.map((ev, idx) => (
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[10px] md:text-xs px-2 py-1 rounded cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200 shadow-sm border border-blue-200/50'}`} title={ev.summary}>
+                {ev.start?.dateTime
+                  ? <><span className="font-bold">{new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> {ev.summary}</>
+                  : <><span className="font-bold">[Dia Todo]</span> {ev.summary}</>
+                }
+              </div>
+            ))}
+          </div>
+          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100">
+            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(); }} className="p-1.5 bg-white shadow-sm border border-gray-200 hover:bg-gray-50 rounded-full text-blue-600">
+              <Plus size={16} />
+            </button>
+          </div>
+        </div>
+      );
+    }
     return days;
   }
 
@@ -354,7 +404,7 @@ export const Agenda: React.FC = () => {
         {/* Calendar Grid */}
         <div className="flex-1 overflow-y-auto bg-white">
           <div className="grid grid-cols-7 auto-rows-fr">
-            {renderMonthGrid()}
+            {view === 'month' ? renderMonthGrid() : renderWeekGrid()}
           </div>
         </div>
       </main>
@@ -363,7 +413,7 @@ export const Agenda: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
         onSave={handleCreateEvent}
-        specialists={specialists.filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))}
+        specialists={specialists}
         defaultDate={currentDate}
         initialData={editingEvent}
       />

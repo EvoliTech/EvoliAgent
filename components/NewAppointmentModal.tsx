@@ -212,17 +212,20 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
 
             // --- Double Check: Google Calendar side ---
             // Fetch directly from Google to catch events created outside the app
-            const DEFAULT_EMAIL = 'open.evertonai@gmail.com';
             try {
-                const gEvents = await googleCalendarService.listEvents(empresaId!, DEFAULT_EMAIL, startDate, endDate, selectedCalendarId);
+                // Pega o email do admin dinamicamente (usamos lazy import para evitar dependência circular se houver, ou importar diretamente)
+                const { userService } = await import('../services/userService');
+                const adminEmail = await userService.getAdminEmail(empresaId!);
+                
+                if (adminEmail) {
+                    const gEvents = await googleCalendarService.listEvents(empresaId!, adminEmail, startDate, endDate, selectedCalendarId);
+                    const realGOverlaps = gEvents.filter(e => e.id !== initialData?.id && e.status !== 'cancelled');
 
-                // Filter out self (if editing) and cancelled events
-                const realGOverlaps = gEvents.filter(e => e.id !== initialData?.id && e.status !== 'cancelled');
-
-                if (realGOverlaps.length > 0) {
-                    alert(`Ops! Já existe um evento ("${realGOverlaps[0].summary}") agendado para este mesmo horário. Por favor, escolha outro período.`);
-                    setLoading(false);
-                    return;
+                    if (realGOverlaps.length > 0) {
+                        alert(`Ops! Já existe um evento ("${realGOverlaps[0].summary}") agendado no Google Agenda para este mesmo horário.`);
+                        setLoading(false);
+                        return;
+                    }
                 }
             } catch (err) {
                 console.warn('Could not verify GCal overlaps, proceeding with local check only.', err);

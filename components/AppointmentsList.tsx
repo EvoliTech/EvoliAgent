@@ -357,6 +357,7 @@ export const AppointmentsList: React.FC = () => {
                                             <option value="pendente">PENDENTE</option>
                                             <option value="confirmado">CONFIRMADO</option>
                                             <option value="concluido">CONCLUÍDO</option>
+                                            <option value="cancelado">CANCELADO</option>
                                         </select>
                                         <div className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
                                             <StatusIcon size={10} />

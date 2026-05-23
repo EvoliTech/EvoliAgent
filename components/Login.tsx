@@ -111,7 +111,25 @@ export const Login: React.FC = () => {
 
                     {!isSignUp && (
                         <div className="flex justify-end">
-                            <button type="button" className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                            <button 
+                                type="button" 
+                                onClick={async () => {
+                                    if (!email) {
+                                        alert("Por favor, digite seu e-mail no campo acima primeiro.");
+                                        return;
+                                    }
+                                    try {
+                                        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                                            redirectTo: window.location.origin + '/login',
+                                        });
+                                        if (error) throw error;
+                                        alert("Se este e-mail estiver cadastrado, você receberá um link para redefinir sua senha.");
+                                    } catch (err: any) {
+                                        alert("Erro ao solicitar redefinição: " + err.message);
+                                    }
+                                }}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                            >
                                 Esqueceu a senha?
                             </button>
                         </div>

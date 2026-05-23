@@ -91,7 +91,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         { name: 'Outros', value: Math.round((planCounts['Outros'] / totalWithPlan) * 100), count: planCounts['Outros'], color: '#94a3b8' }
       ].sort((a, b) => b.value - a.value);
 
-      setRecentPatientsList(patients.slice(0, 5));
+      setRecentPatientsList([...patients].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 5));
 
       // --- 2. APPOINTMENTS DATA ---
       const now = new Date();
