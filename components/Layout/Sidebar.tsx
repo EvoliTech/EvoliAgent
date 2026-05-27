@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
       )}
       
       <aside className={`
-        fixed md:relative top-0 left-0 h-screen w-64 glass border-r border-white/50 flex flex-col flex-shrink-0 z-50
+        fixed md:relative top-0 left-0 app-h-screen w-64 glass border-r border-white/50 flex flex-col flex-shrink-0 z-50
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>

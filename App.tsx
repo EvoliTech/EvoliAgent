@@ -203,7 +203,7 @@ export default function App() {
     };
 
     return (
-      <div className="flex h-screen bg-transparent font-sans w-full">
+      <div className="flex app-h-screen bg-transparent font-sans w-full">
         <Sidebar
           activePage={currentPage}
           onNavigate={(page) => { navigateTo(page); setIsMobileMenuOpen(false); }}

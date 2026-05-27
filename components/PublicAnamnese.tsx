@@ -34,17 +34,16 @@ export const PublicAnamnese = () => {
         setEmpresaId(empId);
         setPatientId(patId);
 
-        // Fetch user data to confirm it's valid and get name
+        // Fetch user data securely via RPC
         const { data, error } = await supabase
-          .from('Cliente')
-          .select('nome')
-          .eq('id', patId)
-          .eq('IDEmpresa', empId)
-          .single();
+          .rpc('get_nome_paciente_publico', {
+             p_empresa_id: empId,
+             p_patient_id: patId
+          });
 
         if (error || !data) throw new Error("Paciente não encontrado ou link expirado.");
 
-        setPatientName(data.nome);
+        setPatientName(data as string);
         setLoading(false);
       } catch (err: any) {
         setErrorMsg(err.message || 'Erro ao carregar link.');
