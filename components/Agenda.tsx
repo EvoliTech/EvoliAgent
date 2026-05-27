@@ -20,6 +20,7 @@ export const Agenda: React.FC = () => {
   const [view, setView] = useState<'month' | 'week'>('month');
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDateContext, setModalDateContext] = useState<Date | undefined>(undefined);
 
   // Details Modal State
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -180,11 +181,7 @@ export const Agenda: React.FC = () => {
       alert("Integração Necessária!\n\nPara criar agendamentos, o sistema precisa estar integrado ao Google Calendar.\nPor favor, acesse o menu 'Integrações' e conecte sua conta.");
       return;
     }
-    // If we passed a date from the grid add button, we might want to use it? 
-    // Currently NewAppointmentModal takes defaultDate={currentDate}. 
-    // If I want to support clicking "+" on a specific day, I should update state or pass it to modal.
-    // However, the current code just used setIsModalOpen(true). 
-    // I will stick to the requested rule enforcement.
+    setModalDateContext(dateContext);
     setIsModalOpen(true);
   };
 
@@ -235,7 +232,7 @@ export const Agenda: React.FC = () => {
 
           {/* Add on hover (simplified) */}
           <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100">
-            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(); }} className="p-1 hover:bg-gray-200 rounded-full text-blue-600">
+            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(new Date(year, month, day)); }} className="p-1 hover:bg-gray-200 rounded-full text-blue-600">
               <Plus size={14} />
             </button>
           </div>
@@ -285,7 +282,7 @@ export const Agenda: React.FC = () => {
             ))}
           </div>
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100">
-            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(); }} className="p-1.5 bg-white shadow-sm border border-gray-200 hover:bg-gray-50 rounded-full text-blue-600">
+            <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(new Date(currentDay)); }} className="p-1.5 bg-white shadow-sm border border-gray-200 hover:bg-gray-50 rounded-full text-blue-600">
               <Plus size={16} />
             </button>
           </div>
@@ -411,10 +408,10 @@ export const Agenda: React.FC = () => {
 
       <NewAppointmentModal
         isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
+        onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); setModalDateContext(undefined); }}
         onSave={handleCreateEvent}
         specialists={specialists}
-        defaultDate={currentDate}
+        defaultDate={modalDateContext || currentDate}
         initialData={editingEvent}
       />
 

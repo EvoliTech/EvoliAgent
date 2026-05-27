@@ -4,6 +4,7 @@ import { X, Search, Check, Calendar as CalendarIcon, Clock, User, Phone, FileTex
 import { supabase } from '../lib/supabase';
 import { googleCalendarService, GoogleCalendar, GoogleEvent } from '../services/googleCalendarService';
 import { specialistService } from '../services/specialistService';
+import { subUserService } from '../services/userService';
 import { Specialist, SupabaseCustomer } from '../types';
 import { useCompany } from '../contexts/CompanyContext';
 
@@ -42,6 +43,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [observations, setObservations] = useState('');
     const [consultationType, setConsultationType] = useState<string>('');
     const [patientId, setPatientId] = useState<number | null>(null);
+
+    // Retroactive modal state
+    const [showRetroactiveModal, setShowRetroactiveModal] = useState(false);
+    const [retroactivePassword, setRetroactivePassword] = useState('');
+    const [verifyingRetroactive, setVerifyingRetroactive] = useState(false);
+    const [retroactiveError, setRetroactiveError] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -178,11 +185,68 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             return;
         }
 
-        setLoading(true);
+        // Construct start/end Date
+        const dateTimeString = `${date}T${time}:00`;
+        const startDate = new Date(dateTimeString);
+
+        // Retroactive date check
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDateOnly = new Date(startDate);
+        selectedDateOnly.setHours(0, 0, 0, 0);
+
+        if (selectedDateOnly < today && !showRetroactiveModal) {
+            setShowRetroactiveModal(true);
+            return;
+        }
+
+        await executeSubmit(startDate);
+    };
+
+    const handleRetroactiveConfirm = async () => {
+        if (!retroactivePassword) {
+            setRetroactiveError('Por favor, digite a senha.');
+            return;
+        }
+
+        setVerifyingRetroactive(true);
+        setRetroactiveError('');
+
         try {
-            // Construct start/end Date
+            const role = localStorage.getItem('clinica_sub_user_role');
+            if (!role || !empresaId) {
+                setRetroactiveError('Sessão inválida. Faça login novamente.');
+                setVerifyingRetroactive(false);
+                return;
+            }
+
+            const profiles = await subUserService.getSubUsers(empresaId);
+            const profile = profiles[role];
+
+            if (!profile || profile.password !== retroactivePassword) {
+                setRetroactiveError('Senha incorreta.');
+                setVerifyingRetroactive(false);
+                return;
+            }
+
+            // Senha correta, prosseguir
+            setShowRetroactiveModal(false);
+            setRetroactivePassword('');
+            
             const dateTimeString = `${date}T${time}:00`;
             const startDate = new Date(dateTimeString);
+            await executeSubmit(startDate);
+        } catch (error) {
+            console.error('Error verifying password:', error);
+            setRetroactiveError('Erro ao verificar a senha.');
+        } finally {
+            setVerifyingRetroactive(false);
+        }
+    };
+
+    const executeSubmit = async (startDate: Date) => {
+        setLoading(true);
+        try {
             const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 min duration default
 
             // --- Business Rule: Prevent Duplicates/Overlaps ---
@@ -488,6 +552,73 @@ Obs: ${observations || '-'}`,
                 </div>
 
             </div>
+
+            {/* Retroactive Appointment Confirmation Modal */}
+            {showRetroactiveModal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <div className="mx-auto w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mb-3">
+                                <Clock size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">Agendamento Retroativo</h3>
+                            <p className="text-sm text-gray-500 mt-2">
+                                Você está tentando agendar uma consulta para uma data anterior a hoje. Deseja realmente prosseguir?
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {retroactiveError && (
+                                <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl text-center font-medium animate-bounce">
+                                    {retroactiveError}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Confirme sua senha de perfil</label>
+                                <input
+                                    type="text"
+                                    style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
+                                    autoComplete="off"
+                                    value={retroactivePassword}
+                                    onChange={(e) => setRetroactivePassword(e.target.value)}
+                                    placeholder="Digite sua senha"
+                                    className="w-full rounded-lg border-gray-300 border px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-center tracking-widest font-semibold placeholder:tracking-normal placeholder:font-normal"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRetroactiveConfirm();
+                                    }}
+                                />
+                            </div>
+
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowRetroactiveModal(false);
+                                        setRetroactivePassword('');
+                                        setRetroactiveError('');
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRetroactiveConfirm}
+                                    disabled={verifyingRetroactive || !retroactivePassword}
+                                    className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                                >
+                                    {verifyingRetroactive ? (
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        'Confirmar'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
