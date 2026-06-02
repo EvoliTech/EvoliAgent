@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Patient } from '../types';
 import { patientService } from '../services/patientService';
-import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2, ClipboardList } from 'lucide-react';
+import { Search, Plus, Filter, MoreVertical, Phone, Mail, User, Check, X, Loader2, Edit2, Trash2, ClipboardList, Download } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { PageHeader } from './ui/PageHeader';
 import { PatientDetails } from './PatientDetails';
@@ -21,6 +21,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
   // Estado principal dos pacientes
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPatientIds, setSelectedPatientIds] = useState<string[]>([]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -166,6 +167,61 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
   }, [patients, searchTerm, statusFilter]);
 
   // Handlers
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const allIds = filteredPatients.map(p => p.id);
+      setSelectedPatientIds(allIds);
+    } else {
+      setSelectedPatientIds([]);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedPatientIds.length === 0) return;
+    showAlert(
+      'Confirmar Exclusão Múltipla',
+      `Tem certeza que deseja excluir ${selectedPatientIds.length} paciente(s)?`,
+      'confirm',
+      async () => {
+        try {
+          if (empresaId) {
+            setIsLoading(true);
+            for (const id of selectedPatientIds) {
+               await patientService.deletePatient(empresaId, id);
+            }
+            setSelectedPatientIds([]);
+            await loadPatients();
+            showAlert('Sucesso', 'Pacientes excluídos com sucesso!', 'success');
+          }
+        } catch (error) {
+          setIsLoading(false);
+          showAlert('Erro', 'Erro ao excluir pacientes.', 'error');
+        }
+      }
+    );
+  };
+
+  const handleBulkExport = () => {
+    if (selectedPatientIds.length === 0) return;
+    const patientsToExport = patients.filter(p => selectedPatientIds.includes(p.id));
+    
+    const headers = ['Nome,Contato,Email,Plano,Status,Criado Em'];
+    const rows = patientsToExport.map(p => {
+      return `"${p.name}","${p.phone || ''}","${p.email || ''}","${p.plano || ''}","${p.status}","${p.lastVisit || ''}"`;
+    });
+    const csvContent = headers.concat(rows).join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `pacientes_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleOpenNewPatient = () => {
     setFormData({
       name: '',
@@ -297,7 +353,29 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
         title="Pacientes"
         subtitle="Lista sincronizada de clientes."
       >
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedPatientIds.length > 0 && (
+            <>
+              <span className="text-sm font-medium text-gray-600 mr-2 hidden sm:inline-block">
+                {selectedPatientIds.length} selecionado(s)
+              </span>
+              <button
+                onClick={handleBulkDelete}
+                className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-medium border border-red-200 hover:bg-red-100 shadow-sm flex items-center gap-2 transition-colors"
+                title="Excluir selecionados"
+              >
+                <Trash2 size={16} /> <span className="hidden sm:inline">Excluir</span>
+              </button>
+              <button
+                onClick={handleBulkExport}
+                className="bg-green-50 text-green-600 px-3 py-2 rounded-lg text-sm font-medium border border-green-200 hover:bg-green-100 shadow-sm flex items-center gap-2 transition-colors"
+                title="Exportar selecionados"
+              >
+                <Download size={16} /> <span className="hidden sm:inline">Exportar</span>
+              </button>
+              <div className="w-px h-6 bg-gray-300 mx-1 hidden sm:block"></div>
+            </>
+          )}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`
@@ -362,6 +440,14 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th scope="col" className="px-6 py-3 text-left w-12">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                  checked={filteredPatients.length > 0 && selectedPatientIds.length === filteredPatients.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Nome
               </th>
@@ -385,7 +471,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-20 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-20 text-center text-gray-500">
                   <div className="flex flex-col items-center justify-center">
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
                     <p>Sincronizando com Supabase...</p>
@@ -396,9 +482,21 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
               filteredPatients.map((patient) => (
                 <tr
                   key={patient.id}
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  className={`transition-colors cursor-pointer ${selectedPatientIds.includes(patient.id) ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
                   onClick={() => handleSelectPatient(patient)}
                 >
+                  <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      checked={selectedPatientIds.includes(patient.id)}
+                      onChange={(e) => {
+                        setSelectedPatientIds(prev =>
+                          e.target.checked ? [...prev, patient.id] : prev.filter(id => id !== patient.id)
+                        );
+                      }}
+                    />
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10">
@@ -506,7 +604,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                   Nenhum paciente encontrado.
                 </td>
               </tr>
@@ -517,6 +615,22 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
 
       {/* Mobile Card List */}
       <div className="md:hidden space-y-3">
+        {/* Adiciona selecionar todos na versão mobile se houver pacientes */}
+        {filteredPatients.length > 0 && !isLoading && (
+          <div className="flex items-center px-2 py-1 mb-2">
+            <input
+              type="checkbox"
+              id="selectAllMobile"
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer mr-3"
+              checked={filteredPatients.length > 0 && selectedPatientIds.length === filteredPatients.length}
+              onChange={handleSelectAll}
+            />
+            <label htmlFor="selectAllMobile" className="text-sm text-gray-600 cursor-pointer select-none">
+              Selecionar todos
+            </label>
+          </div>
+        )}
+        
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
@@ -526,10 +640,22 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
           filteredPatients.map((patient) => (
             <div
               key={patient.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 active:bg-gray-50 transition-colors cursor-pointer"
+              className={`rounded-xl shadow-sm border p-4 transition-colors cursor-pointer ${selectedPatientIds.includes(patient.id) ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 active:bg-gray-50'}`}
               onClick={() => handleSelectPatient(patient)}
             >
               <div className="flex items-center gap-3">
+                <div onClick={e => e.stopPropagation()} className="shrink-0 flex items-center h-full">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5 cursor-pointer"
+                    checked={selectedPatientIds.includes(patient.id)}
+                    onChange={(e) => {
+                      setSelectedPatientIds(prev =>
+                        e.target.checked ? [...prev, patient.id] : prev.filter(id => id !== patient.id)
+                      );
+                    }}
+                  />
+                </div>
                 <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase text-sm shrink-0">
                   {patient.name.charAt(0)}
                 </div>
