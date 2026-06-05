@@ -163,7 +163,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       const matchesStatus = statusFilter === 'Todos' || patient.status === statusFilter;
 
       return matchesSearch && matchesStatus;
-    });
+    }).sort((a, b) => a.name.localeCompare(b.name));
   }, [patients, searchTerm, statusFilter]);
 
   // Handlers
