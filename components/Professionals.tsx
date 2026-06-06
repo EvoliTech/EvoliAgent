@@ -293,14 +293,34 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
         <form onSubmit={handleSaveBasicInfo} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nome Completo</label>
-              <input
-                type="text"
-                required
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                value={currentSpecialist.name || ''}
-                onChange={e => setCurrentSpecialist({ ...currentSpecialist, name: e.target.value })}
-              />
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Título e Nome Completo</label>
+              <div className="flex gap-2">
+                <select
+                  className="w-1/3 px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm bg-white"
+                  value={(currentSpecialist.name || '').match(/^(Dr\.|Dra\.|Dr|Dra)\b/i) ? ((currentSpecialist.name || '').match(/^(Dra\.|Dra)\b/i) ? 'Dra.' : 'Dr.') : ''}
+                  onChange={e => {
+                    const title = e.target.value;
+                    let currentName = (currentSpecialist.name || '').replace(/^(Dr\.|Dra\.|Dr|Dra)\s*/i, '').trim();
+                    setCurrentSpecialist({ ...currentSpecialist, name: title ? `${title} ${currentName}` : currentName });
+                  }}
+                >
+                  <option value="">Nenhum</option>
+                  <option value="Dr.">Dr.</option>
+                  <option value="Dra.">Dra.</option>
+                </select>
+                <input
+                  type="text"
+                  required
+                  className="w-2/3 px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                  value={(currentSpecialist.name || '').replace(/^(Dr\.|Dra\.|Dr|Dra)\s*/i, '')}
+                  onChange={e => {
+                    const titleMatch = (currentSpecialist.name || '').match(/^(Dr\.|Dra\.|Dr|Dra)\b/i);
+                    const title = titleMatch ? ((currentSpecialist.name || '').match(/^(Dra\.|Dra)\b/i) ? 'Dra. ' : 'Dr. ') : '';
+                    setCurrentSpecialist({ ...currentSpecialist, name: `${title}${e.target.value}` });
+                  }}
+                  placeholder="Nome do Especialista"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Especialidade (Título)</label>
