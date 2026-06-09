@@ -15,7 +15,7 @@ export const budgetService = {
   async fetchBudgets(empresaId: number, pacienteId: number): Promise<Budget[]> {
     const { data, error } = await supabase
       .from('orcamentos')
-      .select('*')
+      .select('*, orcamento_itens(*)')
       .eq('empresa_id', empresaId)
       .eq('paciente_id', pacienteId)
       .order('created_at', { ascending: false });
@@ -25,22 +25,14 @@ export const budgetService = {
       return [];
     }
 
-    return data.map(dbBudget => ({
-      id: dbBudget.id,
-      numero: dbBudget.numero,
-      name: dbBudget.nome,
-      date: dbBudget.data_orcamento,
-      created_at: dbBudget.created_at,
-      total: Number(dbBudget.total),
-      status: dbBudget.status as 'Pendente' | 'Aguardando' | 'Aprovado',
-      treatments: dbBudget.tratamentos || []
-    }));
+    return data.map(dbBudget => this.mapToBudget(dbBudget));
   },
   async fetchAllCompanyBudgets(empresaId: number): Promise<any[]> {
     const { data, error } = await supabase
       .from('orcamentos')
       .select(`
         *,
+        orcamento_itens(*),
         paciente:Cliente (
           id, nome, nome_completo, cpf
         )
@@ -52,7 +44,10 @@ export const budgetService = {
       console.error('Error fetching company budgets:', error);
       return [];
     }
-    return data;
+    return data.map(dbBudget => {
+      const budget = this.mapToBudget(dbBudget);
+      return { ...dbBudget, treatments: budget.treatments };
+    });
   },
 
   async saveBudget(empresaId: number, pacienteId: number, budget: Budget): Promise<Budget | null> {
@@ -62,13 +57,14 @@ export const budgetService = {
       nome: budget.name,
       data_orcamento: budget.date,
       total: budget.total,
-      status: budget.status,
-      tratamentos: budget.treatments
+      status: budget.status
     };
 
     // If ID is a purely numeric short random id (from frontend), we should omit it and let Supabase generate UUID
     // Or if we want to enforce updates, we need to check if it's a valid UUID.
     const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(budget.id);
+
+    let savedBudget: any = null;
 
     if (isUUID) {
       // Update
@@ -83,7 +79,7 @@ export const budgetService = {
         console.error('Error updating budget:', error);
         return null;
       }
-      return this.mapToBudget(data);
+      savedBudget = data;
     } else {
       // Create
       const { data, error } = await supabase
@@ -96,8 +92,37 @@ export const budgetService = {
         console.error('Error inserting budget:', error);
         return null;
       }
-      return this.mapToBudget(data);
+      savedBudget = data;
     }
+
+    // Deletar itens antigos antes de inserir os novos para evitar duplicidade
+    await supabase.from('orcamento_itens').delete().eq('orcamento_id', savedBudget.id);
+
+    // Inserir os novos itens
+    if (budget.treatments && budget.treatments.length > 0) {
+      const itemsPayload = budget.treatments.map(t => ({
+        id: t.id || Math.random().toString(36).substr(2, 9),
+        orcamento_id: savedBudget.id,
+        treatment_name: t.treatmentName || t.tratamento,
+        categoria: t.categoria || null,
+        valor: t.valor ? Number(t.valor) : 0,
+        dente: t.dente ? String(t.dente) : null,
+        faces: t.faces || null,
+        profissional: t.profissional || null,
+        convenio: t.convenio || null,
+        status: t.status || 'Aguardando',
+        observacoes: t.observacoes || null
+      }));
+
+      const { error: insertError } = await supabase.from('orcamento_itens').insert(itemsPayload);
+      if (insertError) {
+        console.error('Error inserting budget items:', insertError);
+      }
+      
+      savedBudget.orcamento_itens = itemsPayload;
+    }
+
+    return this.mapToBudget(savedBudget);
   },
 
   async deleteBudget(budgetId: string): Promise<boolean> {
@@ -131,6 +156,23 @@ export const budgetService = {
   },
 
   mapToBudget(dbBudget: any): Budget {
+    let treatments = dbBudget.tratamentos || [];
+    
+    if (dbBudget.orcamento_itens && Array.isArray(dbBudget.orcamento_itens)) {
+      treatments = dbBudget.orcamento_itens.map((item: any) => ({
+        id: item.id,
+        treatmentName: item.treatment_name,
+        categoria: item.categoria,
+        valor: item.valor,
+        dente: item.dente,
+        faces: item.faces,
+        profissional: item.profissional,
+        convenio: item.convenio,
+        status: item.status,
+        observacoes: item.observacoes
+      }));
+    }
+
     return {
       id: dbBudget.id,
       numero: dbBudget.numero,
@@ -139,7 +181,7 @@ export const budgetService = {
       created_at: dbBudget.created_at,
       total: Number(dbBudget.total),
       status: dbBudget.status,
-      treatments: dbBudget.tratamentos || []
+      treatments: treatments
     };
   }
 };

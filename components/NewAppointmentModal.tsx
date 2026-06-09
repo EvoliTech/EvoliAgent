@@ -43,6 +43,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [observations, setObservations] = useState('');
     const [consultationType, setConsultationType] = useState<string>('');
     const [patientId, setPatientId] = useState<number | null>(null);
+    const [durationMinutes, setDurationMinutes] = useState<number>(30);
 
     // Retroactive modal state
     const [showRetroactiveModal, setShowRetroactiveModal] = useState(false);
@@ -59,6 +60,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                     const startObj = new Date(initialData.start.dateTime);
                     setDate(startObj.toISOString().split('T')[0]);
                     setTime(startObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+                    
+                    if (initialData.end?.dateTime) {
+                        const endObj = new Date(initialData.end.dateTime);
+                        const diffMins = Math.round((endObj.getTime() - startObj.getTime()) / 60000);
+                        setDurationMinutes(diffMins);
+                    }
                 }
 
                 // Parse description for fields
@@ -103,6 +110,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                     setDate(new Date().toISOString().split('T')[0]);
                 }
                 setTime('09:00');
+                setDurationMinutes(30);
                 setPatientName('');
                 setDdd('');
                 setPhoneOnly('');
@@ -247,7 +255,7 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const executeSubmit = async (startDate: Date) => {
         setLoading(true);
         try {
-            const endDate = new Date(startDate.getTime() + 30 * 60000); // 30 min duration default
+            const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
 
             // --- Business Rule: Prevent Duplicates/Overlaps ---
             // Check if there's already an appointment for this specialist at this time
@@ -388,8 +396,8 @@ Obs: ${observations || '-'}`,
                         </select>
                     </div>
 
-                    {/* Date & Time */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Date, Time & Duration */}
+                    <div className="grid grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-0.5">Data</label>
                             <div className="relative">
@@ -412,6 +420,24 @@ Obs: ${observations || '-'}`,
                                     onChange={e => setTime(e.target.value)}
                                     className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-0.5">Duração</label>
+                            <div className="relative">
+                                <Clock size={16} className="absolute left-3 top-2.5 text-gray-400" />
+                                <select
+                                    value={durationMinutes}
+                                    onChange={e => setDurationMinutes(Number(e.target.value))}
+                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                >
+                                    <option value={15}>15 Minutos</option>
+                                    <option value={30}>30 Minutos</option>
+                                    <option value={45}>45 Minutos</option>
+                                    <option value={60}>1 Hora</option>
+                                    <option value={90}>1h 30m</option>
+                                    <option value={120}>2 Horas</option>
+                                </select>
                             </div>
                         </div>
                     </div>
