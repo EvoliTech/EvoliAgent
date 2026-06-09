@@ -179,6 +179,8 @@ const [loading, setLoading] = useState(false);
       const fetchTargetPatients = async () => {
          setLoading(true);
          try {
+            let finalPatients: any[] = [];
+            
             if (activeTab === 'aniversariantes') {
                const allPatients = await patientService.fetchPatients(empresaId);
                const today = new Date();
@@ -191,7 +193,7 @@ const [loading, setLoading] = useState(false);
                const tomorrowMonth = tomorrow.getMonth();
                const tomorrowDay = tomorrow.getDate();
 
-               const birthdayPatients = allPatients
+               finalPatients = allPatients
                   .filter(p => p.dataNascimento)
                   .map(p => {
                      const bYear = parseInt(p.dataNascimento!.substring(0, 4), 10);
@@ -218,23 +220,45 @@ const [loading, setLoading] = useState(false);
                   })
                   .filter((p): p is BirthdayPatient => p !== null);
 
-               setPatientsList(birthdayPatients);
             } else if (selectedInstance) {
                const contactIds = allCampaignContacts.filter(c => c.campaign_id === selectedInstance.id).map(c => String(c.cliente_id));
                if (contactIds.length > 0) {
                   const allPatients = await patientService.fetchPatients(empresaId);
                   const targeted = allPatients.filter(p => contactIds.includes(String(p.id)));
-                  const mapped = targeted.map(p => {
+                  finalPatients = targeted.map(p => {
                      const contactInfo = allCampaignContacts.find(c => String(c.cliente_id) === String(p.id) && c.campaign_id === selectedInstance.id);
                      return { ...p, campaignReason: contactInfo?.reason || '' };
                   });
-                  setPatientsList(mapped);
-               } else {
-                  setPatientsList([]);
                }
-            } else {
-               setPatientsList([]);
             }
+
+            if (finalPatients.length > 0) {
+               // Enriquecer com a data da última consulta REAL (da tabela agendamentos)
+               const { data: appts } = await supabase
+                 .from('agendamentos')
+                 .select('cliente_id, data_inicio, titulo')
+                 .eq('IDEmpresa', empresaId)
+                 .order('data_inicio', { ascending: false });
+
+               if (appts && appts.length > 0) {
+                  finalPatients = finalPatients.map(p => {
+                     const cleanPhone = p.phone ? p.phone.replace(/\D/g, '') : null;
+                     const lastAppt = appts.find((a: any) => {
+                        const matchedId = String(a.cliente_id) === String(p.id);
+                        const matchedPhone = cleanPhone && String(a.cliente_id) === cleanPhone;
+                        const matchesTitle = a.titulo && a.titulo.toLowerCase().includes(p.name.toLowerCase());
+                        return matchedId || matchedPhone || matchesTitle;
+                     });
+                     
+                     return {
+                        ...p,
+                        lastVisit: lastAppt && lastAppt.data_inicio ? lastAppt.data_inicio : p.lastVisit
+                     };
+                  });
+               }
+            }
+
+            setPatientsList(finalPatients);
          } catch (e) {
             console.error(e);
          } finally {
