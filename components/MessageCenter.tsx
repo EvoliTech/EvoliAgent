@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCompany } from '../contexts/CompanyContext';
 import { patientService } from '../services/patientService';
+import { companyService } from '../services/companyService';
 import { Patient } from '../types';
 import { Gift, CalendarClock, Search, MessageCircle, Edit3, X, Loader2, Send, Check, Settings, ShieldAlert, ArrowLeft, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -41,6 +42,7 @@ const [loading, setLoading] = useState(false);
    // Template Editor State
    const [isEditingTemplate, setIsEditingTemplate] = useState(false);
    const [templateToEdit, setTemplateToEdit] = useState('');
+   const [companyName, setCompanyName] = useState<string>('Clínica');
 
    const location = useLocation();
    const navigate = useNavigate();
@@ -89,8 +91,8 @@ const [loading, setLoading] = useState(false);
 
    // Base default templates
    const defaultTemplates: Record<string, string> = {
-      'aniversariantes': "Olá {nome}, tudo bem?\nNós da Clínica desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!",
-      'retorno_semestral': "Olá {nome}, tudo bem?\nNotamos que já faz um tempo desde a sua última consulta conosco. Que tal agendarmos um retorno preventivo para cuidarmos da sua saúde?",
+      'aniversariantes': "Olá {nome}, tudo bem?\nNós da {nome_clinica} desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!",
+      'retorno_semestral': "Olá {nome}, tudo bem?\nNotamos que já faz um tempo desde a sua última consulta conosco na {nome_clinica}. Que tal agendarmos um retorno preventivo para cuidarmos da sua saúde?",
    };
 
    const getTemplate = (campId: string) => {
@@ -102,6 +104,10 @@ const [loading, setLoading] = useState(false);
       if (!empresaId) return;
 
       const fetchCampaigns = async () => {
+         try {
+            const compData = await companyService.fetchCompany(empresaId);
+            if (compData) setCompanyName(compData.nome);
+         } catch(e) {}
          let instances: any[] = [];
          if (supabase) {
             const { data } = await supabase.from('campaigns').select('*').eq('empresa_id', empresaId).eq('status', 'active');
@@ -212,125 +218,6 @@ const [loading, setLoading] = useState(false);
       return isGloballyContacted48h(patientId, currentCampaignId) || isInAnotherUnsentCampaign(patientId, currentCampaignId);
    };
 
-   const isRecentlyContacted = (patientId: string, campaignId: string) => {
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      return sentLogs.some(log =>
-         log.patientId === patientId &&
-         log.campaignId === campaignId &&
-         (now - log.timestamp) < THIRTY_DAYS
-      );
-   };
-
-   const handleDeleteCampaign = async (campaignId: string) => {
-      if (!window.confirm("Atenção: Tem certeza que deseja excluir esta campanha? Ela não enviará mais novas mensagens. Históricos anteriores serão mantidos.")) return;
-
-      // Optimistically update UI
-      setActiveCampaigns(prev => prev.filter(c => c.id !== campaignId));
-
-      if (supabase) {
-         try {
-            await supabase.from('campaigns').delete().eq('id', campaignId);
-         } catch (e) {
-            console.error("Error deleting campaign:", e);
-            alert("Houve um erro ao excluir a campanha da nuvem.");
-         }
-      } else {
-         const localData = JSON.parse(localStorage.getItem(`campaigns_${empresaId}`) || '[]');
-         const updatedData = localData.filter((c: any) => c.id !== campaignId);
-         localStorage.setItem(`campaigns_${empresaId}`, JSON.stringify(updatedData));
-      }
-   };
-
-   useEffect(() => {
-      const handleOpenAniv = () => setActiveTab('aniversariantes');
-      window.addEventListener('open_aniversariantes', handleOpenAniv);
-      return () => window.removeEventListener('open_aniversariantes', handleOpenAniv);
-   }, []);
-
-   useEffect(() => {
-      const fetchData = async () => {
-         const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
-         if (!empresaId || !campToUse) {
-            setLoading(false);
-            setPatientsList([]);
-            return;
-         }
-         setLoading(true);
-         try {
-            const allPatients = await patientService.fetchPatients(empresaId);
-            const cType = campToUse.type;
-
-            if (cType === 'aniversariantes') {
-               const today = new Date();
-               const tomorrow = new Date(today);
-               tomorrow.setDate(today.getDate() + 1);
-
-               const currentMonth = today.getMonth() + 1;
-               const currentDay = today.getDate();
-               const tmrwMonth = tomorrow.getMonth() + 1;
-               const tmrwDay = tomorrow.getDate();
-
-               const filtered: BirthdayPatient[] = [];
-
-               allPatients.forEach(p => {
-                  if (!p.dataNascimento) return;
-                  const [yearStr, monthStr, dayStr] = p.dataNascimento.split('-');
-                  if (!monthStr || !dayStr) return;
-                  const bMonth = parseInt(monthStr, 10);
-                  const bDay = parseInt(dayStr, 10);
-                  const bYear = parseInt(yearStr, 10);
-
-                  let bType: 'hoje' | 'amanha' | null = null;
-                  if (bMonth === currentMonth && bDay === currentDay) bType = 'hoje';
-                  else if (bMonth === tmrwMonth && bDay === tmrwDay) bType = 'amanha';
-
-                  if (bType) {
-                     const age = today.getFullYear() - bYear;
-                     filtered.push({ ...p, birthdayType: bType, age });
-                  }
-               });
-
-               filtered.sort((a, b) => a.birthdayType === 'hoje' ? -1 : 1);
-               setPatientsList(filtered);
-
-            } else if (campToUse.id) {
-               if (supabase) {
-                  const { data: contactsData } = await supabase.from('campaign_contacts').select('cliente_id').eq('campaign_id', campToUse.id);
-                  if (contactsData) {
-                     const tiedPatientIds = contactsData.map((c: any) => String(c.cliente_id));
-                     const matchContext = campToUse.filters?.matchContext || {};
-                     const filtered = allPatients.filter(p => tiedPatientIds.includes(String(p.id))).map(p => ({
-                        ...p,
-                        campaignReason: matchContext[p.id] || ''
-                     }));
-                     setPatientsList(filtered);
-                  } else {
-                     setPatientsList([]);
-                  }
-               } else {
-                  setPatientsList([]);
-               }
-            }
-         } catch (e) {
-            console.error(e);
-         } finally {
-            setLoading(false);
-         }
-      };
-      fetchData();
-   }, [empresaId, selectedInstance, activeTab, activeCampaigns]);
-
-   const generateMessage = (patient: any, template: string) => {
-      const firstName = patient.name.split(' ')[0] || '';
-      return template.replace(/\{nome_cliente\}/gi, firstName)
-         .replace(/\{nome\}/gi, firstName)
-         .replace(/\{nome_completo\}/gi, patient.name);
-   };
-
-   const getActiveTemplate = () => {
-      const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
-      if (campToUse && campToUse.messageTemplate) return campToUse.messageTemplate;
       return getTemplate(activeTab);
    };
 
@@ -637,7 +524,8 @@ const [loading, setLoading] = useState(false);
                   <div className="p-6">
                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4 text-sm text-blue-800">
                         Utilize as tags abaixo para personalizar automaticamente:<br />
-                        <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600">{"{nome_cliente}"}</code> - Primeiro Nome
+                        <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600 mt-1 inline-block">{"{nome_cliente}"}</code> - Primeiro Nome<br />
+                        <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600 mt-1 inline-block">{"{nome_clinica}"}</code> - Nome da sua Clínica
                      </div>
                      <textarea
                         value={templateToEdit}
