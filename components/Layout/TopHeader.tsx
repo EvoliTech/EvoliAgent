@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CalendarDays,
   User,
@@ -205,7 +206,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
         </div>
       </div>
       {/* Birthday Toast Popup */}
-      {showBirthdayToast && (
+      {showBirthdayToast && createPortal(
          <div className="fixed bottom-6 right-6 z-[100] glass border border-white/50 shadow-glass rounded-2xl p-5 w-80 animate-in slide-in-from-bottom-5 fade-in duration-300">
             <div className="flex items-start justify-between mb-3">
                <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center -mt-1 -ml-1">
@@ -229,7 +230,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             >
                Enviar mensagens agora
             </button>
-         </div>
+         </div>,
+         document.body
       )}
 
       <GlobalSearchModal 

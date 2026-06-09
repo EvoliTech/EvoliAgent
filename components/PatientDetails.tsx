@@ -1257,6 +1257,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                 <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Dente/Face</th>
                                 <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Profissional/Convênio</th>
                                 <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Valor</th>
+                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Ações</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1274,6 +1275,42 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                   </td>
                                   <td className="px-4 py-2.5 text-sm font-bold text-slate-700 text-right">
                                     {t?.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parseFloat(t.valor)) : '--'}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-sm text-right">
+                                    {t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Finalizado' ? (
+                                      <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Aprovado</span>
+                                    ) : budget.status !== 'Aprovado' ? (
+                                      <button
+                                        onClick={async () => {
+                                          if (!empresaId || !patient?.id) return;
+                                          if (t.status === 'Pendente') {
+                                            alert("Não é possível aprovar um tratamento pendente de preenchimento.");
+                                            return;
+                                          }
+                                          
+                                          const updatedTreatments = budget.treatments.map((x: any) => 
+                                            x.id === t.id ? { ...x, status: 'Em andamento' } : x
+                                          );
+                                          
+                                          const allApproved = updatedTreatments.every((x: any) => 
+                                            x.status === 'Em andamento' || x.status === 'Concluído' || x.status === 'Finalizado'
+                                          );
+
+                                          const upd = {
+                                            ...budget,
+                                            status: allApproved ? 'Aprovado' : budget.status,
+                                            treatments: updatedTreatments
+                                          };
+                                          const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
+                                          if (saved) {
+                                            setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+                                          }
+                                        }}
+                                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
+                                      >
+                                        Aprovar
+                                      </button>
+                                    ) : null}
                                   </td>
                                 </tr>
                               ))}
