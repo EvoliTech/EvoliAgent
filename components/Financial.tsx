@@ -160,6 +160,19 @@ export const Financial: React.FC = () => {
 
   const despesas = useMemo(() => allDespesas.filter(d => isDateInFilter(d.data_pagamento || d.data_vencimento)), [allDespesas, filterMonth, filterYear]);
 
+  const gruposRecorrentes = useMemo(() => {
+    const groups: Record<string, DespesaType[]> = {};
+    allDespesas.forEach(d => {
+      if (d.is_recorrente && d.grupo_recorrente) {
+        if (!groups[d.grupo_recorrente]) groups[d.grupo_recorrente] = [];
+        groups[d.grupo_recorrente].push(d);
+      }
+    });
+    // Sort each group by date
+    Object.values(groups).forEach(g => g.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()));
+    return groups;
+  }, [allDespesas]);
+
   const despesasAgrupadas = useMemo(() => {
     const groups: Record<string, DespesaType[]> = {};
     const singles: DespesaType[] = [];
@@ -961,8 +974,18 @@ export const Financial: React.FC = () => {
                   // === GROUPED RECURRING ===
                   const { grupoId, items, representative } = entry;
                   const isExpanded = expandedGroup === grupoId;
-                  const totalPagas = items.filter(i => i.is_paga).length;
-                  const totalValor = items.reduce((s, i) => s + (i.valor || 0), 0);
+                  
+                  // Use the global groups for total values to ensure correct index calculations
+                  const fullGroupItems = gruposRecorrentes[grupoId] || items;
+                  
+                  // We sort it by date to compute the exact index of each installment
+                  const sortedGroupItems = [...fullGroupItems].sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime());
+                  
+                  const expectedDuracao = representative.duracao_meses || fullGroupItems.length;
+                  const maxTotalItems = Math.max(expectedDuracao, fullGroupItems.length);
+                  
+                  const totalPagas = fullGroupItems.filter(i => i.is_paga).length;
+                  const totalValor = items.reduce((s, i) => s + (i.valor || 0), 0); // show only the sum for the shown items
                   const proximaAPagar = items.find(i => !i.is_paga);
 
                   return (
@@ -979,7 +1002,7 @@ export const Financial: React.FC = () => {
                           <div className="flex flex-col">
                             <span className="text-[13.5px] font-semibold text-gray-700">{representative.titulo}</span>
                             <span className="text-[12px] font-medium text-gray-500 mt-0.5">
-                              Recorrente ({representative.periodo_recorrencia}) · {representative.duracao_meses} meses · {totalPagas}/{items.length} pagas
+                              Recorrente ({representative.periodo_recorrencia}) · {maxTotalItems} meses · {totalPagas}/{maxTotalItems} pagas
                             </span>
                           </div>
                         </div>
@@ -993,7 +1016,7 @@ export const Financial: React.FC = () => {
                           </div>
                           <div className="w-28 flex justify-end pr-2">
                             <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[11px] font-bold whitespace-nowrap">
-                              {items.length}x parcelas
+                              {items.length}x parcela{items.length !== 1 ? 's' : ''}
                             </span>
                           </div>
                           <button onClick={(e) => handleDeleteGroup(grupoId, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Cancelar todas">
@@ -1003,34 +1026,40 @@ export const Financial: React.FC = () => {
                       </div>
 
                       {/* Expanded detail rows */}
-                      {isExpanded && items.map((d, subIdx) => (
-                        <div key={d.id || subIdx} className={`flex items-center justify-between p-3 pl-16 pr-6 border-b border-gray-100/80 transition-colors ${d.is_paga ? 'bg-red-50/30' : 'bg-blue-50/20'}`}>
-                          <div className="flex-1 flex items-start gap-3">
-                            <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5" style={{ borderColor: d.is_paga ? '#ef4444' : '#f97316' }}>
-                              {d.is_paga && <Check size={10} strokeWidth={4} className="text-red-500" />}
+                      {isExpanded && items.map((d, subIdx) => {
+                        // Find the exact index of this installment in the full group
+                        const exactIndex = sortedGroupItems.findIndex(x => x.id === d.id);
+                        const displayedIndex = exactIndex >= 0 ? exactIndex + 1 : subIdx + 1;
+                        
+                        return (
+                          <div key={d.id || subIdx} className={`flex items-center justify-between p-3 pl-16 pr-6 border-b border-gray-100/80 transition-colors ${d.is_paga ? 'bg-red-50/30' : 'bg-blue-50/20'}`}>
+                            <div className="flex-1 flex items-start gap-3">
+                              <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5" style={{ borderColor: d.is_paga ? '#ef4444' : '#f97316' }}>
+                                {d.is_paga && <Check size={10} strokeWidth={4} className="text-red-500" />}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[13px] font-medium text-gray-700">Parcela {displayedIndex}/{maxTotalItems}</span>
+                                {d.is_paga && d.forma_pagamento && <span className="text-[11px] text-gray-500">Pago via {d.forma_pagamento}</span>}
+                              </div>
                             </div>
-                            <div className="flex flex-col">
-                              <span className="text-[13px] font-medium text-gray-700">Parcela {subIdx + 1}/{items.length}</span>
-                              {d.is_paga && d.forma_pagamento && <span className="text-[11px] text-gray-500">Pago via {d.forma_pagamento}</span>}
+                            <div className="flex items-center justify-between w-[55%] pl-4">
+                              <div className="w-[18%] text-[12px] font-medium text-gray-500">{d.categoria || '--'}</div>
+                              <div className="w-[18%] text-[12px] font-medium text-gray-600">{new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+                              <div className="w-[18%] text-[13px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <div className="w-28 flex justify-end pr-2 gap-2">
+                                {d.is_paga ? (
+                                  <span className="flex items-center gap-1 px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold"><Check size={10} strokeWidth={3.5} /> Pago</span>
+                                ) : (
+                                  <button onClick={(e) => handlePayDespesa(d.id!, e)} className="flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded-full text-[10px] font-bold">
+                                    <Check size={10} strokeWidth={3} /> Pagar
+                                  </button>
+                                )}
+                              </div>
+                              <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir parcela"><Trash2 size={14} /></button>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between w-[55%] pl-4">
-                            <div className="w-[18%] text-[12px] font-medium text-gray-500">{d.categoria || '--'}</div>
-                            <div className="w-[18%] text-[12px] font-medium text-gray-600">{new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-                            <div className="w-[18%] text-[13px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                            <div className="w-28 flex justify-end pr-2 gap-2">
-                              {d.is_paga ? (
-                                <span className="flex items-center gap-1 px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold"><Check size={10} strokeWidth={3.5} /> Pago</span>
-                              ) : (
-                                <button onClick={(e) => handlePayDespesa(d.id!, e)} className="flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded-full text-[10px] font-bold">
-                                  <Check size={10} strokeWidth={3} /> Pagar
-                                </button>
-                              )}
-                            </div>
-                            <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir parcela"><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCompany } from '../contexts/CompanyContext';
 import { patientService } from '../services/patientService';
@@ -13,11 +13,11 @@ interface BirthdayPatient extends Patient {
 }
 
 const campaignTypesInfo = [
-   { id: 'aniversariantes', title: 'Aniversário', icon: Gift },
-   { id: 'retorno_semestral', title: 'Recuperação de Inativos', icon: CalendarClock },
-   { id: 'pos_operatorio', title: 'Pós-operatório', icon: MessageCircle },
-   { id: 'satisfacao', title: 'Satisfação', icon: MessageCircle },
-   { id: 'orcamentos_aberto', title: 'Recuperação de Orçamentos', icon: MessageCircle },
+   { id: 'aniversariantes', title: 'Anivers├írio', icon: Gift },
+   { id: 'retorno_semestral', title: 'Recupera├º├úo de Inativos', icon: CalendarClock },
+   { id: 'pos_operatorio', title: 'P├│s-operat├│rio', icon: MessageCircle },
+   { id: 'satisfacao', title: 'Satisfa├º├úo', icon: MessageCircle },
+   { id: 'orcamentos_aberto', title: 'Recupera├º├úo de Or├ºamentos', icon: MessageCircle },
    { id: 'tratamentos_finalizados', title: 'Retorno de tratamentos', icon: MessageCircle },
 ];
 
@@ -42,7 +42,7 @@ const [loading, setLoading] = useState(false);
    // Template Editor State
    const [isEditingTemplate, setIsEditingTemplate] = useState(false);
    const [templateToEdit, setTemplateToEdit] = useState('');
-   const [companyName, setCompanyName] = useState<string>('Clínica');
+   const [companyName, setCompanyName] = useState<string>('Cl├¡nica');
 
    const location = useLocation();
    const navigate = useNavigate();
@@ -91,13 +91,13 @@ const [loading, setLoading] = useState(false);
 
    // Base default templates
    const defaultTemplates: Record<string, string> = {
-      'aniversariantes': "Olá {nome}, tudo bem?\nNós da {nome_clinica} desejamos a você um feliz aniversário! 🎉 Que seu dia seja cheio de alegrias!",
-      'retorno_semestral': "Olá {nome}, tudo bem?\nNotamos que já faz um tempo desde a sua última consulta conosco na {nome_clinica}. Que tal agendarmos um retorno preventivo para cuidarmos da sua saúde?",
+      'aniversariantes': "Ol├í {nome}, tudo bem?\nN├│s da {nome_clinica} desejamos a voc├¬ um feliz anivers├írio! ­ƒÄë Que seu dia seja cheio de alegrias!",
+      'retorno_semestral': "Ol├í {nome}, tudo bem?\nNotamos que j├í faz um tempo desde a sua ├║ltima consulta conosco na {nome_clinica}. Que tal agendarmos um retorno preventivo para cuidarmos da sua sa├║de?",
    };
 
    const getTemplate = (campId: string) => {
       const saved = localStorage.getItem(`${campId}_template`);
-      return saved || defaultTemplates[campId] || "Olá {nome}, venha nos visitar!";
+      return saved || defaultTemplates[campId] || "Ol├í {nome}, venha nos visitar!";
    };
 
    useEffect(() => {
@@ -173,78 +173,6 @@ const [loading, setLoading] = useState(false);
       fetchCampaigns();
    }, [empresaId]);
 
-   useEffect(() => {
-      if (!empresaId) return;
-
-      const fetchTargetPatients = async () => {
-         setLoading(true);
-         try {
-            if (activeTab === 'aniversariantes') {
-               const allPatients = await patientService.fetchPatients(empresaId);
-               const today = new Date();
-               const currentMonth = today.getMonth();
-               const currentDay = today.getDate();
-               const currentYear = today.getFullYear();
-               
-               const tomorrow = new Date();
-               tomorrow.setDate(today.getDate() + 1);
-               const tomorrowMonth = tomorrow.getMonth();
-               const tomorrowDay = tomorrow.getDate();
-
-               const birthdayPatients = allPatients
-                  .filter(p => p.dataNascimento)
-                  .map(p => {
-                     const bYear = parseInt(p.dataNascimento!.substring(0, 4), 10);
-                     const bMonth = parseInt(p.dataNascimento!.substring(5, 7), 10) - 1;
-                     const bDay = parseInt(p.dataNascimento!.substring(8, 10), 10);
-
-                     let type: 'hoje' | 'amanha' | null = null;
-                     if (bMonth === currentMonth && bDay === currentDay) type = 'hoje';
-                     else if (bMonth === tomorrowMonth && bDay === tomorrowDay) type = 'amanha';
-
-                     if (type) {
-                        let age = currentYear - bYear;
-                        if (currentMonth < bMonth || (currentMonth === bMonth && currentDay < bDay)) {
-                           age--;
-                        }
-
-                        return {
-                           ...p,
-                           birthdayType: type,
-                           age
-                        } as BirthdayPatient;
-                     }
-                     return null;
-                  })
-                  .filter((p): p is BirthdayPatient => p !== null);
-
-               setPatientsList(birthdayPatients);
-            } else if (selectedInstance) {
-               const contactIds = allCampaignContacts.filter(c => c.campaign_id === selectedInstance.id).map(c => String(c.cliente_id));
-               if (contactIds.length > 0) {
-                  const allPatients = await patientService.fetchPatients(empresaId);
-                  const targeted = allPatients.filter(p => contactIds.includes(String(p.id)));
-                  const mapped = targeted.map(p => {
-                     const contactInfo = allCampaignContacts.find(c => String(c.cliente_id) === String(p.id) && c.campaign_id === selectedInstance.id);
-                     return { ...p, campaignReason: contactInfo?.reason || '' };
-                  });
-                  setPatientsList(mapped);
-               } else {
-                  setPatientsList([]);
-               }
-            } else {
-               setPatientsList([]);
-            }
-         } catch (e) {
-            console.error(e);
-         } finally {
-            setLoading(false);
-         }
-      };
-
-      fetchTargetPatients();
-   }, [empresaId, activeTab, selectedInstance, allCampaignContacts]);
-
    const markAsSent = async (patientId: string, campaignId: string) => {
       if (!empresaId) return;
       const now = Date.now();
@@ -290,24 +218,7 @@ const [loading, setLoading] = useState(false);
       return isGloballyContacted48h(patientId, currentCampaignId) || isInAnotherUnsentCampaign(patientId, currentCampaignId);
    };
 
-   const getActiveTemplate = () => {
       return getTemplate(activeTab);
-   };
-
-   const generateMessage = (patient: any, template: string) => {
-      let msg = template || '';
-      if (patient && patient.name) {
-         const firstName = patient.name.split(' ')[0];
-         msg = msg.replace(/\{nome\}/g, firstName).replace(/\{nome_cliente\}/g, firstName);
-      }
-      msg = msg.replace(/\{nome_clinica\}/g, companyName);
-      return msg;
-   };
-
-   const isRecentlyContacted = (patientId: string, campaignId: string) => {
-      const now = Date.now();
-      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-      return sentLogs.some(log => log.patientId === patientId && log.campaignId === campaignId && (now - log.timestamp) < THIRTY_DAYS);
    };
 
    const handleFastSend = (patient: any) => {
@@ -315,7 +226,7 @@ const [loading, setLoading] = useState(false);
       const msg = customDrafts[patient.id] || generateMessage(patient, savedTemplate);
       const encoded = encodeURIComponent(msg);
 
-      let phone = patient.phone ? patient.phone.replace(/\D/g, '') : '';
+      let phone = patient.phone.replace(/\D/g, '');
       if (phone && !phone.startsWith('55')) phone = '55' + phone;
 
       const campToUse = (activeTab === 'aniversariantes') ? activeCampaigns.find(c => c.type === 'aniversariantes') : selectedInstance;
@@ -374,7 +285,7 @@ const [loading, setLoading] = useState(false);
                </div>
                <div>
                   <h1 className="text-2xl font-bold text-gray-800">Central de Mensagens</h1>
-                  <p className="text-sm text-gray-500 mt-1">Gerencie os alertas ativos para envio de mensagens automáticas.</p>
+                  <p className="text-sm text-gray-500 mt-1">Gerencie os alertas ativos para envio de mensagens autom├íticas.</p>
                </div>
             </div>
          </div>
@@ -396,9 +307,9 @@ const [loading, setLoading] = useState(false);
                      {type.title}
                   </button>
                ))}
-               {/* Seta indicativa (fade effect) no mobile para mostrar que há mais abas */}
+               {/* Seta indicativa (fade effect) no mobile para mostrar que h├í mais abas */}
                <div className="md:hidden absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none flex items-center justify-end pr-1 text-gray-400">
-                  ▶
+                  ÔûÂ
                </div>
             </div>
 
@@ -410,7 +321,7 @@ const [loading, setLoading] = useState(false);
                      </div>
                      <h3 className="text-lg font-bold text-gray-800 mb-2">Nenhuma Campanha Ativa</h3>
                      <p className="text-gray-500 max-w-md mx-auto">
-                        Vá em 'Campanhas automáticas' no menu principal para ativar e configurar suas campanhas de CRM.
+                        V├í em 'Campanhas autom├íticas' no menu principal para ativar e configurar suas campanhas de CRM.
                      </p>
                   </div>
                ) : (!selectedInstance && activeTab !== 'aniversariantes') ? (
@@ -447,25 +358,25 @@ const [loading, setLoading] = useState(false);
                      </div>
                      <h3 className="text-lg font-bold text-gray-800 mb-2">Campanha Inativa</h3>
                      <p className="text-gray-500 max-w-md mx-auto">
-                        A campanha de "Aniversariantes" não está ativada. Vá em 'Campanhas automáticas' no menu principal para ativá-la.
+                        A campanha de "Aniversariantes" n├úo est├í ativada. V├í em 'Campanhas autom├íticas' no menu principal para ativ├í-la.
                      </p>
                   </div>
                ) : loading ? (
                   <div className="flex flex-col items-center justify-center py-20">
                      <Loader2 className="animate-spin text-indigo-600 mb-4" size={40} />
-                     <p className="text-gray-500 font-medium">Buscando público alvo...</p>
+                     <p className="text-gray-500 font-medium">Buscando p├║blico alvo...</p>
                   </div>
                ) : patientsList.length === 0 ? (
                   <div className="bg-white border text-center border-gray-200 rounded-2xl p-16 shadow-sm flex flex-col items-center relative">
                      <button onClick={() => handleInstanceChange(null)} className="absolute top-6 left-6 text-gray-400 hover:text-gray-600 font-semibold text-sm flex items-center gap-1">
-                        ← Voltar
+                        ÔåÉ Voltar
                      </button>
                      <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mb-4 border border-emerald-100">
                         <Check className="text-emerald-500 w-10 h-10" />
                      </div>
                      <h3 className="text-lg font-bold text-gray-800 mb-2">Lista Vazia</h3>
                      <p className="text-gray-500 max-w-md mx-auto">
-                        {activeTab === 'aniversariantes' ? 'Não há aniversariantes hoje nem amanhã.' : 'Não há pacientes qualificados para esta campanha no momento.'}
+                        {activeTab === 'aniversariantes' ? 'N├úo h├í aniversariantes hoje nem amanh├ú.' : 'N├úo h├í pacientes qualificados para esta campanha no momento.'}
                      </p>
                   </div>
                ) : (
@@ -475,7 +386,7 @@ const [loading, setLoading] = useState(false);
                         <div className="flex items-center gap-3 w-full md:w-auto">
                            {activeTab !== 'aniversariantes' && (
                               <button onClick={() => handleInstanceChange(null)} className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gray-800 uppercase px-3 md:px-4 py-2 md:py-2.5 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow transition-all shrink-0">
-                                 ← Voltar
+                                 ÔåÉ Voltar
                               </button>
                            )}
                            <h2 className="font-bold text-lg md:text-xl text-gray-800 tracking-tight truncate">
@@ -517,7 +428,7 @@ const [loading, setLoading] = useState(false);
                                        {patient.age && <p className="text-sm text-gray-500 mt-0.5 font-medium">{patient.age} anos</p>}
                                        {patient.lastVisit && (
                                           <p className="text-[11px] text-amber-600 font-bold bg-amber-100/50 px-2 py-0.5 rounded-md mt-1 w-fit border border-amber-200/50">
-                                             Última consulta: {new Date(patient.lastVisit).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                                             ├Ültima consulta: {new Date(patient.lastVisit).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
                                           </p>
                                        )}
                                         {(patient as any).campaignReason && (
@@ -532,7 +443,7 @@ const [loading, setLoading] = useState(false);
                                  {isContacted ? (
                                     <div className="mt-auto pt-4 border-t border-gray-100">
                                        <div className="bg-gray-100 text-gray-500 font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 text-sm">
-                                          <ShieldAlert size={16} /> Já Contatado (Últimos 30 dias)
+                                          <ShieldAlert size={16} /> J├í Contatado (├Ültimos 30 dias)
                                         </div>
                                      </div>
                                  ) : (
@@ -575,7 +486,7 @@ const [loading, setLoading] = useState(false);
                   </div>
                   <div className="p-6">
                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl mb-4 text-sm text-yellow-800">
-                        Abaixo você pode editar a mensagem. Clique em **Salvar** para manter as alterações para este paciente antes de enviar.
+                        Abaixo voc├¬ pode editar a mensagem. Clique em **Salvar** para manter as altera├º├Áes para este paciente antes de enviar.
                      </div>
                      <label className="block text-sm font-semibold text-gray-700 mb-2">Mensagem a ser enviada</label>
                      <textarea
@@ -603,7 +514,7 @@ const [loading, setLoading] = useState(false);
                <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
                   <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                      <div>
-                        <h3 className="text-lg font-bold text-gray-800">Modelo de Mensagem Padrão</h3>
+                        <h3 className="text-lg font-bold text-gray-800">Modelo de Mensagem Padr├úo</h3>
                         <p className="text-sm text-gray-500">Defina o texto para a aba atual</p>
                      </div>
                      <button onClick={() => setIsEditingTemplate(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition-colors">
@@ -614,7 +525,7 @@ const [loading, setLoading] = useState(false);
                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4 text-sm text-blue-800">
                         Utilize as tags abaixo para personalizar automaticamente:<br />
                         <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600 mt-1 inline-block">{"{nome_cliente}"}</code> - Primeiro Nome<br />
-                        <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600 mt-1 inline-block">{"{nome_clinica}"}</code> - Nome da sua Clínica
+                        <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 text-indigo-600 mt-1 inline-block">{"{nome_clinica}"}</code> - Nome da sua Cl├¡nica
                      </div>
                      <textarea
                         value={templateToEdit}
