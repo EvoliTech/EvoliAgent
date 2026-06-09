@@ -928,7 +928,18 @@ const ProsthesisModal: React.FC<ProsthesisModalProps> = ({ solicitacao, laborato
                         multiple 
                         className="hidden" 
                         onChange={(e) => {
-                          if (e.target.files) setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                          if (e.target.files) {
+                            const maxSizeBytes = 48 * 1024 * 1024;
+                            const validFiles = Array.from(e.target.files).filter(f => {
+                              if (f.size > maxSizeBytes) {
+                                alert('Tamanho do arquivo maior que o permitido, caso queira subir esse arquivo contate o suporte - Limite atingido-');
+                                return false;
+                              }
+                              return true;
+                            });
+                            if (validFiles.length > 0) setSelectedFiles(prev => [...prev, ...validFiles]);
+                            e.target.value = '';
+                          }
                         }} 
                       />
                       <div className="flex items-center gap-2 font-medium">

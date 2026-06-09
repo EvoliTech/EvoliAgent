@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, ChevronRight, HelpCircle, X, ArrowDownRight, ArrowUpRight, Scale, Calendar, Filter, ArrowUp, Check, MoreVertical, Eye, Settings, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, HelpCircle, X, ArrowDownRight, ArrowUpRight, Scale, Calendar, Filter, ArrowUp, Check, MoreVertical, Eye, Settings, Trash2, Edit3 } from 'lucide-react';
 import { useCompany } from '../contexts/CompanyContext';
 import { specialistService } from '../services/specialistService';
 import { budgetService } from '../services/budgetService';
@@ -34,7 +34,8 @@ export const Financial: React.FC = () => {
   const [filterMonth, setFilterMonth] = useState<string>((new Date().getMonth() + 1).toString());
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedSpecialist, setSelectedSpecialist] = useState<Specialist | null>(null);
-  const [showDetails, setShowDetails] = useState<'entradas' | 'saidas' | 'addDespesa' | null>(null);
+  const [showDetails, setShowDetails] = useState<'entradas' | 'saidas' | 'addDespesa' | 'addReceita' | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<{type: 'despesa' | 'receita', data: DespesaType} | null>(null);
   const [showCommissionsDetail, setShowCommissionsDetail] = useState<string | null>(null);
   const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
   const { empresaId } = useCompany();
@@ -74,11 +75,29 @@ export const Financial: React.FC = () => {
 
   const handlePayDespesa = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Confirmar o pagamento desta despesa?")) {
+    if (window.confirm("Confirmar o recebimento/pagamento?")) {
       const success = await expenseService.payExpense(id, 'Dinheiro');
       if (id) {
         setAllDespesas(prev => prev.map(d => d.id === id ? { ...d, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : d));
       }
+    }
+  };
+
+  const handleSaveTransaction = async (data: DespesaType, files: any) => {
+    if (!empresaId) return;
+    try {
+      if (editingTransaction?.data?.id) {
+        await expenseService.updateExpense(editingTransaction.data.id, data, files);
+      } else {
+        await expenseService.createExpense({ ...data, empresa_id: empresaId }, files);
+      }
+      const refreshed = await expenseService.fetchExpenses(empresaId);
+      setAllDespesas(refreshed as DespesaType[]);
+      setShowDetails(null);
+      setEditingTransaction(null);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar transação.');
     }
   };
 
@@ -443,7 +462,28 @@ export const Financial: React.FC = () => {
     });
 
     despesas.forEach(d => {
-      if (d.is_paga) {
+      if (d.tipo === 'receita') {
+        const netReceived = d.valor;
+        if (d.is_paga) {
+          paidTotal += netReceived;
+        } else {
+          pendingTotal += netReceived;
+        }
+        transactions.push({
+          id: d.id || ('rec_' + Math.random()),
+          treatmentName: d.titulo,
+          patientName: 'Receita (' + (d.categoria || 'Outros') + ')',
+          cpf: '',
+          date: d.data_pagamento || d.data_vencimento,
+          amount: d.valor,
+          originalAmount: d.valor,
+          planFee: 0,
+          isPaid: d.is_paga,
+          type: d.is_paga ? 'entrada' : 'pendente',
+          isManualRevenue: true,
+          rawData: d // Keep reference for editing
+        });
+      } else if (d.is_paga) {
         transactions.push({
           id: d.id || ('desp_' + Math.random()),
           treatmentName: d.titulo,
@@ -454,7 +494,8 @@ export const Financial: React.FC = () => {
           originalAmount: d.valor,
           planFee: 0,
           isPaid: true,
-          type: 'saida'
+          type: 'saida',
+          rawData: d // Keep reference for editing
         });
       }
     });
@@ -515,6 +556,20 @@ export const Financial: React.FC = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Financeiro</h1>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowDetails('addReceita')}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Nova Receita
+          </button>
+          <button 
+            onClick={() => setShowDetails('addDespesa')}
+            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Nova Despesa
+          </button>
+        </div>
       </div>
 
       {/* Main Container */}
@@ -651,6 +706,11 @@ export const Financial: React.FC = () => {
                           <span className="font-semibold text-emerald-600 whitespace-nowrap ml-2">
                             R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
+                          {t.isManualRevenue && t.rawData && (
+                            <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: 'receita', data: t.rawData }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1 ml-2">
+                              <Edit3 size={15} />
+                            </button>
+                          )}
                         </div>
                       ));
                     })()}
@@ -715,7 +775,10 @@ export const Financial: React.FC = () => {
                             <p className="font-semibold text-red-600 whitespace-nowrap">R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                             <div className="flex items-center gap-1.5 border-l border-gray-100 pl-3">
                               <button onClick={(e) => handlePayDespesa(d.id!, e)} className="text-emerald-600 font-bold text-[11px] px-2 py-1 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors">
-                                Pagar
+                                {d.tipo === 'receita' ? 'Receber' : 'Pagar'}
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: d.tipo || 'despesa', data: d }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1">
+                                <Edit3 size={15} />
                               </button>
                               <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
                                 <Trash2 size={15} />
@@ -1187,10 +1250,17 @@ export const Financial: React.FC = () => {
                           <p className="text-gray-500 text-xs">Paciente: {t.patientName}</p>
                           {t.planFee > 0 && <p className="text-xs text-orange-600 mt-1">Custo retido plano: R$ {t.planFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>}
                         </div>
-                        <div className="text-right">
-                          <p className={`font-semibold ${t.isPaid ? 'text-green-600' : 'text-blue-600'}`}>
-                            R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </p>
+                        <div className="text-right flex flex-col items-end">
+                          <div className="flex items-center gap-2">
+                            <p className={`font-semibold ${t.isPaid ? 'text-green-600' : 'text-blue-600'}`}>
+                              R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                            {t.isManualRevenue && t.rawData && (
+                              <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: 'receita', data: t.rawData }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1">
+                                <Edit3 size={15} />
+                              </button>
+                            )}
+                          </div>
                           <p className="text-[11px] font-medium text-gray-400 mt-0.5">
                             {t.isPaid ? 'Recebido' : 'A receber em: '} {new Date(t.date).toLocaleDateString()}
                           </p>
@@ -1403,6 +1473,19 @@ export const Financial: React.FC = () => {
                 alert("Houve um erro ao salvar a despesa. Verifique sua conexão.");
               }
             }}
+          />
+        )}
+
+        {/* Modal Add/Edit Transaction */}
+        {(showDetails === 'addDespesa' || showDetails === 'addReceita' || editingTransaction !== null) && (
+          <AddDespesaModal
+            type={editingTransaction ? editingTransaction.type : (showDetails === 'addReceita' ? 'receita' : 'despesa')}
+            initialData={editingTransaction ? editingTransaction.data : undefined}
+            onClose={() => {
+              setShowDetails(null);
+              setEditingTransaction(null);
+            }}
+            onSave={handleSaveTransaction}
           />
         )}
 

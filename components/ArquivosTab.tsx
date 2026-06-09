@@ -426,10 +426,10 @@ export const ArquivosTab: React.FC<ArquivosTabProps> = ({ patient, empresaId }) 
         // Snapshot the array immediately (important for File objects from camera captures)
         const fileArray = Array.from(files);
 
-        // Limite de 50MB por arquivo
+        // Limite de 48MB por arquivo
         const validFiles = fileArray.filter(f => {
-            if (f.size > 50 * 1024 * 1024) {
-                alert(`"${f.name}" é muito grande (máx 50MB).`);
+            if (f.size > 48 * 1024 * 1024) {
+                alert('Tamanho do arquivo maior que o permitido, caso queira subir esse arquivo contate o suporte - Limite atingido-');
                 return false;
             }
             return true;
