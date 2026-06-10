@@ -184,8 +184,14 @@ export default function App() {
   // Navigation helper used by child components
   const navigateTo = (page: PageType) => {
     const base = pageToPath[page] || '/dashboard';
-    if (page === 'patients' && selectedPatientId) {
-      navigate(`${base}/${selectedPatientId}`);
+    if (page === 'patients') {
+      const globalLastPatientId = localStorage.getItem('global_last_patient_id');
+      if (globalLastPatientId) {
+        const lastPath = localStorage.getItem(`patient_path_${globalLastPatientId}`) || 'visao-geral';
+        navigate(`${base}/${globalLastPatientId}/${lastPath}`);
+      } else {
+        navigate(base);
+      }
     } else if (page === 'patient-registration-update' && selectedPatientId) {
       navigate(`${base}/${selectedPatientId}`);
     } else {
@@ -289,9 +295,17 @@ export default function App() {
   // Loading / auth guards
   if (loading || companyLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-        <p className="text-gray-500 text-sm animate-pulse">{loading ? 'Carregando sessão...' : 'Carregando dados da empresa...'}</p>
+      <div className="min-h-screen bg-slate-50/30 flex flex-col">
+        {/* Barra de progresso linear no topo */}
+        <div className="fixed top-0 left-0 w-full h-1 z-50 overflow-hidden bg-slate-100">
+          <div className="h-full bg-blue-600 rounded-r-full absolute left-0 top-0 w-1/3 animate-[slide_1.5s_ease-in-out_infinite]"></div>
+          <style>{`
+            @keyframes slide {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(300%); }
+            }
+          `}</style>
+        </div>
       </div>
     );
   }

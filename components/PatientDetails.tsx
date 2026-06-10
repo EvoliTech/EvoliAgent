@@ -83,6 +83,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           if (activeTab !== pathToTab[tabPath]) {
              setActiveTab(pathToTab[tabPath]);
           }
+          localStorage.setItem(`patient_path_${patient.id}`, tabPath);
        }
     }
   }, [location.pathname, patient.id]);
@@ -98,8 +99,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [tarefas, setTarefas] = React.useState<Tarefa[]>([]);
   const [isTarefasOpen, setIsTarefasOpen] = React.useState(false);
 
-  // Shared Procedures State (DB Sync)
-  const [procedures, setProcedures] = React.useState<Record<number, OdontogramProcedure[]>>({});
+  // Odontograma state removed (now local to NewBudgetModal)
   // Budgets State (DB Sync)
   const [budgets, setBudgets] = React.useState<Budget[]>([]);
 
@@ -390,8 +390,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
     if (empresaId && patient?.id) {
       const load = async () => {
         const patientIdNum = Number(patient.id);
-        const procs = await budgetService.fetchOdontogram(patientIdNum);
-        setProcedures(procs);
         const fetchedBudgets = await budgetService.fetchBudgets(empresaId, patientIdNum);
         setBudgets(fetchedBudgets as Budget[]);
 
@@ -438,12 +436,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
     }
   }, [empresaId, patient?.id]);
 
-  React.useEffect(() => {
-    if (isLoaded && patient?.id) {
-      budgetService.saveOdontogram(Number(patient.id), procedures);
-    }
-  }, [procedures, patient?.id, isLoaded]);
-
   const [openBudgetMenuId, setOpenBudgetMenuId] = React.useState<string | null>(null);
   const [openTreatmentMenuId, setOpenTreatmentMenuId] = React.useState<string | null>(null);
   const [expandedBudgets, setExpandedBudgets] = React.useState<Record<string, boolean>>({});
@@ -451,48 +443,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   // Budget Modal State
   const [isNewBudgetModalOpen, setIsNewBudgetModalOpen] = React.useState(false);
   const [budgetToEdit, setBudgetToEdit] = React.useState<Budget | null>(null);
-
-  const handleAppendToBudgetFromOdontogram = async (newTreatments: any[]) => {
-    let targetBudget: Budget | undefined;
-    let isNew = false;
-
-    setBudgets(prev => {
-      const existingIdx = prev.findIndex(b => b.name === `Plano de tratamento de ${patient.name}` && b.status === 'Pendente');
-
-      if (existingIdx >= 0) {
-        const draft = prev[existingIdx];
-        const mergedTreatments = [...draft.treatments, ...newTreatments];
-        const total = mergedTreatments.reduce((sum, t) => sum + (parseFloat(t.valor) || 0), 0);
-        targetBudget = { ...draft, treatments: mergedTreatments, total };
-        return prev; // We will update after DB call
-      } else {
-        const total = newTreatments.reduce((sum, t) => sum + (parseFloat(t.valor) || 0), 0);
-        targetBudget = {
-          id: Math.floor(Math.random() * 10000000).toString(),
-          name: `Plano de tratamento de ${patient.name}`,
-          date: new Date().toLocaleDateString('pt-BR'),
-          total,
-          status: 'Pendente',
-          treatments: newTreatments
-        };
-        isNew = true;
-        return prev; // We will update after DB call
-      }
-    });
-
-    if (targetBudget && empresaId && patient?.id) {
-      const saved = await budgetService.saveBudget(empresaId, Number(patient.id), targetBudget);
-      if (saved) {
-        setBudgets(prev => {
-          if (isNew) return [saved, ...prev];
-          return prev.map(b => b.id === saved.id || b.id === targetBudget!.id ? saved : b);
-        });
-        alert(`Procedimentos enviados para a aba Orçamentos com sucesso!`);
-      } else {
-        alert('Erro ao sincronizar orçamento no banco de dados.');
-      }
-    }
-  };
 
   // Categories state (Persisted)
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = React.useState(false);
@@ -606,9 +556,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   };
 
   const pendingPaymentsCount = React.useMemo(() => {
-    return budgets.filter(b => b.status === "Aprovado")
-      .flatMap(b => b.treatments)
-      .filter((t: any) => (t.status === 'Em andamento' || t.status === 'Finalizado') && t.paymentStatus !== 'Pago')
+    return budgets.flatMap(b => b.treatments || [])
+      .filter((t: any) => (t && (t.status === 'Em andamento' || t.status === 'Finalizado' || t.status === 'Concluído') && t.paymentStatus !== 'Pago'))
       .length;
   }, [budgets]);
   const ageText = getAgeText(patient.dataNascimento);
@@ -816,7 +765,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           <AnamneseTab
             empresaId={empresaId!}
             patient={patient}
-            onBack={() => setActiveTab('Visão Geral')}
+            onBack={() => handleTabChange('Visão Geral')}
           />
         )}
 
@@ -929,21 +878,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             {/* Right Column */}
             <div className="lg:col-span-8 flex flex-col gap-5">
 
-              {/* Odontogram Section */}
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                <div className="bg-slate-50 border-b border-gray-100 p-4">
-                  <h3 className="font-bold text-gray-800">Odontograma</h3>
-                </div>
-                <div className="p-4 sm:p-6 lg:p-8 bg-blue-50/30 flex justify-center items-center">
-                  <Odontogram
-                    patientName={patient.name}
-                    procedures={procedures}
-                    setProcedures={setProcedures}
-                    onAppendToBudget={handleAppendToBudgetFromOdontogram}
-                  />
-                </div>
-              </div>
-
               {/* Últimas Evoluções Box */}
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex flex-col">
                 <div className="flex items-center justify-between mb-5">
@@ -951,14 +885,14 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   <div className="flex items-center gap-2">
                     {evolutions.length > 3 && (
                       <button
-                        onClick={() => setActiveTab('Evoluções')}
+                        onClick={() => handleTabChange('Evoluções')}
                         className="text-[12px] font-semibold text-blue-500 hover:text-blue-700 transition-colors"
                       >
                         Ver todas ({evolutions.length})
                       </button>
                     )}
                     <button
-                      onClick={() => setActiveTab('Evoluções')}
+                      onClick={() => handleTabChange('Evoluções')}
                       className="flex items-center gap-2 border border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:border-[#94a3b8] transition-colors rounded-md px-3 py-1.5 text-[13px] font-semibold"
                     >
                       <FileText size={14} /> Adicionar
@@ -980,7 +914,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                     {evolutions.slice(0, 3).map(evo => (
                       <div
                         key={evo.id}
-                        onClick={() => setActiveTab('Evoluções')}
+                        onClick={() => handleTabChange('Evoluções')}
                         className="border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-all cursor-pointer group"
                       >
                         <p className="text-[13.5px] text-gray-700 line-clamp-2 leading-relaxed mb-2">
@@ -999,7 +933,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
                     {evolutions.length > 3 && (
                       <button
-                        onClick={() => setActiveTab('Evoluções')}
+                        onClick={() => handleTabChange('Evoluções')}
                         className="text-center text-[12.5px] font-semibold text-blue-500 hover:text-blue-700 py-2 border border-dashed border-blue-200 rounded-xl hover:bg-blue-50/40 transition-all"
                       >
                         + {evolutions.length - 3} evoluções a mais → Ver histórico completo
@@ -1160,7 +1094,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                               const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
                               if (saved) {
                                 setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
-                                setActiveTab('Tratamentos');
+                                handleTabChange('Tratamentos');
                               }
                             }}
                             className="border border-gray-200 rounded-lg px-4 py-1.5 font-bold text-gray-700 hover:bg-gray-50 text-[13px] shadow-sm transition-all"
@@ -1199,40 +1133,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                 </button>
                                 <button
                                   onClick={async () => {
-                                    if (!window.confirm("Você tem certeza que deseja excluir esse orçamento permanentemente? (Isso limpará os dentes vinculados a ele)")) return;
+                                    if (!window.confirm("Você tem certeza que deseja excluir esse orçamento permanentemente?")) return;
                                     const success = await budgetService.deleteBudget(budget.id);
                                     if (success) {
                                       setBudgets(prev => prev.filter(b => b.id !== budget.id));
-                                      // Clean up linked odontogram entries robustly (handles old data without matching IDs as well)
-                                      setProcedures(prev => {
-                                        const idsToRemove = new Set(budget.treatments?.map((t: any) => t.id));
-
-                                        // Build a map of tooth -> names to remove (fallback for old unlinked data)
-                                        const namesToRemoveByTooth: Record<number, Set<string>> = {};
-                                        budget.treatments?.forEach((t: any) => {
-                                          const num = parseInt(t.dente);
-                                          if (!isNaN(num)) {
-                                            if (!namesToRemoveByTooth[num]) namesToRemoveByTooth[num] = new Set();
-                                            namesToRemoveByTooth[num].add(t.treatmentName || t.tratamento);
-                                          }
-                                        });
-
-                                        const newState = { ...prev };
-                                        let changed = false;
-                                        for (const toothStr in newState) {
-                                          const tooth = Number(toothStr);
-                                          const procs = newState[tooth] || [];
-                                          const fallbackNames = namesToRemoveByTooth[tooth] || new Set();
-
-                                          const filtered = procs.filter(p => !idsToRemove.has(p.id) && !fallbackNames.has(p.treatmentName));
-                                          if (filtered.length !== procs.length) {
-                                            if (filtered.length === 0) delete newState[tooth];
-                                            else newState[tooth] = filtered;
-                                            changed = true;
-                                          }
-                                        }
-                                        return changed ? newState : prev;
-                                      });
                                     }
                                     else alert("Erro ao excluir orçamento!");
                                   }}
@@ -1327,102 +1231,67 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           </div>
         )}
 
-        {activeTab === 'Tratamentos' && (
+        {activeTab === 'Tratamentos' && (() => {
+          const odontogramProcedures = (() => {
+            const proc: Record<number, OdontogramProcedure[]> = {};
+            budgets.forEach(b => {
+              b.treatments?.forEach((t: any) => {
+                if (t.dente && !isNaN(Number(t.dente))) {
+                  const isApproved = t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Finalizado';
+                  if (!isApproved) return;
+                  
+                  const toothNum = Number(t.dente);
+                  if (!proc[toothNum]) proc[toothNum] = [];
+                  proc[toothNum].push({
+                    id: t.id,
+                    treatmentName: t.treatmentName || t.tratamento || '',
+                    isExtraction: !!t.isExtraction || (t.treatmentName || t.tratamento || '').toLowerCase().includes('exodontia') || (t.treatmentName || t.tratamento || '').toLowerCase().includes('extração'),
+                    notes: t.observacoes || '',
+                    sourceTreatment: t,
+                    sourceBudget: b
+                  });
+                }
+              });
+            });
+            return proc;
+          })();
+
+          const approvedTreatments = budgets
+            .flatMap(b => (b.treatments || []).map((t: any) => ({ ...t, budget: b })))
+            .filter((t: any) => t && (t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Finalizado'));
+
+          return (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 animate-in fade-in">
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center justify-between">
               Tratamentos em Andamento/Concluídos
-              <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">{budgets.filter(b => b.status === 'Aprovado').length} Orçamentos Aprovados</span>
+              <span className="text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {new Set(approvedTreatments.map(t => t.budget.id)).size} Orçamentos com Tratamentos
+              </span>
             </h3>
 
-            <Odontogram
-              patientName={patient.name}
-              procedures={(() => {
-                const result: Record<number, OdontogramProcedure[]> = {};
-                budgets.filter(b => b.status === 'Aprovado' || (b.status as any) === 'Odontograma').forEach(b => {
-                  b.treatments?.forEach(t => {
-                    const num = parseInt(t.dente);
-                    if (!isNaN(num)) {
-                      if (!result[num]) result[num] = [];
+            <div className="mb-8 border-b border-gray-100 pb-8">
+              <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Smile size={20} className="text-blue-500" />
+                Odontograma
+              </h4>
+              <Odontogram 
+                patientName={patient.name}
+                procedures={odontogramProcedures}
+                setProcedures={() => {}} 
+                viewMode={true}
+                onUpdateTreatment={async (budget, treatmentId, updates) => {
+                   if (!empresaId || !patient?.id) return;
+                   const upd = { 
+                       ...budget, 
+                       treatments: budget.treatments.map((x: any) => x.id === treatmentId ? { ...x, ...updates } : x) 
+                   };
+                   const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
+                   if (saved) setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
+                }}
+              />
+            </div>
 
-                      result[num].push({
-                        id: t.id,
-                        treatmentName: t.treatmentName || t.tratamento,
-                        isExtraction: !!t.isExtraction,
-                        notes: t.observacoes || '',
-                        sourceTreatment: t,
-                        sourceBudget: b
-                      } as any);
-                    }
-                  });
-                });
-                return result;
-              })()}
-              setProcedures={setProcedures}
-              viewMode={true}
-              onUpdateTreatment={async (budget, treatmentId, updates) => {
-                if (!empresaId || !patient?.id) return;
-                const upd = {
-                  ...budget,
-                  treatments: budget.treatments.map((t: any) => t.id === treatmentId ? { ...t, ...updates } : t)
-                };
-                const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
-                if (saved) {
-                  setBudgets(prev => prev.map(b => b.id === budget.id ? saved : b));
-                }
-              }}
-              onToggleExtraction={async (tooth, extracted) => {
-                if (!empresaId || !patient?.id) return;
-
-                let odontogramaBudget: any = budgets.find(b => (b.status as any) === 'Odontograma');
-                if (!odontogramaBudget) {
-                  if (!extracted) return;
-                  odontogramaBudget = {
-                    name: 'Paciente Odontograma Base',
-                    date: new Date().toISOString(),
-                    status: 'Odontograma',
-                    total: 0,
-                    treatments: []
-                  };
-                }
-
-                let treatments = [...(odontogramaBudget.treatments || [])];
-                const existingIdx = treatments.findIndex((t: any) => t.dente === String(tooth) && t.isExtraction);
-
-                let changed = false;
-                if (extracted && existingIdx === -1) {
-                  treatments.push({
-                    id: Math.random().toString(36).substring(2, 9),
-                    treatmentName: 'Remoção / Ausente',
-                    dente: String(tooth),
-                    isExtraction: true,
-                    status: 'Concluído',
-                    valor: '',
-                    convenio: 'N/A',
-                    profissional: 'N/A'
-                  });
-                  changed = true;
-                } else if (!extracted && existingIdx >= 0) {
-                  treatments.splice(existingIdx, 1);
-                  changed = true;
-                }
-
-                if (changed) {
-                  const upd = { ...odontogramaBudget, treatments };
-                  const saved = await budgetService.saveBudget(empresaId, Number(patient.id), upd);
-                  if (saved) {
-                    setBudgets(prev => {
-                      const out = [...prev];
-                      const i = out.findIndex(b => b.id === saved.id);
-                      if (i >= 0) out[i] = saved;
-                      else out.push(saved);
-                      return out;
-                    });
-                  }
-                }
-              }}
-            />
-
-            <div className="mt-12 pt-8 border-t border-gray-100">
+            <div className="mt-8 pt-4">
               <div className="grid grid-cols-[100px_1fr_60px_60px_120px_150px] gap-6 px-6 border-b border-gray-100 pb-3 mb-4 text-[14px] font-semibold text-slate-700">
                 <div>Data</div>
                 <div>Tratamento</div>
@@ -1433,7 +1302,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               </div>
 
               <div className="flex flex-col gap-3">
-                {budgets.filter(b => b.status === 'Aprovado').flatMap(b => b.treatments.map((t: any) => ({ ...t, budget: b }))).map((t: any) => (
+                {approvedTreatments.map((t: any) => (
                   <div key={t.id} className="grid grid-cols-[100px_1fr_60px_60px_120px_150px] gap-6 items-center bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex flex-col items-start gap-1">
                       <span className="text-[14px] text-gray-600 font-medium">{t.budget.date}</span>
@@ -1534,9 +1403,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                   setBudgets(saved as Budget[]);
                                 }
 
-                                const restoredTreatment = { ...t, status: 'Pendente' };
-                                delete restoredTreatment.budget;
-                                await handleAppendToBudgetFromOdontogram([restoredTreatment]);
+                                // Restoration to Odontogram removed, now the logic can just delete or ignore it
                               }
                             }}
                           >
@@ -1547,14 +1414,14 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                     </div>
                   </div>
                 ))}
-                {budgets.filter(b => b.status === 'Aprovado').flatMap(b => b.treatments).length === 0 && (
+                {approvedTreatments.length === 0 && (
                   <div className="text-center py-12 text-sm text-gray-500 bg-gray-50/50 rounded-xl border border-gray-100">Nenhum tratamento aprovado ainda.</div>
                 )}
               </div>
 
               {/* Nova Camada: Dentes Ausentes */}
               {(() => {
-                const ausentes = budgets.filter(b => b.status === 'Aprovado' || (b.status as any) === 'Odontograma').flatMap(b => b.treatments).filter(t => t && t.isExtraction);
+                const ausentes = budgets.flatMap(b => b.treatments || []).filter((t: any) => t && t.isExtraction);
                 if (ausentes.length === 0) return null;
                 return (
                   <div className="mt-8 pt-8 border-t border-gray-100 animate-in fade-in">
@@ -1583,12 +1450,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               })()}
             </div>
           </div>
-        )}
+        )})()}
 
         {activeTab === 'Pagamentos' && (() => {
-          const paymentTreatments = budgets.filter(b => b.status === "Aprovado")
-            .flatMap(b => b.treatments.map((t: any) => ({ ...t, budget: b })))
-            .filter(t => t.status === 'Em andamento' || t.status === 'Finalizado');
+          const paymentTreatments = budgets.flatMap(b => (b.treatments || []).map((t: any) => ({ ...t, budget: b })))
+            .filter((t: any) => t && (t.status === 'Em andamento' || t.status === 'Finalizado' || t.status === 'Concluído'));
 
           // total paid would be where paymentStatus === 'Pago'
           const totalPago = paymentTreatments.filter(t => t.paymentStatus === 'Pago').reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
@@ -2190,8 +2056,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           isOpen={isNewBudgetModalOpen}
           onClose={() => { setIsNewBudgetModalOpen(false); setBudgetToEdit(null); }}
           patientName={patient.name}
-          proceduresSync={procedures}
-          setProceduresSync={setProcedures}
           initialData={budgetToEdit}
           onSave={async (budget) => {
             if (empresaId && patient?.id) {

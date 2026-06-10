@@ -24,9 +24,11 @@ interface OdontogramProps {
   viewMode?: boolean;
   onUpdateTreatment?: (budget: any, treatmentId: string, updates: any) => Promise<void>;
   onToggleExtraction?: (tooth: number, extracted: boolean) => Promise<void>;
+  selectorMode?: boolean;
+  onToothSelect?: (tooth: number) => void;
 }
 
-export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction }: OdontogramProps) {
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction, selectorMode, onToothSelect }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
@@ -38,6 +40,11 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
 
   const handleToothClick = (tooth: number) => {
     setSelectedTooth(tooth);
+    if (selectorMode) {
+      if (onToothSelect) onToothSelect(tooth);
+      return;
+    }
+
     setSelectedTreatments([]);
     setNotes('');
     setSearchTerm('');
@@ -119,7 +126,7 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
         onClick={() => handleToothClick(num)}
       >
         {!isUpper && <span className="text-[10px] md:text-[13px] font-semibold text-gray-600 mb-0.5 md:mb-1">{num}</span>}
-        <div className={`relative w-7 h-12 md:w-10 md:h-16 flex items-center justify-center rounded-lg md:rounded-xl border-2 transition-colors overflow-hidden ${hasProcedure ? 'border-orange-500 bg-orange-50' : 'border-transparent hover:border-blue-400 bg-transparent'}`}>
+        <div className={`relative w-7 h-12 md:w-10 md:h-16 flex items-center justify-center rounded-lg md:rounded-xl border-2 transition-colors overflow-hidden ${selectedTooth === num ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : hasProcedure ? 'border-orange-500 bg-orange-50' : 'border-transparent hover:border-blue-400 bg-transparent'}`}>
           {/* Tooth Image (Use user uploaded PNG for all) */}
           <img 
             src={`/${num}.png`} 
@@ -196,7 +203,7 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
       )}
 
       {/* Action Modal */}
-      {selectedTooth && (
+      {selectedTooth && !selectorMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">

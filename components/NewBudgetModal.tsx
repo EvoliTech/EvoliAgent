@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
-import { OdontogramProcedure } from './Odontogram';
+import { Odontogram, OdontogramProcedure } from './Odontogram';
 import { plansService } from '../services/plansService';
 import { useCompany } from '../contexts/CompanyContext';
 import { HealthPlan, Specialist } from '../types';
@@ -10,8 +10,8 @@ interface NewBudgetModalProps {
   isOpen: boolean;
   onClose: () => void;
   patientName: string;
-  proceduresSync: Record<number, OdontogramProcedure[]>;
-  setProceduresSync: React.Dispatch<React.SetStateAction<Record<number, OdontogramProcedure[]>>>;
+  proceduresSync?: Record<number, OdontogramProcedure[]>;
+  setProceduresSync?: React.Dispatch<React.SetStateAction<Record<number, OdontogramProcedure[]>>>;
   onSave: (budget: any) => void;
   initialData?: any | null;
 }
@@ -34,6 +34,12 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [faces, setFaces] = useState('');
   const [multiplicarPorDente, setMultiplicarPorDente] = useState(false);
   const [observacoes, setObservacoes] = useState('');
+  const [isHarmonizacao, setIsHarmonizacao] = useState(false);
+
+  // New Treatment Modal state
+  const [isAddingNewTreatment, setIsAddingNewTreatment] = useState(false);
+  const [newTreatmentName, setNewTreatmentName] = useState('');
+  const [newTreatmentPrice, setNewTreatmentPrice] = useState('');
 
   // Added treatments array
   const [addedTreatments, setAddedTreatments] = useState<any[]>([]);
@@ -70,15 +76,32 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   // Editing pending treatment state
   const [editingPendingId, setEditingPendingId] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const safeTreatments = Array.isArray(addedTreatments) ? addedTreatments : [];
   const pendingTreatments = safeTreatments.filter((t: any) => t?.status === 'Pendente');
   const confirmedTreatments = safeTreatments.filter((t: any) => t?.status !== 'Pendente');
 
+  const localProcedures = React.useMemo(() => {
+    const proc: Record<number, OdontogramProcedure[]> = {};
+    safeTreatments.forEach(t => {
+      const denteNum = parseInt(t.dente);
+      if (!isNaN(denteNum)) {
+        if (!proc[denteNum]) proc[denteNum] = [];
+        proc[denteNum].push({
+          id: t.id,
+          treatmentName: t.treatmentName,
+          isExtraction: t.treatmentName.toLowerCase().includes('exodontia') || t.treatmentName.toLowerCase().includes('extração'),
+          notes: t.observacoes || ''
+        });
+      }
+    });
+    return proc;
+  }, [safeTreatments]);
+
+  if (!isOpen) return null;
+
   const handleAddTreatment = () => {
-    if (!selectedTratamento || !denteId) {
-      alert("Preencha ao menos o tratamento e o dente");
+    if (!selectedTratamento || (!denteId && !isHarmonizacao)) {
+      alert("Preencha ao menos o tratamento e o dente (ou marque como Harmonização Facial)");
       return;
     }
 
@@ -112,23 +135,6 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
       };
 
       setAddedTreatments([...safeTreatments, t]);
-
-      // Sincronizar com Odontograma (Global)
-      const denteNum = parseInt(denteId);
-      if (!isNaN(denteNum)) {
-        setProceduresSync(prev => {
-          const denteProcs = prev[denteNum] || [];
-          return {
-            ...prev,
-            [denteNum]: [...denteProcs, {
-              id: t.id,
-              treatmentName: t.treatmentName,
-              isExtraction: t.treatmentName.toLowerCase().includes('exodontia') || t.treatmentName.toLowerCase().includes('extração'),
-              notes: ''
-            }]
-          };
-        });
-      }
     }
 
     // Limpar campos
@@ -138,6 +144,58 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setDenteId('');
     setFaces('');
     setObservacoes('');
+    setIsHarmonizacao(false);
+  };
+
+  const handleCreateNewTreatment = () => {
+    if (!convenio) {
+      alert("Por favor, selecione um convênio primeiro para adicionar o tratamento a ele.");
+      return;
+    }
+    setNewTreatmentName('');
+    setNewTreatmentPrice('');
+    setIsAddingNewTreatment(true);
+  };
+
+  const handleConfirmNewTreatment = async () => {
+    const name = newTreatmentName;
+    if (!name || !name.trim()) return;
+    
+    const price = parseFloat(newTreatmentPrice.replace(',', '.') || '0');
+    if (isNaN(price)) {
+      alert("Valor numérico inválido! Operação cancelada.");
+      return;
+    }
+
+    const selectedPlanObj = plans.find(p => p.id === convenio);
+    if (selectedPlanObj && empresaId) {
+      const newTreatment = {
+        id: Math.random().toString(36).substring(2, 9),
+        name: name.trim(),
+        category: 'Outros',
+        price: price,
+        active: true
+      };
+
+      const updatedPlan = {
+        ...selectedPlanObj,
+        treatments: [...selectedPlanObj.treatments, newTreatment]
+      };
+
+      try {
+        const saved = await plansService.updatePlan(empresaId, updatedPlan);
+        setPlans(prev => prev.map(p => p.id === saved.id ? saved : p));
+        
+        setSelectedTratamento(newTreatment.name);
+        setSelectedTratamentoCategoria(newTreatment.category);
+        setTratamentoSearch('');
+        setValor(String(newTreatment.price));
+        setIsAddingNewTreatment(false);
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao salvar novo tratamento no banco de dados.");
+      }
+    }
   };
 
   const handleEditPending = (t: any) => {
@@ -157,18 +215,6 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
 
   const handleRemoveAddedTreatment = (tId: string, denteOrig: string) => {
     setAddedTreatments(prev => prev.filter(x => x.id !== tId));
-
-    // Remove do Odontograma as well
-    const denteNum = parseInt(denteOrig);
-    if (!isNaN(denteNum)) {
-      setProceduresSync(prev => {
-        const denteProcs = prev[denteNum] || [];
-        return {
-          ...prev,
-          [denteNum]: denteProcs.filter(p => p.id !== tId)
-        };
-      });
-    }
   };
 
   const selectedPlanObj = plans.find(p => p.id === convenio);
@@ -176,8 +222,53 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const filteredTreatments = planTreatments.filter(t => t.name.toLowerCase().includes(tratamentoSearch.toLowerCase())).slice(0, 5);
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="relative w-full max-w-5xl mt-6 rounded-2xl bg-[#f8fafc] shadow-2xl border border-white flex flex-col max-h-[calc(100vh-3rem)] animate-in zoom-in-95 duration-300 overflow-hidden">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 md:p-6 animate-in fade-in duration-300">
+      
+      {/* Add New Treatment Modal */}
+      {isAddingNewTreatment && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-lg">Novo Tratamento</h3>
+              <button onClick={() => setIsAddingNewTreatment(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Nome do tratamento</label>
+                <input
+                  type="text"
+                  value={newTreatmentName}
+                  onChange={e => setNewTreatmentName(e.target.value)}
+                  placeholder="Ex: Restauração Resina"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Valor Base (R$)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                  <input
+                    type="number"
+                    value={newTreatmentPrice}
+                    onChange={e => setNewTreatmentPrice(e.target.value)}
+                    placeholder="Ex: 150.00"
+                    className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button onClick={() => setIsAddingNewTreatment(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors">Cancelar</button>
+              <button onClick={handleConfirmNewTreatment} disabled={!newTreatmentName.trim()} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:shadow-none">Cadastrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="relative w-full max-w-[1400px] h-full max-h-[96vh] rounded-2xl bg-[#f8fafc] shadow-2xl border border-white flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden">
 
         <div className="flex items-center justify-between border-b border-gray-200 p-6 flex-shrink-0 bg-white">
           <h3 className="text-xl font-bold text-gray-900">Novo Orçamento</h3>
@@ -209,8 +300,27 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
             </div>
           </div>
 
+          {/* Odontograma Integrado */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
+            <h4 className="font-bold text-[#1e293b]">Selecione o dente no Odontograma</h4>
+            <div className="w-full bg-slate-50/50 rounded-xl border border-slate-100 p-2">
+              <Odontogram 
+                patientName={patientName}
+                procedures={localProcedures}
+                setProcedures={() => {}} // Apenas visualização e seleção
+                selectorMode={true}
+                onToothSelect={(tooth) => {
+                  setIsHarmonizacao(false);
+                  setDenteId(String(tooth));
+                  // Smooth scroll to the form
+                  document.getElementById('treatment-form-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+              />
+            </div>
+          </div>
+
           {/* Adicionar Tratamentos Box */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4" id="treatment-form-box">
             <h4 className="font-bold text-[#1e293b]">Adicionar tratamentos</h4>
 
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col gap-5">
@@ -280,7 +390,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                       )}
                     </div>
                   )}
-                  <button className="text-blue-600 text-xs font-semibold mt-2 hover:underline">Cadastrar novo tratamento</button>
+                  <button onClick={handleCreateNewTreatment} className="text-blue-600 text-xs font-semibold mt-2 hover:underline">Cadastrar novo tratamento</button>
                 </div>
                 <div className="w-1/4 pb-5">
                   <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Valor</label>
@@ -296,35 +406,57 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                 </div>
               </div>
 
-              <div className="flex gap-4">
-                <div className="w-1/2">
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Dente(s)</label>
-                  <select
-                    value={denteId}
-                    onChange={e => setDenteId(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
-                  >
-                    <option value="">Selecionar</option>
-                    {[18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28, 48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38].map(d => (
-                      <option key={d} value={d}>Dente {d}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-1/2">
-                  <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Face(s)</label>
-                  <select
-                    value={faces}
-                    onChange={e => setFaces(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  >
-                    <option value="">Selecionar</option>
-                    <option value="Vestibular">Vestibular</option>
-                    <option value="Lingual">Lingual</option>
-                    <option value="Oclusal">Oclusal</option>
-                    <option value="Mesial">Mesial</option>
-                    <option value="Distal">Distal</option>
-                  </select>
-                </div>
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-gray-700 bg-blue-50 border border-blue-100 p-3 rounded-xl hover:bg-blue-100/50 transition-colors">
+                  <input type="checkbox" checked={isHarmonizacao} onChange={e => {
+                      setIsHarmonizacao(e.target.checked);
+                      if (e.target.checked) {
+                          setDenteId('');
+                          setFaces('');
+                      }
+                  }} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" />
+                  Este tratamento é Harmonização Facial ou Geral (não requer seleção de dente)
+                </label>
+
+                {!isHarmonizacao && (
+                  <div className="flex gap-4">
+                    <div className="w-1/2">
+                      <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Dente(s)</label>
+                      <select
+                        value={denteId}
+                        onChange={e => setDenteId(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
+                      >
+                        <option value="">Selecionar</option>
+                        <optgroup label="Permanentes">
+                          {[18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28, 48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38].map(d => (
+                            <option key={d} value={d}>Dente {d}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Decíduos (Leite)">
+                          {[55, 54, 53, 52, 51, 61, 62, 63, 64, 65, 85, 84, 83, 82, 81, 71, 72, 73, 74, 75].map(d => (
+                            <option key={d} value={d}>Dente {d}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Face(s)</label>
+                      <select
+                        value={faces}
+                        onChange={e => setFaces(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="">Selecionar</option>
+                        <option value="Vestibular">Vestibular</option>
+                        <option value="Lingual">Lingual</option>
+                        <option value="Oclusal">Oclusal</option>
+                        <option value="Mesial">Mesial</option>
+                        <option value="Distal">Distal</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-4">
@@ -386,7 +518,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                             {t.observacoes && <span className="text-xs text-orange-700/70 font-normal truncate max-w-xs">{t.observacoes}</span>}
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-sm text-orange-800">Dente {t.dente} {t.faces && `- ${t.faces}`}</td>
+                        <td className="px-5 py-3 text-sm text-orange-800">{t.dente ? `Dente ${t.dente}` : 'Geral / Face'} {t.faces && `- ${t.faces}`}</td>
                         <td className="px-5 py-3 text-right">
                           <span className="text-orange-600 font-bold text-[11px] uppercase tracking-wider bg-white px-3 py-1.5 rounded shadow-sm border border-orange-100">Atualizar</span>
                         </td>
@@ -428,7 +560,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                             {t.observacoes && <span className="text-[11px] font-normal text-slate-500 mt-0.5 truncate max-w-[200px]">{t.observacoes}</span>}
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-sm text-slate-600">Dente {t.dente} {t.faces && `- ${t.faces}`}</td>
+                        <td className="px-5 py-3 text-sm text-slate-600">{t.dente ? `Dente ${t.dente}` : 'Geral / Face'} {t.faces && `- ${t.faces}`}</td>
                         <td className="px-5 py-3 text-sm text-slate-600">
                           <div className="flex flex-col">
                             <span>{t.profissional}</span>

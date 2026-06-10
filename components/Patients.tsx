@@ -32,6 +32,7 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       const parts = location.pathname.split('/');
       if (parts[1] === 'pacientes' && parts[2]) {
         const id = parts[2];
+        localStorage.setItem('global_last_patient_id', id);
         if (!selectedPatient || selectedPatient.id !== id) {
           const p = patients.find(p => p.id === id);
           if (p) {
@@ -41,37 +42,26 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       } else if (parts[1] === 'pacientes' && !parts[2] && selectedPatient) {
         // URL says no patient, but we have one selected (e.g. back button)
         setSelectedPatient(null);
+        localStorage.removeItem('global_last_patient_id');
       }
     }
   }, [location.pathname, patients]);
 
   const handleSelectPatient = (patient: Patient) => {
     setSelectedPatient(patient);
-    navigate(`/pacientes/${patient.id}/visao-geral`);
+    const lastPath = localStorage.getItem(`patient_path_${patient.id}`) || 'visao-geral';
+    navigate(`/pacientes/${patient.id}/${lastPath}`);
   };
 
   const handleBackFromPatient = () => {
     setSelectedPatient(null);
+    localStorage.removeItem('global_last_patient_id');
     navigate('/pacientes');
   };
 
 
   // Estados de controle da interface
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(() => {
-    try {
-      const saved = localStorage.getItem('appState_patients_selectedPatient');
-      if (saved) return JSON.parse(saved);
-    } catch { }
-    return null;
-  });
-
-  useEffect(() => {
-    if (selectedPatient) {
-      localStorage.setItem('appState_patients_selectedPatient', JSON.stringify(selectedPatient));
-    } else {
-      localStorage.removeItem('appState_patients_selectedPatient');
-    }
-  }, [selectedPatient]);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -325,6 +315,17 @@ export const Patients: React.FC<PatientsProps> = ({ onUpdateRegistration, onNavi
       showAlert('Erro', `Não foi possível salvar os dados: ${errorMessage}`, 'error');
     }
   };
+
+  const isDirectPatientRoute = location.pathname.startsWith('/pacientes/') && location.pathname.split('/').length >= 3;
+
+  if (isDirectPatientRoute && (isLoading || !selectedPatient)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+        <p className="text-gray-500 font-medium">Carregando prontuário do paciente...</p>
+      </div>
+    );
+  }
 
   if (selectedPatient) {
     return (

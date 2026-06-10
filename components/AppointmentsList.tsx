@@ -15,15 +15,18 @@ import {
     Clock3,
     AlertCircle,
     Pencil,
-    Trash2
+    Trash2,
+    ChevronDown
 } from 'lucide-react';
 import { useCompany } from '../contexts/CompanyContext';
 import { userService } from '../services/userService';
 import { specialistService } from '../services/specialistService';
 import { googleCalendarService, GoogleEvent } from '../services/googleCalendarService';
-import { Specialist } from '../types';
+import { Specialist, Patient } from '../types';
+import { patientService } from '../services/patientService';
+import { useNavigate } from 'react-router-dom';
 import { AppointmentDetailsModal } from './AppointmentDetailsModal';
-import { NewAppointmentModal } from './NewAppointmentModal';
+import { FluidAppointmentWizard } from './SchedulingModals/FluidAppointmentWizard';
 
 export const AppointmentsList: React.FC = () => {
     const { empresaId } = useCompany();
@@ -31,8 +34,10 @@ export const AppointmentsList: React.FC = () => {
     const [specialists, setSpecialists] = useState<Specialist[]>([]);
     const [selectedSpecialistId, setSelectedSpecialistId] = useState<string>('all');
     const [events, setEvents] = useState<GoogleEvent[]>([]);
+    const [patients, setPatients] = useState<Patient[]>([]);
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     // Modals
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -40,6 +45,8 @@ export const AppointmentsList: React.FC = () => {
     const [selectedEvent, setSelectedEvent] = useState<GoogleEvent | null>(null);
     const [editingEvent, setEditingEvent] = useState<GoogleEvent | undefined>(undefined);
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [timeoutAlertEvent, setTimeoutAlertEvent] = useState<GoogleEvent | null>(null);
+    const [snoozedEvents, setSnoozedEvents] = useState<{ [key: string]: number }>({});
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -57,15 +64,21 @@ export const AppointmentsList: React.FC = () => {
 
     const loadInitialData = async () => {
         try {
-            setLoading(true);
-            const email = await userService.getConnectedGoogleEmail(empresaId!);
+            const [email, specialistList, patientList] = await Promise.all([
+                userService.getConnectedGoogleEmail(empresaId!),
+                specialistService.fetchSpecialists(empresaId!),
+                patientService.fetchPatients(empresaId!)
+            ]);
+
+            setSpecialists(specialistList);
+            setPatients(patientList);
             setAdminEmail(email);
 
-            const specialistList = await specialistService.fetchSpecialists(empresaId!);
-            setSpecialists(specialistList);
+            if (!email) {
+                setLoading(false);
+            }
         } catch (error) {
             console.error('Error loading initial data:', error);
-        } finally {
             setLoading(false);
         }
     };
@@ -171,7 +184,7 @@ export const AppointmentsList: React.FC = () => {
         setLoading(true);
         try {
             // Clean tags
-            const tags = ['[PENDENTE]', '[CONFIRMADO]', '[CONCLUIDO]', '[CONCLUÍDO]', '[CANCELADO]'];
+            const tags = ['[PENDENTE]', '[CONFIRMADO]', '[CONCLUIDO]', '[CONCLUÍDO]', '[CANCELADO]', '[EM ATENDIMENTO]'];
             let cleanSummary = event.summary;
             tags.forEach(tag => {
                 cleanSummary = cleanSummary.replace(tag, '').trim();
@@ -192,6 +205,61 @@ export const AppointmentsList: React.FC = () => {
         }
     };
 
+    const handlePresenceUpdate = async (event: GoogleEvent, newPresence: string) => {
+        if (!adminEmail || !empresaId || !event.id) return;
+        setLoading(true);
+        try {
+            const tags = ['[CHECKOUT]', '[MISSED]'];
+            let cleanSummary = event.summary;
+            tags.forEach(tag => {
+                cleanSummary = cleanSummary.replace(tag, '').trim();
+            });
+
+            const updatedSummary = newPresence ? `[${newPresence.toUpperCase()}] ${cleanSummary}` : cleanSummary;
+
+            await googleCalendarService.updateEvent(empresaId, adminEmail, event.id, {
+                ...event,
+                summary: updatedSummary,
+            }, event.calendarId);
+
+            await loadEvents();
+        } catch (error: any) {
+            alert('Erro ao atualizar chegada: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Monitoramento de tempo limite para eventos EM ATENDIMENTO
+    useEffect(() => {
+        const checkTimeouts = () => {
+            const now = new Date();
+            const emAtendimentoEvents = events.filter(e => e.summary.toLowerCase().includes('[em atendimento]'));
+            
+            for (const event of emAtendimentoEvents) {
+                if (event.end && event.end.dateTime && event.id) {
+                    const endTime = new Date(event.end.dateTime);
+                    
+                    const snoozedUntil = snoozedEvents[event.id];
+                    if (snoozedUntil && now.getTime() < snoozedUntil) {
+                        continue;
+                    }
+
+                    // Se o horário de término já passou e não tem alerta aberto
+                    if (now > endTime && !timeoutAlertEvent) {
+                        setTimeoutAlertEvent(event);
+                        break; // Mostra um por vez
+                    }
+                }
+            }
+        };
+
+        const interval = setInterval(checkTimeouts, 60000); // Checa a cada minuto
+        checkTimeouts(); // Checa na primeira vez também
+
+        return () => clearInterval(interval);
+    }, [events, timeoutAlertEvent, snoozedEvents]);
+
     const isToday = (date: Date) => date.toDateString() === today.toDateString();
     const isSelected = (date: Date) => date.toDateString() === currentDate.toDateString();
 
@@ -201,10 +269,24 @@ export const AppointmentsList: React.FC = () => {
 
     const getStatusInfo = (summary: string) => {
         const s = summary.toLowerCase();
+        if (s.includes('em atendimento')) return { id: 'em atendimento', label: 'EM ATEND.', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Clock };
         if (s.includes('confirmado')) return { id: 'confirmado', label: 'CONFIRMADO', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: CheckCircle2 };
         if (s.includes('concluido') || s.includes('concluído')) return { id: 'concluido', label: 'CONCLUÍDO', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 };
         if (s.includes('cancelado')) return { id: 'cancelado', label: 'CANCELADO', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle };
-        return { id: 'pendente', label: 'PENDENTE', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: Clock3 };
+        return { id: 'pendente', label: 'AGENDADO', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock3 }; // Modificado para AGENDADO conforme imagem
+    };
+
+    const getPresenceInfo = (summary: string) => {
+        const s = summary.toLowerCase();
+        if (s.includes('[checkout]')) return 'checkout';
+        if (s.includes('[missed]')) return 'missed';
+        return '';
+    };
+
+    const getPresenceStyle = (presence: string) => {
+        if (presence === 'checkout') return { color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 };
+        if (presence === 'missed') return { color: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle };
+        return { color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock3 }; 
     };
 
     const scrollToSelected = () => {
@@ -213,9 +295,21 @@ export const AppointmentsList: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-white transition-all duration-500 animate-in fade-in">
-
-            {/* Header */}
-            <header className="px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100">
+            {isModalOpen ? (
+                <div className="flex-1 overflow-hidden h-full">
+                    <FluidAppointmentWizard
+                        isOpen={isModalOpen}
+                        onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
+                        onSave={handleCreateEvent}
+                        specialists={specialists.filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))}
+                        defaultDate={currentDate}
+                        initialData={editingEvent}
+                    />
+                </div>
+            ) : (
+                <>
+                    {/* Header */}
+                    <header className="px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100">
                 <div>
                     <h1 className="text-xl md:text-2xl font-bold text-slate-800">Agendamentos do Dia</h1>
                     <p className="text-sm text-slate-500">Gerencie os compromissos em formato de lista</p>
@@ -311,149 +405,252 @@ export const AppointmentsList: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    events.map((event) => {
-                        const startTime = event.start.dateTime ? new Date(event.start.dateTime) : null;
-                        const endTime = event.end.dateTime ? new Date(event.end.dateTime) : null;
-                        const status = getStatusInfo(event.summary);
-                        const StatusIcon = status.icon;
+                    <div className="bg-white rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm">
+                        <div className="overflow-x-auto pb-24">
+                            <table className="w-full text-left border-collapse min-w-[1000px]">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100 text-xs uppercase tracking-wider text-slate-500 font-bold">
+                                        <th className="px-6 py-4">Horário</th>
+                                        <th className="px-6 py-4">Paciente</th>
+                                        <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Compromisso</th>
+                                        <th className="px-6 py-4">Observações</th>
+                                        <th className="px-6 py-4 text-center">Chegada</th>
+                                        <th className="px-6 py-4 text-center">Pagamento</th>
+                                        <th className="px-6 py-4 text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {events.map((event) => {
+                                        const startTime = event.start.dateTime ? new Date(event.start.dateTime) : null;
+                                        const endTime = event.end.dateTime ? new Date(event.end.dateTime) : null;
+                                        const status = getStatusInfo(event.summary);
+                                        const StatusIcon = status.icon;
 
-                        // Extract info (same as AppointmentDetailsModal)
-                        const getField = (text: string | undefined, label: string) => {
-                            if (!text) return '';
-                            const lines = text.split('\n');
-                            const line = lines.find(l => l.startsWith(label));
-                            return line ? line.replace(label, '').trim() : '';
-                        };
+                                        // Extract info
+                                        const getField = (text: string | undefined, label: string) => {
+                                            if (!text) return '';
+                                            const lines = text.split('\n');
+                                            const line = lines.find(l => l.startsWith(label));
+                                            return line ? line.replace(label, '').trim() : '';
+                                        };
 
-                        const patientName = getField(event.description, 'Paciente:') || event.summary.split(' - Paciente:')[1] || event.summary;
-                        const patientRaw = event.summary.includes(' - Paciente:') ? event.summary.split(' - Paciente:')[1].trim() : event.summary;
-                        const specialist = specialists.find(s => s.calendarId === event.calendarId || s.id === event.calendarId);
-                        const type = getField(event.description, 'Tipo:');
+                                        const patientName = getField(event.description, 'Paciente:') || 
+                                                            (event.summary.includes(' - Paciente:') ? event.summary.split(' - Paciente:')[1].trim() : event.summary.replace(/\[.*?\]/g, '').trim());
+                                        const specialist = specialists.find(s => s.calendarId === event.calendarId || s.id === event.calendarId);
+                                        const type = getField(event.description, 'Tipo:');
+                                        const obs = getField(event.description, 'Obs:');
+                                        
+                                        const isAgendado = status.id === 'confirmado' || status.id === 'pendente'; 
+                                        const isEmAtendimento = status.id === 'em atendimento';
+                                        const isConcluido = status.id === 'concluido';
+                                        const presence = getPresenceInfo(event.summary);
+                                        const PresenceIcon = getPresenceStyle(presence).icon;
 
-                        return (
-                            <div
-                                key={event.id}
-                                onClick={() => handleEventClick(event)}
-                                className="group bg-white rounded-2xl md:rounded-3xl border border-gray-100 p-4 md:p-6 flex flex-col md:flex-row gap-3 md:gap-8 md:items-center cursor-pointer hover:shadow-xl hover:shadow-gray-100 transition-all active:scale-[0.99]"
-                            >
-                                {/* Time Section */}
-                                <div className="w-full md:w-32 flex flex-row md:flex-col items-center md:justify-center gap-2 md:gap-0 border-b md:border-b-0 md:border-r border-gray-100 pb-3 md:pb-0 md:px-4">
-                                    <span className="text-lg md:text-2xl font-black text-slate-800">
-                                        {startTime ? startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Dia'}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-400 mb-2">
-                                        {endTime ? endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Todo'}
-                                    </span>
-                                    <div className="relative group/status">
-                                        <select
-                                            value={status.id}
-                                            onClick={(e) => e.stopPropagation()}
-                                            onChange={(e) => handleStatusUpdate(event, e.target.value)}
-                                            className={`
-                        appearance-none pl-6 pr-2 py-1 rounded-lg text-[9px] font-black border outline-none cursor-pointer transition-all
-                        ${status.color} hover:shadow-sm
-                      `}
-                                        >
-                                            <option value="pendente">PENDENTE</option>
-                                            <option value="confirmado">CONFIRMADO</option>
-                                            <option value="concluido">CONCLUÍDO</option>
-                                            <option value="cancelado">CANCELADO</option>
-                                        </select>
-                                        <div className="absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                                            <StatusIcon size={10} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Patient & Details */}
-                                <div className="flex-1 flex flex-col gap-2">
-                                    <h3 className="text-base md:text-xl font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-                                        {patientRaw}
-                                    </h3>
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${specialist?.color.split(' ')[0] || 'bg-blue-500'}`}></div>
-                                            <span className="text-sm font-bold text-slate-600">{specialist?.name || 'Clínica'}</span>
-                                        </div>
-
-                                        {type && type !== '-' && (
-                                            <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
-                                                <Clock size={14} />
-                                                <span className="text-xs font-bold">{type}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="relative">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveMenuId(activeMenuId === event.id ? null : (event.id || null));
-                                        }}
-                                        className={`p-2 rounded-full transition-all ${activeMenuId === event.id ? 'bg-slate-100 text-slate-800' : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100'}`}
-                                    >
-                                        <MoreVertical size={20} />
-                                    </button>
-
-                                    {activeMenuId === event.id && (
-                                        <>
-                                            {/* Overlay invisível para fechar o menu ao clicar fora */}
-                                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}></div>
-
-                                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 py-2 animate-in fade-in zoom-in-95 duration-200">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveMenuId(null);
-                                                        setEditingEvent(event);
-                                                        setIsModalOpen(true);
-                                                    }}
-                                                    className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 transition-colors"
-                                                >
-                                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                                                        <Pencil size={16} />
+                                        return (
+                                            <tr 
+                                                key={event.id}
+                                                onClick={() => handleEventClick(event)}
+                                                className="border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-colors group relative"
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap align-middle">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-800 text-sm">
+                                                            {startTime ? startTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Dia'}
+                                                        </span>
+                                                        <span className="text-xs text-slate-400 font-medium mt-1">
+                                                            {endTime ? endTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Todo'}
+                                                        </span>
                                                     </div>
-                                                    <span className="font-bold">Editar agendamento</span>
-                                                </button>
-
-                                                <div className="h-px bg-gray-100 mx-2 my-1"></div>
-
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveMenuId(null);
-                                                        handleDeleteEvent(event);
-                                                    }}
-                                                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                                                >
-                                                    <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
-                                                        <Trash2 size={16} />
+                                                </td>
+                                                <td className="px-6 py-4 align-middle">
+                                                    <div className="flex items-center gap-2">
+                                                        <User size={14} className="text-slate-400 shrink-0" />
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
+                                                                if (found) {
+                                                                    navigate(`/pacientes/${found.id}/visao-geral`);
+                                                                } else {
+                                                                    navigate('/pacientes');
+                                                                }
+                                                            }}
+                                                            className="font-bold text-slate-700 hover:text-blue-600 text-sm max-w-[180px] truncate hover:underline text-left cursor-pointer"
+                                                        >
+                                                            {patientName}
+                                                        </button>
                                                     </div>
-                                                    <span className="font-bold">Excluir agendamento</span>
-                                                </button>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                {/* Decorative Pill */}
-                                <div className={`w-1.5 h-16 rounded-full ${specialist?.color.split(' ')[0] || 'bg-blue-100'} opacity-30 shadow-sm`}></div>
-                            </div>
-                        );
-                    })
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap align-middle">
+                                                    <div className="relative group/status w-[130px]" onClick={(e) => e.stopPropagation()}>
+                                                        <select
+                                                            value={status.id}
+                                                            onChange={(e) => handleStatusUpdate(event, e.target.value)}
+                                                            className={`
+                                                                appearance-none pl-7 pr-6 py-1.5 rounded-full text-[10px] font-black border outline-none cursor-pointer transition-all uppercase tracking-wider w-full
+                                                                ${status.color} hover:shadow-sm
+                                                            `}
+                                                        >
+                                                            <option value="pendente">AGENDADO</option>
+                                                            <option value="confirmado">CONFIRMADO</option>
+                                                            <option value="em atendimento">EM ATENDIMENTO</option>
+                                                            <option value="concluido">CONCLUÍDO</option>
+                                                            <option value="cancelado">CANCELADO</option>
+                                                        </select>
+                                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                            <StatusIcon size={12} />
+                                                        </div>
+                                                        <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 align-middle">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">{type && type !== '-' ? type : 'ATENDIMENTO'}</span>
+                                                        <span className="text-xs font-medium text-slate-500 mt-0.5">{specialist?.name || 'Clínica'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 align-middle">
+                                                    <span className="text-sm text-slate-500 line-clamp-2 max-w-[150px]" title={obs !== '-' ? obs : ''}>
+                                                        {obs !== '-' ? obs : ''}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center whitespace-nowrap align-middle">
+                                                    <div className="relative group/status w-[110px] mx-auto" onClick={(e) => e.stopPropagation()}>
+                                                        <select
+                                                            value={presence}
+                                                            onChange={(e) => handlePresenceUpdate(event, e.target.value)}
+                                                            className={`
+                                                                appearance-none pl-7 pr-6 py-1.5 rounded-full text-[10px] font-black border outline-none cursor-pointer transition-all uppercase tracking-wider w-full
+                                                                ${getPresenceStyle(presence).color} hover:shadow-sm
+                                                            `}
+                                                        >
+                                                            <option value="">PENDENTE</option>
+                                                            <option value="checkout">PRESENTE</option>
+                                                            <option value="missed">FALTOU</option>
+                                                        </select>
+                                                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                            <PresenceIcon size={12} />
+                                                        </div>
+                                                        <ChevronDown size={10} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50" />
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center whitespace-nowrap align-middle">
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
+                                                            if (found) {
+                                                                navigate(`/pacientes/${found.id}/pagamentos`);
+                                                            } else {
+                                                                navigate('/pacientes');
+                                                            }
+                                                        }}
+                                                        className="p-2 hover:bg-slate-50 rounded-full transition-colors cursor-pointer inline-flex items-center justify-center group/pay"
+                                                        title="Ir para Pagamentos"
+                                                    >
+                                                        <span className="text-red-500 font-bold group-hover/pay:scale-110 transition-transform">$</span>
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-4 text-right whitespace-nowrap align-middle">
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        {(isAgendado || isEmAtendimento || isConcluido) && (
+                                                            <button 
+                                                                disabled={isConcluido}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (isConcluido) return;
+
+                                                                    if (presence !== 'checkout') {
+                                                                        alert('É necessário marcar a Chegada como PRESENTE antes de iniciar ou finalizar o atendimento.');
+                                                                        return;
+                                                                    }
+
+                                                                    if (isAgendado) {
+                                                                        if (endTime && new Date() > endTime) {
+                                                                            if(confirm("O horário previsto para este agendamento já encerrou. Deseja apenas marcá-lo como CONCLUÍDO? (Cancelará a navegação ao prontuário)")) {
+                                                                                handleStatusUpdate(event, 'concluido');
+                                                                                return;
+                                                                            } else if (!confirm("Deseja iniciar o atendimento mesmo com o horário esgotado?")) {
+                                                                                return;
+                                                                            }
+                                                                        }
+
+                                                                        handleStatusUpdate(event, 'em atendimento');
+                                                                        const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
+                                                                        if (found) {
+                                                                            navigate(`/pacientes/${found.id}/tratamentos`);
+                                                                        } else {
+                                                                            navigate('/pacientes');
+                                                                        }
+                                                                    } else if (isEmAtendimento) {
+                                                                        handleStatusUpdate(event, 'concluido');
+                                                                    }
+                                                                }}
+                                                                className={`px-4 py-2 border-2 font-bold rounded-full text-xs transition-colors flex items-center gap-1 ${
+                                                                    isConcluido
+                                                                    ? 'border-gray-300 text-gray-500 cursor-not-allowed opacity-70 bg-gray-50'
+                                                                    : isAgendado 
+                                                                    ? 'border-blue-600 text-blue-600 hover:bg-blue-50' 
+                                                                    : 'border-green-600 text-green-600 hover:bg-green-50'
+                                                                }`}
+                                                            >
+                                                                {isConcluido ? 'FINALIZADO' : isAgendado ? 'ATENDER' : 'FINALIZAR'} {!isConcluido && <ChevronRight size={14} />}
+                                                            </button>
+                                                        )}
+                                                        <div className="relative">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActiveMenuId(activeMenuId === event.id ? null : (event.id || null));
+                                                                }}
+                                                                className={`p-1.5 rounded-full transition-colors ${activeMenuId === event.id ? 'bg-slate-100 text-slate-800' : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100'}`}
+                                                            >
+                                                                <MoreVertical size={16} />
+                                                            </button>
+                                                            {activeMenuId === event.id && (
+                                                                <>
+                                                                    <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}></div>
+                                                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-1" onClick={e => e.stopPropagation()}>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                setEditingEvent(event);
+                                                                                setIsModalOpen(true);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                                        >
+                                                                            <Pencil size={14} /> <span className="font-medium">Editar</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setActiveMenuId(null);
+                                                                                handleDeleteEvent(event);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                                        >
+                                                                            <Trash2 size={14} /> <span className="font-medium">Excluir</span>
+                                                                        </button>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                {/* Indicador de cor do especialista */}
+                                                <td className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full" style={{ backgroundColor: specialist?.color?.split(' ')[0]?.replace('bg-', '') || '#3b82f6' }}></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 )}
             </div>
 
-            {/* Modals */}
-            <NewAppointmentModal
-                isOpen={isModalOpen}
-                onClose={() => { setIsModalOpen(false); setEditingEvent(undefined); }}
-                onSave={handleCreateEvent}
-                specialists={specialists.filter(spec => spec.name && /Dr\.?|Dra\.?/i.test(spec.name))}
-                defaultDate={currentDate}
-                initialData={editingEvent}
-            />
+                </>
+            )}
 
             <AppointmentDetailsModal
                 isOpen={isDetailsOpen}
@@ -469,6 +666,67 @@ export const AppointmentsList: React.FC = () => {
                 }}
                 onDelete={handleDeleteEvent}
             />
+
+            {/* Modal de Alerta de Tempo Limite */}
+            {timeoutAlertEvent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col p-6 animate-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <div className="mx-auto w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mb-3">
+                                <Clock size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">Tempo Esgotado</h3>
+                            <p className="text-sm text-gray-500 mt-2">
+                                O atendimento de <span className="font-bold text-slate-700">{timeoutAlertEvent.summary.replace('[EM ATENDIMENTO]', '').trim()}</span> já passou do horário previsto de encerramento.
+                            </p>
+                            <p className="text-sm text-slate-600 mt-4 font-medium">O atendimento já foi encerrado ou ainda está em atendimento?</p>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={() => {
+                                    if (!timeoutAlertEvent?.id) return;
+                                    const eventToUpdate = timeoutAlertEvent;
+                                    setSnoozedEvents(prev => ({ ...prev, [eventToUpdate.id!]: Date.now() + 60000 }));
+                                    setTimeoutAlertEvent(null);
+                                    handleStatusUpdate(eventToUpdate, 'concluido');
+                                }}
+                                className="w-full px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-xl transition-all shadow-sm"
+                            >
+                                Sim, já foi encerrado
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!timeoutAlertEvent?.id || !timeoutAlertEvent.end?.dateTime) return;
+                                    const eventToUpdate = timeoutAlertEvent;
+                                    
+                                    // Snooze local temporário apenas para evitar reabertura enquanto salva na nuvem
+                                    setSnoozedEvents(prev => ({ ...prev, [eventToUpdate.id!]: Date.now() + 60000 }));
+                                    setTimeoutAlertEvent(null);
+                                    
+                                    // Estende o horário do evento em 10 minutos na nuvem (Google Calendar)
+                                    setLoading(true);
+                                    const newEndTime = new Date(new Date(eventToUpdate.end.dateTime).getTime() + 10 * 60000);
+                                    googleCalendarService.updateEvent(empresaId!, adminEmail!, eventToUpdate.id, {
+                                        ...eventToUpdate,
+                                        end: {
+                                            ...eventToUpdate.end,
+                                            dateTime: newEndTime.toISOString()
+                                        }
+                                    }, eventToUpdate.calendarId).then(() => {
+                                        loadEvents();
+                                    }).catch((error: any) => {
+                                        alert('Erro ao estender horário na nuvem: ' + error.message);
+                                        setLoading(false);
+                                    });
+                                }}
+                                className="w-full px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors"
+                            >
+                                Ainda está em atendimento (+10 min)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
