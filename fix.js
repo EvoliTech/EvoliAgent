@@ -1,0 +1,1 @@
+const fs = require('fs'); const path = 'c:/Users/User/Documents/App gestão/clínicasync---gestão-médica/EvoliAgent/components/PatientDetails.tsx'; let content = fs.readFileSync(path, 'utf8'); content = content.replace(/t\.status === 'Conclu[^']*'/g, "t.status === 'Concluído'"); fs.writeFileSync(path, content, 'utf8');

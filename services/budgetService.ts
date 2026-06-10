@@ -57,7 +57,8 @@ export const budgetService = {
       nome: budget.name,
       data_orcamento: budget.date,
       total: budget.total,
-      status: budget.status
+      status: budget.status,
+      tratamentos: budget.treatments
     };
 
     // If ID is a purely numeric short random id (from frontend), we should omit it and let Supabase generate UUID
@@ -114,12 +115,13 @@ export const budgetService = {
         observacoes: t.observacoes || null
       }));
 
-      const { error: insertError } = await supabase.from('orcamento_itens').insert(itemsPayload);
+      const { data: insertedItems, error: insertError } = await supabase.from('orcamento_itens').insert(itemsPayload).select();
       if (insertError) {
         console.error('Error inserting budget items:', insertError);
+        savedBudget.orcamento_itens = itemsPayload;
+      } else {
+        savedBudget.orcamento_itens = insertedItems;
       }
-      
-      savedBudget.orcamento_itens = itemsPayload;
     }
 
     return this.mapToBudget(savedBudget);
@@ -158,7 +160,7 @@ export const budgetService = {
   mapToBudget(dbBudget: any): Budget {
     let treatments = dbBudget.tratamentos || [];
     
-    if (dbBudget.orcamento_itens && Array.isArray(dbBudget.orcamento_itens)) {
+    if (dbBudget.orcamento_itens && Array.isArray(dbBudget.orcamento_itens) && dbBudget.orcamento_itens.length > 0) {
       treatments = dbBudget.orcamento_itens.map((item: any) => ({
         id: item.id,
         treatmentName: item.treatment_name,

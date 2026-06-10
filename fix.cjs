@@ -1,16 +1,1 @@
-const fs = require('fs');
-let f = fs.readFileSync('components/MessageCenter.tsx', 'utf8');
-let lines = f.split('\n');
-
-// Clean up duplicate block
-lines.splice(457, 11);
-
-// Add the campaignReason block at line 449
-const newBlock = `                                        {(patient as any).campaignReason && (
-                                           <p className="text-[11px] text-indigo-700 font-bold bg-indigo-50 px-2 py-1 rounded-md mt-1 w-fit border border-indigo-100 line-clamp-2" title={(patient as any).campaignReason}>
-                                              {(patient as any).campaignReason}
-                                           </p>
-                                        )}`;
-lines.splice(449, 0, newBlock);
-
-fs.writeFileSync('components/MessageCenter.tsx', lines.join('\n'), 'utf8');
+const fs = require('fs'); const path = require('path').join(__dirname, 'components/PatientDetails.tsx'); let content = fs.readFileSync(path, 'utf8'); content = content.replace(/t\.status === 'Conclu[^']*'/g, 't.status === \'Conclu' + String.fromCharCode(237) + 'do\''); content = content.replace(/Pend[^']*ncia/g, 'Pend' + String.fromCharCode(234) + 'ncia'); content = content.replace(/evolu[^']*o/g, 'evolu' + String.fromCharCode(231) + String.fromCharCode(227) + 'o'); fs.writeFileSync(path, content, 'utf8');
