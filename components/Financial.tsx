@@ -8,8 +8,22 @@ import { Specialist, CommissionRule } from '../types';
 import { ConfigComissionsModal } from './ConfigComissionsModal';
 import { AddDespesaModal, DespesaType } from './AddDespesaModal';
 import { expenseService } from '../services/expenseService';
+import { revenueService } from '../services/revenueService';
 import { supabase } from '../lib/supabase';
 
+
+interface ErrorBoundaryState { error: any; }
+class FinancialErrorBoundary extends React.Component<any, ErrorBoundaryState> {
+  constructor(props: any) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error: any) { return { error }; }
+  componentDidCatch(error: any, info: any) { console.error('Financial Error:', error, info); }
+  render() {
+    if (this.state.error) return <div style={{padding: 40, color: 'red', background: '#fee2e2'}}>
+      <h1>Error in Financial.tsx</h1><pre>{this.state.error.message}</pre><pre>{this.state.error.stack}</pre>
+    </div>;
+    return this.props.children;
+  }
+}
 
 export const Financial: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes'>('painel');
@@ -42,8 +56,9 @@ export const Financial: React.FC = () => {
   const { empresaId } = useCompany();
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [commissionedSpecialists, setCommissionedSpecialists] = useState<Record<string, CommissionRule[]>>({});
-  const [allBudgets, setAllBudgets] = useState<any[]>([]);
   const [allDespesas, setAllDespesas] = useState<DespesaType[]>([]);
+  const [allReceitas, setAllReceitas] = useState<any[]>([]);
+  const [allBudgets, setAllBudgets] = useState<any[]>([]);
   const [maquininhas, setMaquininhas] = useState<any[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
@@ -65,26 +80,39 @@ export const Financial: React.FC = () => {
         .then((data) => setAllDespesas(data as DespesaType[]))
         .catch(console.error);
 
-      supabase.from('maquininhas').select('*').eq('empresa_id', empresaId)
-        .then(({ data }) => setMaquininhas(data || []))
+      revenueService.fetchRevenues(empresaId)
+        .then((data) => setAllReceitas(data))
         .catch(console.error);
+
+      supabase.from('maquininhas').select('*').eq('empresa_id', empresaId)
+        .then(({ data, error }) => { if (error) console.error(error); else setMaquininhas(data || []); });
     }
   }, [empresaId]);
 
-  const handleDeleteDespesa = async (id: string, e?: React.MouseEvent) => {
+  const handleDeleteDespesa = async (id: string, isReceita: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Deseja realmente cancelar/excluir esta despesa?")) {
-      await expenseService.deleteExpense(id);
-      setAllDespesas(prev => prev.filter(d => d.id !== id));
+    if (window.confirm(`Deseja realmente cancelar/excluir esta ${isReceita ? 'receita' : 'despesa'}?`)) {
+      if (isReceita) {
+          await revenueService.deleteRevenue(id);
+          setAllReceitas(prev => prev.filter(r => r.id !== id));
+      } else {
+          await expenseService.deleteExpense(id);
+          setAllDespesas(prev => prev.filter(d => d.id !== id));
+      }
     }
   };
 
-  const handlePayDespesa = async (id: string, e?: React.MouseEvent) => {
+  const handlePayDespesa = async (id: string, isReceita: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Confirmar o recebimento/pagamento?")) {
-      const success = await expenseService.payExpense(id, 'Dinheiro');
-      if (id) {
-        setAllDespesas(prev => prev.map(d => d.id === id ? { ...d, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : d));
+    if (window.confirm(isReceita ? "Confirmar o recebimento?" : "Confirmar o pagamento?")) {
+      if (isReceita) {
+          await revenueService.payRevenue(id, 'Dinheiro');
+          setAllReceitas(prev => prev.map(r => r.id === id ? { ...r, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : r));
+      } else {
+          const success = await expenseService.payExpense(id, 'Dinheiro');
+          if (id) {
+            setAllDespesas(prev => prev.map(d => d.id === id ? { ...d, is_paga: true, data_pagamento: new Date().toISOString().split('T')[0], forma_pagamento: 'Dinheiro' } : d));
+          }
       }
     }
   };
@@ -92,13 +120,25 @@ export const Financial: React.FC = () => {
   const handleSaveTransaction = async (data: DespesaType, files: any) => {
     if (!empresaId) return;
     try {
+      const isReceita = data.tipo === 'receita' || editingTransaction?.type === 'receita';
+      
       if (editingTransaction?.data?.id) {
-        await expenseService.updateExpense(editingTransaction.data.id, data, files);
+        if (isReceita) {
+          await revenueService.updateRevenue(editingTransaction.data.id, data as any, files);
+        } else {
+          await expenseService.updateExpense(editingTransaction.data.id, data, files);
+        }
       } else {
-        await expenseService.createExpense({ ...data, empresa_id: empresaId }, files);
+        if (isReceita) {
+          await revenueService.createRevenue({ ...data, empresa_id: empresaId } as any, files);
+        } else {
+          await expenseService.createExpense({ ...data, empresa_id: empresaId }, files);
+        }
       }
-      const refreshed = await expenseService.fetchExpenses(empresaId);
-      setAllDespesas(refreshed as DespesaType[]);
+      const refreshedD = await expenseService.fetchExpenses(empresaId);
+      const refreshedR = await revenueService.fetchRevenues(empresaId);
+      setAllDespesas(refreshedD as DespesaType[]);
+      setAllReceitas(refreshedR);
       setShowDetails(null);
       setEditingTransaction(null);
     } catch (err) {
@@ -107,11 +147,16 @@ export const Financial: React.FC = () => {
     }
   };
 
-  const handleDeleteGroup = async (grupoId: string, e?: React.MouseEvent) => {
+  const handleDeleteGroup = async (grupoId: string, isReceita: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Deseja cancelar TODAS as cobranças desta despesa recorrente?")) {
-      await expenseService.deleteExpenseGroup(grupoId);
-      setAllDespesas(prev => prev.filter(d => d.grupo_recorrente !== grupoId));
+    if (window.confirm(`Deseja cancelar TODAS as cobranças desta ${isReceita ? 'receita' : 'despesa'} recorrente?`)) {
+      if (isReceita) {
+          await revenueService.deleteRevenueGroup(grupoId);
+          setAllReceitas(prev => prev.filter(r => r.grupo_recorrente !== grupoId));
+      } else {
+          await expenseService.deleteExpenseGroup(grupoId);
+          setAllDespesas(prev => prev.filter(d => d.grupo_recorrente !== grupoId));
+      }
       setExpandedGroup(null);
     }
   };
@@ -184,37 +229,48 @@ export const Financial: React.FC = () => {
   };
 
   const despesas = useMemo(() => allDespesas.filter(d => isDateInFilter(d.data_pagamento || d.data_vencimento)), [allDespesas, filterMonth, filterYear]);
+  const receitas = useMemo(() => allReceitas.filter(r => isDateInFilter(r.data_pagamento || r.data_vencimento)), [allReceitas, filterMonth, filterYear]);
 
   const gruposRecorrentes = useMemo(() => {
-    const groups: Record<string, DespesaType[]> = {};
-    allDespesas.forEach(d => {
-      if (d.is_recorrente && d.grupo_recorrente) {
-        if (!groups[d.grupo_recorrente]) groups[d.grupo_recorrente] = [];
-        groups[d.grupo_recorrente].push(d);
-      }
-    });
+    const groups: Record<string, any[]> = {};
+    const processItems = (items: any[], typeTag: string) => {
+      items.forEach(d => {
+        if (d.is_recorrente && d.grupo_recorrente) {
+          if (!groups[d.grupo_recorrente]) groups[d.grupo_recorrente] = [];
+          groups[d.grupo_recorrente].push({...d, tipoOrigem: typeTag});
+        }
+      });
+    };
+    processItems(allDespesas, 'despesa');
+    processItems(allReceitas, 'receita');
+    
     // Sort each group by date
     Object.values(groups).forEach(g => g.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()));
     return groups;
-  }, [allDespesas]);
+  }, [allDespesas, allReceitas]);
 
   const despesasAgrupadas = useMemo(() => {
-    const groups: Record<string, DespesaType[]> = {};
-    const singles: DespesaType[] = [];
+    const groups: Record<string, any[]> = {};
+    const singles: any[] = [];
 
-    despesas.forEach(d => {
-      if (d.is_recorrente && d.grupo_recorrente) {
-        if (!groups[d.grupo_recorrente]) groups[d.grupo_recorrente] = [];
-        groups[d.grupo_recorrente].push(d);
-      } else {
-        singles.push(d);
-      }
-    });
+    const processItems = (items: any[], typeTag: string) => {
+      items.forEach(d => {
+        const item = {...d, tipoOrigem: typeTag};
+        if (d.is_recorrente && d.grupo_recorrente) {
+          if (!groups[d.grupo_recorrente]) groups[d.grupo_recorrente] = [];
+          groups[d.grupo_recorrente].push(item);
+        } else {
+          singles.push(item);
+        }
+      });
+    };
+    processItems(despesas, 'despesa');
+    processItems(receitas, 'receita');
 
     // Sort each group by date
     Object.values(groups).forEach(g => g.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()));
 
-    const result: ({ type: 'group'; grupoId: string; items: DespesaType[]; representative: DespesaType } | { type: 'single'; item: DespesaType })[] = [];
+    const result: ({ type: 'group'; grupoId: string; items: any[]; representative: any } | { type: 'single'; item: any })[] = [];
 
     Object.entries(groups).forEach(([grupoId, items]) => {
       result.push({ type: 'group', grupoId, items, representative: items[0] });
@@ -231,7 +287,7 @@ export const Financial: React.FC = () => {
     });
 
     return result;
-  }, [despesas]);
+  }, [despesas, receitas]);
 
   const renderDateFilters = () => (
     <div className="flex items-center gap-3">
@@ -321,154 +377,42 @@ export const Financial: React.FC = () => {
         const profRules = profId ? commissionedSpecialists[profId] : undefined;
         const rule = getCommissionRule(profRules, trtName, convenioName);
         const profNameForCommission = matchedSpec?.name || t.profissional;
-
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
+            if (!p) return;
             const patientPaid = parseFloat(p.amount) || 0;
-            let netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
-            let dateFallback = p.receiveDate || p.date || p.createdAt || new Date().toISOString().split('T')[0];
-            let dueDate = new Date((dateFallback.includes('T') ? dateFallback.split('T')[0] : dateFallback) + 'T12:00:00');
-            let isPaga = true;
-            let planFee = Math.max(0, patientPaid - netReceived);
-            
-            // Lógica de Taxas e Parcelas (Maquininhas)
-            const maq = maquininhas.find(m => m.id === p.maquininha_id);
-            let installments = 1;
-            let transactionsToPush: any[] = [];
-            
-            if (p.method === 'Pix') {
-                if (maq && maq.pix_fee) {
-                    const feeAmt = netReceived * (maq.pix_fee / 100);
-                    netReceived -= feeAmt;
-                    planFee += feeAmt;
-                }
-            } else if (p.method === 'Débito') {
-                if (maq && maq.debito_fee) {
-                    const feeAmt = netReceived * (maq.debito_fee / 100);
-                    netReceived -= feeAmt;
-                    planFee += feeAmt;
-                }
-                if (maq && maq.debito_dias) {
-                    const dias = parseInt(maq.debito_dias || '0');
-                    dueDate.setDate(dueDate.getDate() + dias);
-                    isPaga = dias === 0;
-                }
-            } else if (p.method === 'Crédito') {
-                installments = p.installments || 1;
-                let fee = 0;
-                if (maq) {
-                    if (installments === 1 && maq.credito_fees && maq.credito_fees.length > 0) {
-                         fee = maq.credito_fees[0];
-                    } else if (maq.credito_fees && maq.credito_fees.length >= installments) {
-                         fee = maq.credito_fees[installments - 1];
-                    }
-                    const feeAmt = netReceived * (fee / 100);
-                    netReceived -= feeAmt;
-                    planFee += feeAmt;
-                    
-                    if (maq.credito_forma === 'Antecipado') {
-                         const dias = parseInt(maq.credito_dias_uma_vez || '0');
-                         dueDate.setDate(dueDate.getDate() + dias);
-                         isPaga = dias === 0;
-                    }
-                }
-            } else if (p.method === 'Boleto') {
-                isPaga = p.status === 'Pago' || p.isPaid === true;
-            }
-
             paidOnTrt += patientPaid;
-
-            if (p.method === 'Crédito' && maq && maq.credito_forma !== 'Antecipado' && installments > 1) {
-                 const valorParcela = netReceived / installments;
-                 const originalParcela = patientPaid / installments;
-                 const feeParcela = planFee / installments;
-                 
-                 for (let i = 1; i <= installments; i++) {
-                     const parcelaData = new Date((p.receiveDate || p.date || new Date().toISOString().split('T')[0]) + 'T12:00:00');
-                     parcelaData.setDate(parcelaData.getDate() + (i * 30));
-                     const isFuture = parcelaData.getTime() > new Date().getTime();
-                     
-                     transactionsToPush.push({
-                          id: p.id + '_p' + i,
-                          treatmentName: trtName + ` (${i}/${installments})`,
-                          patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                          cpf: b.paciente?.cpf || '',
-                          date: parcelaData.toISOString().split('T')[0],
-                          amount: valorParcela,
-                          originalAmount: originalParcela,
-                          planFee: feeParcela,
-                          isPaid: !isFuture,
-                          type: 'entrada',
-                          installment: i,
-                          totalInstallments: installments
-                     });
-                 }
-            } else {
-                 const isFuture = dueDate.getTime() > new Date().getTime() || (!isPaga && p.method === 'Boleto');
-                 transactionsToPush.push({
-                      id: p.id,
-                      treatmentName: trtName,
-                      patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                      cpf: b.paciente?.cpf || '',
-                      date: dueDate.toISOString().split('T')[0],
-                      amount: netReceived,
-                      originalAmount: patientPaid,
-                      planFee: planFee,
-                      isPaid: !isFuture,
-                      type: 'entrada'
-                 });
+            
+            // Calculate apos_pagamento commission
+            if (rule && rule.quandoRecebe === 'apos_pagamento') {
+              let valComissao = 0;
+              const valRegra = parseFloat(String(rule.valor).replace(',', '.'));
+              if (rule.tipoComissao === 'porcentagem') {
+                valComissao = patientPaid * (valRegra / 100);
+              } else {
+                const prop = itemVal > 0 ? (patientPaid / itemVal) : 1;
+                valComissao = valRegra * prop;
+              }
+              if (valComissao > 0) {
+                comissoesTotal += valComissao;
+                comissoesList.push({
+                  id: 'com_pg_' + p.id,
+                  budgetId: b.id,
+                  treatmentId: t.id,
+                  paymentId: p.id,
+                  treatmentName: trtName,
+                  profissional: profNameForCommission,
+                  treatment: trtName,
+                  date: p.date || p.receiveDate || new Date().toISOString(),
+                  amount: valComissao,
+                  paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                  status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
+                  valorLiquido: patientPaid,
+                  custo: 0, // plan fee logic moved to physical revenues
+                  ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+                });
+              }
             }
-
-            // Distribuir nos totais e comissões baseando nas parcelas criadas
-            transactionsToPush.forEach(tx => {
-                if (!tx.isPaid) {
-                  pendingTotal += tx.amount;
-                } else {
-                  paidTotal += tx.amount;
-                }
-
-                // Calculate apos_pagamento commission per transaction if needed
-                if (rule && rule.quandoRecebe === 'apos_pagamento') {
-                  let valComissao = 0;
-                  const valRegra = parseFloat(rule.valor.replace(',', '.'));
-                  if (rule.tipoComissao === 'porcentagem') {
-                    valComissao = tx.amount * (valRegra / 100);
-                  } else {
-                    const prop = itemVal > 0 ? (tx.amount / itemVal) : 1;
-                    valComissao = valRegra * prop;
-                  }
-                  if (valComissao > 0) {
-                    comissoesTotal += valComissao;
-                    comissoesList.push({
-                      id: 'com_pg_' + tx.id,
-                      budgetId: b.id,
-                      treatmentId: t.id,
-                      paymentId: p.id,
-                      treatmentName: tx.treatmentName,
-                      profissional: profNameForCommission,
-                      treatment: tx.treatmentName,
-                      date: tx.date,
-                      amount: valComissao,
-                      paciente: tx.patientName,
-                      status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
-                      valorLiquido: tx.amount,
-                      custo: tx.planFee,
-                      ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
-                    });
-                  }
-                }
-                
-                if (tx.planFee > 0) {
-                  planTaxesTotal += tx.planFee;
-                }
-                
-                const met = p.method || 'Outro';
-                methodsSummary[met] = (methodsSummary[met] || 0) + tx.amount;
-                
-                if (isDateInFilter(tx.date)) {
-                    transactions.push(tx);
-                }
-            });
           });
         }
 
@@ -514,7 +458,7 @@ export const Financial: React.FC = () => {
           const procDate = b.updated_at || b.created_at || new Date().toISOString();
           if (isDateInFilter(procDate)) {
             let valComissao = 0;
-            const valRegra = parseFloat(rule.valor.replace(',', '.'));
+            const valRegra = parseFloat(String(rule.valor).replace(',', '.'));
             if (rule.tipoComissao === 'porcentagem') {
               valComissao = itemVal * (valRegra / 100);
             } else {
@@ -545,29 +489,31 @@ export const Financial: React.FC = () => {
       });
     });
 
+    receitas.forEach(r => {
+      const netReceived = r.valor;
+      if (r.is_paga) {
+        paidTotal += netReceived;
+      } else {
+        pendingTotal += netReceived;
+      }
+      transactions.push({
+        id: r.id || ('rec_' + Math.random()),
+        treatmentName: r.titulo,
+        patientName: 'Receita (' + (r.categoria || 'Outros') + ')',
+        cpf: '',
+        date: r.data_pagamento || r.data_vencimento,
+        amount: r.valor,
+        originalAmount: r.valor,
+        planFee: 0,
+        isPaid: r.is_paga,
+        type: r.is_paga ? 'entrada' : 'pendente',
+        isManualRevenue: true,
+        rawData: { ...r, tipo: 'receita' } // Keep reference for editing and identify as receita
+      });
+    });
+
     despesas.forEach(d => {
-      if (d.tipo === 'receita') {
-        const netReceived = d.valor;
-        if (d.is_paga) {
-          paidTotal += netReceived;
-        } else {
-          pendingTotal += netReceived;
-        }
-        transactions.push({
-          id: d.id || ('rec_' + Math.random()),
-          treatmentName: d.titulo,
-          patientName: 'Receita (' + (d.categoria || 'Outros') + ')',
-          cpf: '',
-          date: d.data_pagamento || d.data_vencimento,
-          amount: d.valor,
-          originalAmount: d.valor,
-          planFee: 0,
-          isPaid: d.is_paga,
-          type: d.is_paga ? 'entrada' : 'pendente',
-          isManualRevenue: true,
-          rawData: d // Keep reference for editing
-        });
-      } else if (d.is_paga) {
+      if (d.is_paga) {
         transactions.push({
           id: d.id || ('desp_' + Math.random()),
           treatmentName: d.titulo,
@@ -579,7 +525,7 @@ export const Financial: React.FC = () => {
           planFee: 0,
           isPaid: true,
           type: 'saida',
-          rawData: d // Keep reference for editing
+          rawData: { ...d, tipo: 'despesa' } // Keep reference for editing
         });
       }
     });
@@ -603,7 +549,7 @@ export const Financial: React.FC = () => {
       inadimplenciaAmount, inadimplenciaCount: patientsInad.size,
       topTreatments, methodsData, planTaxesTotal, comissoesTotal, comissoesList
     };
-  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, maquininhas]);
+  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, receitas, maquininhas]);
 
   const handleSaveRules = async (specialistId: string, rules: CommissionRule[]) => {
     // Optimistic UI Update
@@ -814,25 +760,25 @@ export const Financial: React.FC = () => {
                     {financialStats.comissoesList.length === 0 ? (
                       <div className="flex mt-8 items-center justify-center text-center text-xs text-gray-500">
                         Nenhum repasse de comissão encontrado para o período.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {financialStats.comissoesList.map(c => (
-                          <div key={c.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                            <div className="flex flex-col">
-                              <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
-                              <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {financialStats.comissoesList.map(c => (
+                            <div key={c.id} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
+                                <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
+                              </div>
+                              <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
+                                R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
                             </div>
-                            <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
-                              R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {/* Proximas Despesas */}
               <div className="flex flex-col px-0 md:px-6 md:pr-0 min-h-[160px] pt-4 md:pt-0">
@@ -858,13 +804,13 @@ export const Financial: React.FC = () => {
                           <div className="flex items-center gap-4 ml-2">
                             <p className="font-semibold text-red-600 whitespace-nowrap">R$ {d.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                             <div className="flex items-center gap-1.5 border-l border-gray-100 pl-3">
-                              <button onClick={(e) => handlePayDespesa(d.id!, e)} className="text-emerald-600 font-bold text-[11px] px-2 py-1 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors">
-                                {d.tipo === 'receita' ? 'Receber' : 'Pagar'}
+                              <button onClick={(e) => handlePayDespesa(d.id!, d.tipoOrigem === 'receita', e)} className="text-emerald-600 font-bold text-[11px] px-2 py-1 bg-emerald-50 rounded hover:bg-emerald-100 transition-colors">
+                                {d.tipoOrigem === 'receita' ? 'Receber' : 'Pagar'}
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: d.tipo || 'despesa', data: d }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1">
+                              <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: d.tipoOrigem || 'despesa', data: d }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1">
                                 <Edit3 size={15} />
                               </button>
-                              <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                              <button onClick={(e) => handleDeleteDespesa(d.id!, d.tipoOrigem === 'receita', e)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
                                 <Trash2 size={15} />
                               </button>
                             </div>
@@ -1102,17 +1048,17 @@ export const Financial: React.FC = () => {
                         <div className="flex items-center justify-between w-[55%] pl-4">
                           <div className="w-[18%] text-[13px] font-medium text-gray-600">{d.categoria || '--'}</div>
                           <div className="w-[18%] text-[13px] font-medium text-gray-600">{new Date(d.data_vencimento + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
-                          <div className="w-[18%] text-[13.5px] font-semibold text-red-600">-R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                          <div className="w-[18%] text-[13.5px] font-semibold text-red-600">{d.tipoOrigem === 'receita' ? '' : '-'}R$ {(d.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                           <div className="w-28 flex justify-end pr-2">
                             {d.is_paga ? (
                               <span className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 rounded-full text-[11px] font-bold whitespace-nowrap"><Check size={12} strokeWidth={3.5} /> Pago</span>
                             ) : (
-                              <button onClick={(e) => handlePayDespesa(d.id!, e)} className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded-full text-[11px] font-bold whitespace-nowrap">
-                                <Check size={12} strokeWidth={3} /> Pagar
+                              <button onClick={(e) => handlePayDespesa(d.id!, d.tipoOrigem === 'receita', e)} className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded-full text-[11px] font-bold whitespace-nowrap">
+                                <Check size={12} strokeWidth={3} /> {d.tipoOrigem === 'receita' ? 'Receber' : 'Pagar'}
                               </button>
                             )}
                           </div>
-                          <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir despesa"><Trash2 size={16} /></button>
+                          <button onClick={(e) => handleDeleteDespesa(d.id!, d.tipoOrigem === 'receita', e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir"><Trash2 size={16} /></button>
                         </div>
                       </div>
                     );
@@ -1122,22 +1068,17 @@ export const Financial: React.FC = () => {
                   const { grupoId, items, representative } = entry;
                   const isExpanded = expandedGroup === grupoId;
                   
-                  // Use the global groups for total values to ensure correct index calculations
                   const fullGroupItems = gruposRecorrentes[grupoId] || items;
-                  
-                  // We sort it by date to compute the exact index of each installment
                   const sortedGroupItems = [...fullGroupItems].sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime());
-                  
                   const expectedDuracao = representative.duracao_meses || fullGroupItems.length;
                   const maxTotalItems = Math.max(expectedDuracao, fullGroupItems.length);
                   
                   const totalPagas = fullGroupItems.filter(i => i.is_paga).length;
-                  const totalValor = items.reduce((s, i) => s + (i.valor || 0), 0); // show only the sum for the shown items
+                  const totalValor = items.reduce((s, i) => s + (i.valor || 0), 0); 
                   const proximaAPagar = items.find(i => !i.is_paga);
 
                   return (
                     <div key={grupoId}>
-                      {/* Summary row */}
                       <div
                         onClick={() => setExpandedGroup(isExpanded ? null : grupoId)}
                         className={`flex items-center justify-between p-4 px-6 border-b border-gray-100 transition-colors cursor-pointer ${isExpanded ? 'bg-blue-50/50' : 'bg-white hover:bg-orange-50/40'}`}
@@ -1166,7 +1107,7 @@ export const Financial: React.FC = () => {
                               {items.length}x parcela{items.length !== 1 ? 's' : ''}
                             </span>
                           </div>
-                          <button onClick={(e) => handleDeleteGroup(grupoId, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Cancelar todas">
+                          <button onClick={(e) => handleDeleteGroup(grupoId, representative.tipoOrigem === 'receita', e)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors" title="Cancelar cobrança">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -1543,23 +1484,6 @@ export const Financial: React.FC = () => {
           );
         })()}
 
-        {showDetails === 'addDespesa' && (
-          <AddDespesaModal
-            onClose={() => setShowDetails(null)}
-            onSave={async (novaDespesa, file) => {
-              const despesaToSave = { ...novaDespesa, empresa_id: empresaId };
-              try {
-                const savedArray = await expenseService.createExpense(despesaToSave as any, file);
-                setAllDespesas([...(savedArray as DespesaType[]), ...allDespesas]);
-                setShowDetails(null);
-              } catch (error) {
-                console.error("Falha ao salvar despesa", error);
-                alert("Houve um erro ao salvar a despesa. Verifique sua conexão.");
-              }
-            }}
-          />
-        )}
-
         {/* Modal Add/Edit Transaction */}
         {(showDetails === 'addDespesa' || showDetails === 'addReceita' || editingTransaction !== null) && (
           <AddDespesaModal
@@ -1569,7 +1493,17 @@ export const Financial: React.FC = () => {
               setShowDetails(null);
               setEditingTransaction(null);
             }}
-            onSave={handleSaveTransaction}
+            onSave={async (data) => {
+              if (data.tipo === 'receita') {
+                await revenueService.createRevenue(data as any, null);
+                revenueService.fetchRevenues(empresaId!).then(setAllReceitas);
+              } else {
+                await expenseService.createExpense(data as any, null);
+                expenseService.fetchExpenses(empresaId!).then((d) => setAllDespesas(d as DespesaType[]));
+              }
+              setShowDetails(null);
+              setEditingTransaction(null);
+            }}
           />
         )}
 

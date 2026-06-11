@@ -17,6 +17,7 @@ import { DocumentosTab } from './DocumentosTab';
 import { ArquivosTab } from './ArquivosTab';
 import { TarefasModal } from './TarefasModal';
 import { tarefaService, Tarefa } from '../services/tarefaService';
+import { revenueService } from '../services/revenueService';
 
 interface PatientDetailsProps {
   patient: any; // Using any for Patient to avoid circular dependency complaints here
@@ -2187,7 +2188,29 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             }
           }
 
-          if (lastSaved) {            printReceipt(payingTreatments, paymentsArr);
+          if (lastSaved) {
+            try {
+              const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
+              
+              const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
+              for (const p of paymentsArray) {
+                  for (const t of payingTreatments) {
+                      await revenueService.createRevenuesFromPayment(
+                          empresaId!, 
+                          Number(patient.id), 
+                          t.budget.id, 
+                          t.id, 
+                          p, 
+                          maquininhas || [], 
+                          patient.name, 
+                          t.treatmentName || t.tratamento || 'Tratamento'
+                      );
+                  }
+              }
+            } catch (finErr) {
+              console.error("Erro ao gerar registros financeiros:", finErr);
+            }
+            printReceipt(payingTreatments, paymentsArr);
             setPayingTreatments([]);
             setSelectedPayments([]);
           }
@@ -2244,6 +2267,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       const saved = await budgetService.saveBudget(empresaId, Number(patient.id), budgetToUpdate);
                       if (saved) {
                         newBudgets = newBudgets.map(b => b.id === saved.id ? saved : b);
+                        // Apagar parcelas em aberto referentes a este tratamento
+                        await revenueService.deleteRevenuesByTreatment(t.id, true);
                       }
                     }
                   }

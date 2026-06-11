@@ -146,7 +146,7 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
               const maxSizeBytes = 48 * 1024 * 1024;
               if (multiple) {
                 if (e.target.files) {
-                  const validFiles = Array.from(e.target.files).filter(f => {
+                  const validFiles = Array.from(e.target.files).filter((f: any) => {
                     if (f.size > maxSizeBytes) {
                       alert('Tamanho do arquivo maior que o permitido, caso queira subir esse arquivo contate o suporte - Limite atingido-');
                       return false;
