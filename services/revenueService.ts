@@ -251,7 +251,7 @@ export const revenueService = {
     maquininhas: any[],
     patientName: string,
     treatmentName: string
-  ): Promise<boolean> {
+  ): Promise<{success: boolean, error?: string}> {
     const patientPaid = parseFloat(p.amount) || 0;
     let netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
     let dateFallback = p.receiveDate || p.date || p.createdAt || new Date().toISOString().split('T')[0];
@@ -264,16 +264,17 @@ export const revenueService = {
     
     if (p.method === 'Pix') {
         if (maq && maq.pix_fee) {
-            const feeAmt = netReceived * (maq.pix_fee / 100);
+            const feeAmt = netReceived * (Number(maq.pix_fee) / 100);
             netReceived -= feeAmt;
         }
     } else if (p.method === 'Débito') {
         if (maq && maq.debito_fee) {
-            const feeAmt = netReceived * (maq.debito_fee / 100);
+            const feeAmt = netReceived * (Number(maq.debito_fee) / 100);
             netReceived -= feeAmt;
         }
         if (maq && maq.debito_dias) {
-            const dias = parseInt(maq.debito_dias || '0');
+            let dias = parseInt(maq.debito_dias || '0');
+            if (isNaN(dias)) dias = 0;
             dueDate.setDate(dueDate.getDate() + dias);
             isPaga = dias === 0;
         }
@@ -282,15 +283,17 @@ export const revenueService = {
         let fee = 0;
         if (maq) {
             if (installments === 1 && maq.credito_fees && maq.credito_fees.length > 0) {
-                 fee = maq.credito_fees[0];
+                 fee = Number(maq.credito_fees[0]);
             } else if (maq.credito_fees && maq.credito_fees.length >= installments) {
-                 fee = maq.credito_fees[installments - 1];
+                 fee = Number(maq.credito_fees[installments - 1]);
             }
             const feeAmt = netReceived * (fee / 100);
             netReceived -= feeAmt;
             
             if (maq.credito_forma === 'Antecipado') {
-                 const dias = parseInt(maq.credito_dias_uma_vez || '0');
+                 let dias = parseInt(maq.credito_dias_uma_vez || '0');
+                 if (isNaN(dias)) dias = 0;
+                 dueDate = new Date();
                  dueDate.setDate(dueDate.getDate() + dias);
                  isPaga = dias === 0;
             }
@@ -300,56 +303,36 @@ export const revenueService = {
         isPaga = p.status === 'Pago' || p.isPaid === true;
     }
 
-    const revenuesToInsert: Receita[] = [];
-
-    if ((p.method === 'Crédito' && maq && maq.credito_forma !== 'Antecipado' && installments > 1) || (p.method === 'Boleto' && installments > 1)) {
-         const valorParcela = netReceived / installments;
-         
-         for (let i = 1; i <= installments; i++) {
-             const parcelaData = new Date((p.receiveDate || p.date || new Date().toISOString().split('T')[0]) + 'T12:00:00');
-             parcelaData.setDate(parcelaData.getDate() + (i * 30));
-             const isFuture = parcelaData.getTime() > new Date().getTime();
-             
-             revenuesToInsert.push({
-                  empresa_id: empresaId,
-                  cliente_id: clienteId,
-                  orcamento_id: orcamentoId,
-                  tratamento_id: tratamentoId,
-                  payment_id: p.id,
-                  titulo: treatmentName + ` (${i}/${installments})`,
-                  categoria: patientName,
-                  data_vencimento: parcelaData.toISOString().split('T')[0],
-                  valor: valorParcela,
-                  is_recorrente: false,
-                  is_paga: !isFuture,
-                  data_pagamento: !isFuture ? parcelaData.toISOString().split('T')[0] : undefined,
-                  forma_pagamento: p.method
-             } as any);
-         }
-    } else {
-         const isFuture = dueDate.getTime() > new Date().getTime() || (!isPaga && p.method === 'Boleto');
-         revenuesToInsert.push({
-              empresa_id: empresaId,
-              cliente_id: clienteId,
-              orcamento_id: orcamentoId,
-              tratamento_id: tratamentoId,
-              payment_id: p.id,
-              titulo: treatmentName,
-              categoria: patientName,
-              data_vencimento: dueDate.toISOString().split('T')[0],
-              valor: netReceived,
-              is_recorrente: false,
-              is_paga: !isFuture,
-              data_pagamento: !isFuture ? dueDate.toISOString().split('T')[0] : undefined,
-              forma_pagamento: p.method
-         } as any);
+    const isFuture = dueDate.getTime() > new Date().getTime() || (!isPaga && p.method === 'Boleto');
+    
+    let baseTitle = `${treatmentName} [${p.method}]`;
+    if (typeof p.observations === 'string' && p.observations.includes('Parcela')) {
+        const parcelaMatch = p.observations.match(/Parcela \d+\/\d+/);
+        if (parcelaMatch) {
+            baseTitle += ` (${parcelaMatch[0]})`;
+        }
     }
 
-    const { error } = await supabase.from('receitas').insert(revenuesToInsert);
+    const { error } = await supabase.from('receitas').insert([{
+        empresa_id: empresaId,
+        cliente_id: clienteId,
+        orcamento_id: orcamentoId,
+        tratamento_id: tratamentoId,
+        payment_id: p.id,
+        titulo: baseTitle,
+        categoria: patientName,
+        data_vencimento: dueDate.toISOString().split('T')[0],
+        valor: netReceived,
+        is_recorrente: false,
+        is_paga: !isFuture,
+        data_pagamento: !isFuture ? dueDate.toISOString().split('T')[0] : undefined,
+        forma_pagamento: p.method
+    }]);
+
     if (error) {
        console.error("Error creating physical revenues from payment", error);
-       return false;
+       return { success: false, error: error.message || JSON.stringify(error) };
     }
-    return true;
+    return { success: true };
   }
 };

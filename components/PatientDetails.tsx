@@ -1350,6 +1350,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       </button>
 
                       {openTreatmentMenuId === t.id && (
+                        <>
+                        <div className="fixed inset-0 z-[50]" onClick={(e) => { e.stopPropagation(); setOpenTreatmentMenuId(null); }}></div>
                         <div className="absolute top-[110%] right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                           {t.paymentStatus !== 'Pago' && (
                             <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-blue-600 hover:bg-blue-50 flex items-center gap-2.5 transition-colors border-b border-gray-50 bg-blue-50/30"
@@ -1389,36 +1391,54 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                           </button>
                           <div className="h-px bg-gray-100 my-1"></div>
                           <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
-                            onClick={async () => {
-                              if (!window.confirm("Deseja realmente cancelar este tratamento e enviá-lo de volta ao orçamento pendente?")) return;
-                              setOpenTreatmentMenuId(null);
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                if (!window.confirm("Deseja realmente cancelar este tratamento e enviá-lo de volta ao orçamento pendente? As parcelas em aberto também serão apagadas.")) return;
+                                setOpenTreatmentMenuId(null);
+                                
+                                // Apagar receitas em aberto associadas a este tratamento
+                                await revenueService.deleteRevenuesByTreatment(t.id, true);
 
-                              const remainingTreatments = t.budget.treatments.filter((x: any) => x.id !== t.id);
-                              const updOriginal = { ...t.budget, treatments: remainingTreatments };
-
-                              let success = false;
-                              if (remainingTreatments.length === 0) {
-                                success = await budgetService.deleteBudget(t.budget.id);
-                              } else {
-                                const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updOriginal);
-                                success = !!saved;
-                              }
-
-                              if (success) {
-                                if (remainingTreatments.length === 0) {
-                                  setBudgets(prev => prev.filter(b => b.id !== t.budget.id));
+                                // Procurar ou criar orçamento pendente
+                                const pendingBudget = budgets.find(b => b.status === 'Pendente');
+                                const treatmentToMove = { ...t, isPaid: false, payments: [], paymentStatus: 'Pendente' };
+                                delete treatmentToMove.budget; // Remover referência circular
+                                
+                                let successMove = false;
+                                if (pendingBudget) {
+                                  const updPending = { ...pendingBudget, treatments: [...(pendingBudget.treatments || []), treatmentToMove] };
+                                  successMove = !!(await budgetService.saveBudget(empresaId!, Number(patient.id), updPending));
                                 } else {
-                                  const saved = await budgetService.fetchBudgets(empresaId!, Number(patient.id));
-                                  setBudgets(saved as Budget[]);
+                                  const newPending = { name: 'Novo Orçamento', date: new Date().toISOString().split('T')[0], total: 0, status: 'Pendente', treatments: [treatmentToMove] };
+                                  successMove = !!(await budgetService.saveBudget(empresaId!, Number(patient.id), newPending as any));
                                 }
 
-                                // Restoration to Odontogram removed, now the logic can just delete or ignore it
+                                if (successMove) {
+                                  const remainingTreatments = t.budget.treatments.filter((x: any) => x.id !== t.id);
+                                  const updOriginal = { ...t.budget, treatments: remainingTreatments };
+                                  
+                                  if (remainingTreatments.length === 0) {
+                                    await budgetService.deleteBudget(t.budget.id);
+                                  } else {
+                                    await budgetService.saveBudget(empresaId!, Number(patient.id), updOriginal);
+                                  }
+                                  
+                                  const saved = await budgetService.fetchBudgets(empresaId!, Number(patient.id));
+                                  setBudgets(saved as Budget[]);
+                                  alert("Tratamento cancelado com sucesso.");
+                                } else {
+                                  alert("Erro ao cancelar tratamento.");
+                                }
+                              } catch (err: any) {
+                                alert("Erro inesperado ao cancelar: " + err.message);
                               }
                             }}
                           >
                             <span className="rotate-180 text-red-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg></span> Cancelar tratamento
                           </button>
                         </div>
+                        </>
                       )}
                     </div>
                   </div>
@@ -2193,18 +2213,31 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
               
               const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
+              const totalTreatmentsCost = payingTreatments.reduce((acc, t) => acc + parseFloat(t.valor || '0'), 0);
+              
               for (const p of paymentsArray) {
                   for (const t of payingTreatments) {
-                      await revenueService.createRevenuesFromPayment(
+                      const tCost = parseFloat(t.valor || '0');
+                      const proportion = totalTreatmentsCost > 0 ? (tCost / totalTreatmentsCost) : (1 / payingTreatments.length);
+                      
+                      const splitP = { ...p, amount: p.amount * proportion };
+                      if (p.planAmount !== undefined) {
+                          splitP.planAmount = p.planAmount * proportion;
+                      }
+
+                      const res = await revenueService.createRevenuesFromPayment(
                           empresaId!, 
                           Number(patient.id), 
                           t.budget.id, 
                           t.id, 
-                          p, 
+                          splitP, 
                           maquininhas || [], 
                           patient.name, 
                           t.treatmentName || t.tratamento || 'Tratamento'
                       );
+                      if (res && !res.success) {
+                        alert(`Erro ao registrar receita física no banco de dados: ${res.error}`);
+                      }
                   }
               }
             } catch (finErr) {

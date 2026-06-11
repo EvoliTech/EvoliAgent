@@ -195,8 +195,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                         date: strDate,
                         observations: part.observations ? `${part.observations} (Parcela ${i+1}/${part.installments})` : `Parcela ${i+1}/${part.installments}`,
                         installments: part.installments,
-                        ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') && part.maquininha_id ? { maquininha_id: part.maquininha_id } : {}),
-                        ...(part.method === 'Plano' && part.plano_id ? { plano_id: part.plano_id } : {}),
+                        ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id || maquininhas[0]?.id } : {}),
+                        ...(part.method === 'Plano' && (part.plano_id || plans[0]?.id) ? { plano_id: part.plano_id || plans[0]?.id } : {}),
                         ...(receiveDate ? { receiveDate } : {}),
                         ...(planAmount !== undefined ? { planAmount } : {})
                     });
@@ -211,8 +211,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                 date: part.date,
                 observations: part.observations,
                 ...((part.method === 'Crédito' || part.method === 'Boleto') ? { installments: part.installments } : {}),
-                ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') && part.maquininha_id ? { maquininha_id: part.maquininha_id } : {}),
-                ...(part.method === 'Plano' && part.plano_id ? { plano_id: part.plano_id } : {}),
+                ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id || maquininhas[0]?.id } : {}),
+                ...(part.method === 'Plano' && (part.plano_id || plans[0]?.id) ? { plano_id: part.plano_id || plans[0]?.id } : {}),
                 ...(receiveDate ? { receiveDate } : {}),
                 ...(planAmount !== undefined ? { planAmount } : {})
             }];

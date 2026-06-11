@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Plus, X, CreditCard, Info, Calculator, QrCode } from 'lucide-react';
+import { ArrowLeft, Save, Plus, X, CreditCard, Info, Calculator, QrCode, Edit2 } from 'lucide-react';
 import { PageType } from '../types';
 import { supabase } from '../lib/supabase';
 import { useCompany } from '../contexts/CompanyContext';
@@ -199,9 +199,14 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {machines.map(m => (
                             <div key={m.id} className="border border-slate-200 rounded-xl p-5 relative group hover:border-blue-300 transition-colors">
-                                <button onClick={() => removeMachine(m.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 bg-white rounded-full p-1 shadow-sm">
-                                    <X size={16} />
-                                </button>
+                                <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => { setEditingMachine(m); setIsModalOpen(true); }} className="text-slate-400 hover:text-blue-500 bg-white rounded-full p-1.5 shadow-sm transition-colors" title="Editar">
+                                        <Edit2 size={14} />
+                                    </button>
+                                    <button onClick={() => removeMachine(m.id)} className="text-slate-400 hover:text-red-500 bg-white rounded-full p-1.5 shadow-sm transition-colors" title="Remover">
+                                        <X size={14} />
+                                    </button>
+                                </div>
                                 <h3 className="font-bold text-slate-800 text-lg mb-1">{m.nome}</h3>
                                 <p className="text-sm font-semibold text-blue-600 mb-4">{m.tipo}</p>
                                 

@@ -265,7 +265,6 @@ export const Financial: React.FC = () => {
       });
     };
     processItems(despesas, 'despesa');
-    processItems(receitas, 'receita');
 
     // Sort each group by date
     Object.values(groups).forEach(g => g.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()));
@@ -439,7 +438,8 @@ export const Financial: React.FC = () => {
               originalAmount: remaining,
               planFee: 0,
               isPaid: false,
-              type: 'pendente'
+              type: 'pendente',
+              patientId: pacId
             });
           }
         }
@@ -508,6 +508,7 @@ export const Financial: React.FC = () => {
         isPaid: r.is_paga,
         type: r.is_paga ? 'entrada' : 'pendente',
         isManualRevenue: true,
+        patientId: r.cliente_id,
         rawData: { ...r, tipo: 'receita' } // Keep reference for editing and identify as receita
       });
     });
@@ -525,7 +526,26 @@ export const Financial: React.FC = () => {
           planFee: 0,
           isPaid: true,
           type: 'saida',
+          patientId: d.cliente_id,
           rawData: { ...d, tipo: 'despesa' } // Keep reference for editing
+        });
+      }
+    });
+
+    comissoesList.forEach(c => {
+      if (c.status === 'A repassar') {
+        transactions.push({
+          id: c.id,
+          treatmentName: `Comissão - ${c.treatment}`,
+          patientName: `Despesa (${c.profissional})`,
+          cpf: '',
+          date: c.date,
+          amount: c.amount,
+          originalAmount: c.amount,
+          planFee: 0,
+          isPaid: false,
+          type: 'saida', // It will be treated as an expense in Fluxo
+          rawData: { ...c, tipo: 'despesa' }
         });
       }
     });
@@ -684,7 +704,7 @@ export const Financial: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-500">A pagar</span>
-                      <span className="text-sm text-gray-800 font-medium">R$ {despesas.filter(d => !d.is_paga).reduce((acc, d) => acc + (d.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-sm text-gray-800 font-medium">R$ {(despesas.filter(d => !d.is_paga).reduce((a, b) => a + (b.valor || 0), 0) + financialStats.comissoesList.filter(c => c.status === 'A repassar').reduce((sum, c) => sum + (c.amount || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between pt-2">
                       <span className="text-sm text-gray-500">Total previsto</span>
@@ -716,28 +736,28 @@ export const Financial: React.FC = () => {
               <div className="flex flex-col px-0 md:px-6 border-b md:border-b-0 md:border-r border-gray-200 first:pl-0 min-h-[160px] h-full overflow-hidden pb-4 md:pb-0">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-sm font-medium text-gray-800 w-full">Aguardando repasse (A receber)</h3>
-                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded whitespace-nowrap">
-                    Total: R$ {financialStats.pendingTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded whitespace-nowrap" title="Total global (todos os meses)">
+                    Total: R$ {allReceitas.filter(r => !r.is_paga).reduce((s, r) => s + (r.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="max-h-[160px] overflow-y-auto w-full pr-2 space-y-3">
                     {(() => {
-                      const repassesPendentes = financialStats.transactions.filter(t => !t.isPaid && t.type !== 'saida');
+                      const repassesPendentes = allReceitas.filter(r => !r.is_paga).sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime());
                       if (repassesPendentes.length === 0) {
                         return <div className="text-center text-xs text-gray-500 mt-8">Não há pagamentos aguardando repasse.</div>;
                       }
-                      return repassesPendentes.map((t, idx) => (
-                        <div key={idx} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                      return repassesPendentes.map((r, idx) => (
+                        <div key={r.id || idx} onClick={() => r.cliente_id ? navigate(`/pacientes/${r.cliente_id}/pagamentos`) : null} className={`flex justify-between items-center text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0 ${r.cliente_id ? 'cursor-pointer hover:bg-gray-50' : ''}`}>
                           <div className="flex flex-col">
-                            <span className="font-medium text-gray-800 line-clamp-1">{t.treatmentName || 'Pagamento'}</span>
-                            <span className="text-xs text-gray-500">{t.patientName} • Data: {new Date(t.date).toLocaleDateString()}</span>
+                            <span className="font-medium text-gray-800 line-clamp-1">{r.titulo || 'Pagamento'}</span>
+                            <span className="text-xs text-gray-500">{r.categoria || 'Paciente'} • Data: {new Date(r.data_vencimento).toLocaleDateString()}</span>
                           </div>
                           <span className="font-semibold text-emerald-600 whitespace-nowrap ml-2">
-                            R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {(r.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
-                          {t.isManualRevenue && t.rawData && (
-                            <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: 'receita', data: t.rawData }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1 ml-2">
+                          {r.is_paga === false && (
+                            <button onClick={(e) => { e.stopPropagation(); setEditingTransaction({ type: 'receita', data: { ...r, tipo: 'receita' } }); }} className="text-blue-500 hover:text-blue-700 transition-colors p-1 ml-2">
                               <Edit3 size={15} />
                             </button>
                           )}
@@ -920,7 +940,7 @@ export const Financial: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-xl md:text-[28px] font-bold text-gray-800 leading-tight mb-2">R$ {despesas.filter(d => d.is_paga).reduce((a, b) => a + (b.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                  <div className="text-[13px] font-medium text-gray-400 leading-tight">A pagar R$ {despesas.filter(d => !d.is_paga).reduce((a, b) => a + (b.valor || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div className="text-[13px] font-medium text-gray-400 leading-tight">A pagar R$ {(despesas.filter(d => !d.is_paga).reduce((a, b) => a + (b.valor || 0), 0) + financialStats.comissoesList.filter(c => c.status === 'A repassar').reduce((sum, c) => sum + (c.amount || 0), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                 </div>
               </div>
 
@@ -964,7 +984,7 @@ export const Financial: React.FC = () => {
                 {financialStats.transactions.filter(tx => tx.isPaid).length === 0 ? (
                   <div className="p-8 text-center text-sm text-gray-500">Nenhuma movimentação financeira encontrada.</div>
                 ) : financialStats.transactions.filter(tx => tx.isPaid).map((tx, idx) => (
-                  <div key={tx.id || idx} className={`flex items-center justify-between p-4 px-6 border-b border-gray-100 transition-colors group relative overflow-hidden ${tx.isPaid ? (tx.type === 'saida' ? 'bg-red-50/20 hover:bg-red-50/50' : 'bg-[#f6fbf8] hover:bg-[#eaf5ef]') : 'bg-white hover:bg-gray-50'}`}>
+                  <div key={tx.id || idx} onClick={() => tx.patientId ? navigate(`/pacientes/${tx.patientId}/pagamentos`) : null} className={`flex items-center justify-between p-4 px-6 border-b border-gray-100 transition-colors group relative overflow-hidden ${tx.isPaid ? (tx.type === 'saida' ? 'bg-red-50/20 hover:bg-red-50/50' : 'bg-[#f6fbf8] hover:bg-[#eaf5ef]') : 'bg-white hover:bg-gray-50'} ${tx.patientId ? 'cursor-pointer' : ''}`}>
                     <div className="flex-1 flex items-start gap-3">
                       {tx.type === 'saida' ? (
                         <ArrowUpRight size={18} strokeWidth={2.5} className="text-red-500 mt-0.5 shrink-0" />
@@ -1020,7 +1040,7 @@ export const Financial: React.FC = () => {
             {/* === DESPESAS (Saídas) === */}
             <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-6 md:mt-8 overflow-x-auto">
               <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-800 border-b border-gray-100 min-w-[700px]">
-                <div className="flex-1 pl-12">Despesa</div>
+                <div className="flex-1 pl-12">Despesas</div>
                 <div className="flex items-center justify-between w-[55%] pl-4">
                   <div className="w-[18%]">Categoria</div>
                   <div className="w-[18%]">Vencimento</div>
