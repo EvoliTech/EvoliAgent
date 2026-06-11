@@ -117,7 +117,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                 date: defaultDate,
                 installments: 1,
                 observations: '',
-                maquininha_id: maquininhas[0]?.id || '',
+                maquininha_id: '',
                 plano_id: plans[0]?.id || ''
             }
         ]);
@@ -140,6 +140,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
         const invalidPart = paymentParts.find(p => isNaN(parseFloat(p.amountStr.replace(',', '.'))) || parseFloat(p.amountStr.replace(',', '.')) <= 0);
         if (invalidPart) {
             alert('Um dos pagamentos possui valor inválido.');
+            return;
+        }
+
+        const invalidMachinePart = paymentParts.find(p => (p.method === 'Crédito' || p.method === 'Débito' || p.method === 'Pix') && !p.maquininha_id);
+        if (invalidMachinePart && maquininhas.length > 0) {
+            alert('Por favor, selecione uma maquininha/conta para os pagamentos via Cartão ou Pix.');
             return;
         }
 
@@ -195,7 +201,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                         date: strDate,
                         observations: part.observations ? `${part.observations} (Parcela ${i+1}/${part.installments})` : `Parcela ${i+1}/${part.installments}`,
                         installments: part.installments,
-                        ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id || maquininhas[0]?.id } : {}),
+                        ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id } : {}),
                         ...(part.method === 'Plano' && (part.plano_id || plans[0]?.id) ? { plano_id: part.plano_id || plans[0]?.id } : {}),
                         ...(receiveDate ? { receiveDate } : {}),
                         ...(planAmount !== undefined ? { planAmount } : {})
@@ -211,7 +217,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                 date: part.date,
                 observations: part.observations,
                 ...((part.method === 'Crédito' || part.method === 'Boleto') ? { installments: part.installments } : {}),
-                ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id || maquininhas[0]?.id } : {}),
+                ...((part.method === 'Crédito' || part.method === 'Débito' || part.method === 'Pix') ? { maquininha_id: part.maquininha_id } : {}),
                 ...(part.method === 'Plano' && (part.plano_id || plans[0]?.id) ? { plano_id: part.plano_id || plans[0]?.id } : {}),
                 ...(receiveDate ? { receiveDate } : {}),
                 ...(planAmount !== undefined ? { planAmount } : {})
@@ -329,10 +335,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                                     <div className="space-y-2 shrink-0 mt-3">
                                         <label className="text-sm font-bold text-slate-700">Maquininha / Conta (Taxas)</label>
                                         <select 
-                                            value={part.maquininha_id || (maquininhas[0]?.id || '')}
+                                            value={part.maquininha_id || ''}
                                             onChange={(e) => updatePaymentPart(part.id, 'maquininha_id', e.target.value)}
                                             className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-blue-500 outline-none"
                                         >
+                                            <option value="" disabled>Selecionar maquininha</option>
                                             {maquininhas.map(m => (
                                                 <option key={m.id} value={m.id}>{m.nome}</option>
                                             ))}

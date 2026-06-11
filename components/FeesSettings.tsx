@@ -137,6 +137,17 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
         }
     };
 
+    const formatFee = (val: number | undefined) => {
+        if (val === undefined || isNaN(val)) return '0,00';
+        return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const handleFeeChange = (value: string, callback: (num: number) => void) => {
+        const digits = value.replace(/\D/g, '');
+        const num = parseInt(digits || '0', 10) / 100;
+        callback(num);
+    };
+
     const removeMachine = async (id: string) => {
         if (confirm('Tem certeza que deseja remover esta máquina?')) {
             try {
@@ -288,8 +299,8 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                                         <label className="text-sm font-bold text-slate-600">Taxa em % *</label>
                                         <input 
                                             type="text"
-                                            value={editingMachine.pixFee ? editingMachine.pixFee + '' : ''}
-                                            onChange={(e) => setEditingMachine({...editingMachine, pixFee: parseFloat(e.target.value.replace(',', '.')) || 0})}
+                                            value={formatFee(editingMachine.pixFee)}
+                                            onChange={(e) => handleFeeChange(e.target.value, (num) => setEditingMachine({...editingMachine, pixFee: num}))}
                                             placeholder="Ex: 0,99"
                                             className="w-full px-4 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                                         />
@@ -318,8 +329,8 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                                             <label className="text-sm font-bold text-slate-600">Taxa em % *</label>
                                             <input 
                                                 type="text"
-                                                value={editingMachine.debitoFee ? editingMachine.debitoFee + '' : ''}
-                                                onChange={(e) => setEditingMachine({...editingMachine, debitoFee: parseFloat(e.target.value.replace(',', '.')) || 0})}
+                                                value={formatFee(editingMachine.debitoFee)}
+                                                onChange={(e) => handleFeeChange(e.target.value, (num) => setEditingMachine({...editingMachine, debitoFee: num}))}
                                                 placeholder="Ex: 1,33"
                                                 className="w-full px-4 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                                             />
@@ -368,12 +379,12 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                                                 <label className="text-xs font-bold text-slate-600">{i + 1}x (taxa %)</label>
                                                 <input 
                                                     type="text"
-                                                    value={editingMachine.creditoFees?.[i] || ''}
-                                                    onChange={(e) => {
+                                                    value={formatFee(editingMachine.creditoFees?.[i])}
+                                                    onChange={(e) => handleFeeChange(e.target.value, (num) => {
                                                         const newFees = [...(editingMachine.creditoFees || Array(12).fill(0))];
-                                                        newFees[i] = parseFloat(e.target.value.replace(',', '.')) || 0;
+                                                        newFees[i] = num;
                                                         setEditingMachine({...editingMachine, creditoFees: newFees});
-                                                    }}
+                                                    })}
                                                     placeholder="Ex: 1,33"
                                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                                                 />
