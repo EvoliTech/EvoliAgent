@@ -8,6 +8,7 @@ import { Specialist, CommissionRule } from '../types';
 import { ConfigComissionsModal } from './ConfigComissionsModal';
 import { AddDespesaModal, DespesaType } from './AddDespesaModal';
 import { expenseService } from '../services/expenseService';
+import { supabase } from '../lib/supabase';
 
 
 export const Financial: React.FC = () => {
@@ -43,6 +44,7 @@ export const Financial: React.FC = () => {
   const [commissionedSpecialists, setCommissionedSpecialists] = useState<Record<string, CommissionRule[]>>({});
   const [allBudgets, setAllBudgets] = useState<any[]>([]);
   const [allDespesas, setAllDespesas] = useState<DespesaType[]>([]);
+  const [maquininhas, setMaquininhas] = useState<any[]>([]);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +63,10 @@ export const Financial: React.FC = () => {
 
       expenseService.fetchExpenses(empresaId)
         .then((data) => setAllDespesas(data as DespesaType[]))
+        .catch(console.error);
+
+      supabase.from('maquininhas').select('*').eq('empresa_id', empresaId)
+        .then(({ data }) => setMaquininhas(data || []))
         .catch(console.error);
     }
   }, [empresaId]);
@@ -319,71 +325,149 @@ export const Financial: React.FC = () => {
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
             const patientPaid = parseFloat(p.amount) || 0;
-            const netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
-            const planFee = Math.max(0, patientPaid - netReceived);
+            let netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
+            let dateFallback = p.receiveDate || p.date || p.createdAt || new Date().toISOString().split('T')[0];
+            let dueDate = new Date((dateFallback.includes('T') ? dateFallback.split('T')[0] : dateFallback) + 'T12:00:00');
+            let isPaga = true;
+            let planFee = Math.max(0, patientPaid - netReceived);
+            
+            // Lógica de Taxas e Parcelas (Maquininhas)
+            const maq = maquininhas.find(m => m.id === p.maquininha_id);
+            let installments = 1;
+            let transactionsToPush: any[] = [];
+            
+            if (p.method === 'Pix') {
+                if (maq && maq.pix_fee) {
+                    const feeAmt = netReceived * (maq.pix_fee / 100);
+                    netReceived -= feeAmt;
+                    planFee += feeAmt;
+                }
+            } else if (p.method === 'Débito') {
+                if (maq && maq.debito_fee) {
+                    const feeAmt = netReceived * (maq.debito_fee / 100);
+                    netReceived -= feeAmt;
+                    planFee += feeAmt;
+                }
+                if (maq && maq.debito_dias) {
+                    const dias = parseInt(maq.debito_dias || '0');
+                    dueDate.setDate(dueDate.getDate() + dias);
+                    isPaga = dias === 0;
+                }
+            } else if (p.method === 'Crédito') {
+                installments = p.installments || 1;
+                let fee = 0;
+                if (maq) {
+                    if (installments === 1 && maq.credito_fees && maq.credito_fees.length > 0) {
+                         fee = maq.credito_fees[0];
+                    } else if (maq.credito_fees && maq.credito_fees.length >= installments) {
+                         fee = maq.credito_fees[installments - 1];
+                    }
+                    const feeAmt = netReceived * (fee / 100);
+                    netReceived -= feeAmt;
+                    planFee += feeAmt;
+                    
+                    if (maq.credito_forma === 'Antecipado') {
+                         const dias = parseInt(maq.credito_dias_uma_vez || '0');
+                         dueDate.setDate(dueDate.getDate() + dias);
+                         isPaga = dias === 0;
+                    }
+                }
+            } else if (p.method === 'Boleto') {
+                isPaga = p.status === 'Pago' || p.isPaid === true;
+            }
 
             paidOnTrt += patientPaid;
 
-            const dateStr = p.receiveDate || p.date;
-            if (!isDateInFilter(dateStr)) return;
-
-            const isFuture = p.receiveDate && new Date(p.receiveDate + 'T23:59:59').getTime() > new Date().getTime();
-
-            if (isFuture) {
-              pendingTotal += netReceived;
+            if (p.method === 'Crédito' && maq && maq.credito_forma !== 'Antecipado' && installments > 1) {
+                 const valorParcela = netReceived / installments;
+                 const originalParcela = patientPaid / installments;
+                 const feeParcela = planFee / installments;
+                 
+                 for (let i = 1; i <= installments; i++) {
+                     const parcelaData = new Date((p.receiveDate || p.date || new Date().toISOString().split('T')[0]) + 'T12:00:00');
+                     parcelaData.setDate(parcelaData.getDate() + (i * 30));
+                     const isFuture = parcelaData.getTime() > new Date().getTime();
+                     
+                     transactionsToPush.push({
+                          id: p.id + '_p' + i,
+                          treatmentName: trtName + ` (${i}/${installments})`,
+                          patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                          cpf: b.paciente?.cpf || '',
+                          date: parcelaData.toISOString().split('T')[0],
+                          amount: valorParcela,
+                          originalAmount: originalParcela,
+                          planFee: feeParcela,
+                          isPaid: !isFuture,
+                          type: 'entrada',
+                          installment: i,
+                          totalInstallments: installments
+                     });
+                 }
             } else {
-              paidTotal += netReceived;
+                 const isFuture = dueDate.getTime() > new Date().getTime() || (!isPaga && p.method === 'Boleto');
+                 transactionsToPush.push({
+                      id: p.id,
+                      treatmentName: trtName,
+                      patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                      cpf: b.paciente?.cpf || '',
+                      date: dueDate.toISOString().split('T')[0],
+                      amount: netReceived,
+                      originalAmount: patientPaid,
+                      planFee: planFee,
+                      isPaid: !isFuture,
+                      type: 'entrada'
+                 });
             }
 
-            // Calculate apos_pagamento commission
-            if (rule && rule.quandoRecebe === 'apos_pagamento') {
-              let valComissao = 0;
-              const valRegra = parseFloat(rule.valor.replace(',', '.'));
-              if (rule.tipoComissao === 'porcentagem') {
-                valComissao = netReceived * (valRegra / 100);
-              } else {
-                const prop = itemVal > 0 ? (netReceived / itemVal) : 1;
-                valComissao = valRegra * prop;
-              }
-              if (valComissao > 0) {
-                comissoesTotal += valComissao;
-                comissoesList.push({
-                  id: 'com_pg_' + p.id,
-                  budgetId: b.id,
-                  treatmentId: t.id,
-                  paymentId: p.id,
-                  treatmentName: trtName,
-                  profissional: profNameForCommission,
-                  treatment: trtName,
-                  date: p.receiveDate || p.date,
-                  amount: valComissao,
-                  paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-                  status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
-                  valorLiquido: netReceived,
-                  custo: planFee,
-                  ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
-                });
-              }
-            }
+            // Distribuir nos totais e comissões baseando nas parcelas criadas
+            transactionsToPush.forEach(tx => {
+                if (!tx.isPaid) {
+                  pendingTotal += tx.amount;
+                } else {
+                  paidTotal += tx.amount;
+                }
 
-            if (p.planAmount !== undefined) {
-              planTaxesTotal += planFee;
-            }
-
-            const met = p.method || 'Outro';
-            methodsSummary[met] = (methodsSummary[met] || 0) + netReceived;
-
-            transactions.push({
-              id: p.id,
-              treatmentName: trtName,
-              patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
-              cpf: b.paciente?.cpf || '',
-              date: p.receiveDate || p.date, // "daquia 15 dias"
-              amount: netReceived,
-              originalAmount: patientPaid,
-              planFee: planFee,
-              isPaid: !isFuture,
-              type: 'entrada'
+                // Calculate apos_pagamento commission per transaction if needed
+                if (rule && rule.quandoRecebe === 'apos_pagamento') {
+                  let valComissao = 0;
+                  const valRegra = parseFloat(rule.valor.replace(',', '.'));
+                  if (rule.tipoComissao === 'porcentagem') {
+                    valComissao = tx.amount * (valRegra / 100);
+                  } else {
+                    const prop = itemVal > 0 ? (tx.amount / itemVal) : 1;
+                    valComissao = valRegra * prop;
+                  }
+                  if (valComissao > 0) {
+                    comissoesTotal += valComissao;
+                    comissoesList.push({
+                      id: 'com_pg_' + tx.id,
+                      budgetId: b.id,
+                      treatmentId: t.id,
+                      paymentId: p.id,
+                      treatmentName: tx.treatmentName,
+                      profissional: profNameForCommission,
+                      treatment: tx.treatmentName,
+                      date: tx.date,
+                      amount: valComissao,
+                      paciente: tx.patientName,
+                      status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
+                      valorLiquido: tx.amount,
+                      custo: tx.planFee,
+                      ruleInfo: `Convênio ${convenioName} > ${rule.especialidade === 'todas' ? 'Todas as Especialidades' : rule.especialidade} > ${rule.valor}${rule.tipoComissao === 'porcentagem' ? '%' : ' R$'}`
+                    });
+                  }
+                }
+                
+                if (tx.planFee > 0) {
+                  planTaxesTotal += tx.planFee;
+                }
+                
+                const met = p.method || 'Outro';
+                methodsSummary[met] = (methodsSummary[met] || 0) + tx.amount;
+                
+                if (isDateInFilter(tx.date)) {
+                    transactions.push(tx);
+                }
             });
           });
         }
@@ -519,7 +603,7 @@ export const Financial: React.FC = () => {
       inadimplenciaAmount, inadimplenciaCount: patientsInad.size,
       topTreatments, methodsData, planTaxesTotal, comissoesTotal, comissoesList
     };
-  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas]);
+  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, maquininhas]);
 
   const handleSaveRules = async (specialistId: string, rules: CommissionRule[]) => {
     // Optimistic UI Update
