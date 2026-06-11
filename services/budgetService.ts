@@ -161,18 +161,24 @@ export const budgetService = {
     let treatments = dbBudget.tratamentos || [];
     
     if (dbBudget.orcamento_itens && Array.isArray(dbBudget.orcamento_itens) && dbBudget.orcamento_itens.length > 0) {
-      treatments = dbBudget.orcamento_itens.map((item: any) => ({
-        id: item.id,
-        treatmentName: item.treatment_name,
-        categoria: item.categoria,
-        valor: item.valor,
-        dente: item.dente,
-        faces: item.faces,
-        profissional: item.profissional,
-        convenio: item.convenio,
-        status: item.status,
-        observacoes: item.observacoes
-      }));
+      treatments = dbBudget.orcamento_itens.map((item: any) => {
+        const jsonTreatment = (dbBudget.tratamentos || []).find((t: any) => t.id === item.id) || {};
+        return {
+          id: item.id,
+          treatmentName: item.treatment_name,
+          categoria: item.categoria,
+          valor: item.valor,
+          dente: item.dente,
+          faces: item.faces,
+          profissional: item.profissional,
+          convenio: item.convenio,
+          status: item.status,
+          observacoes: item.observacoes,
+          payments: jsonTreatment.payments || [],
+          paymentStatus: jsonTreatment.paymentStatus || null,
+          paymentCancellationReason: jsonTreatment.paymentCancellationReason || null
+        };
+      });
     }
 
     return {

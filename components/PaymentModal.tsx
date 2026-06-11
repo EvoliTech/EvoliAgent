@@ -422,6 +422,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                                     className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-orange-400 outline-none"
                                 />
                             </div>
+                            <button 
+                                onClick={() => {
+                                    setPaymentParts(prev => [
+                                        ...prev,
+                                        {
+                                            id: Math.random().toString(),
+                                            method: 'Boleto',
+                                            amountStr: newRemaining.toFixed(2),
+                                            date: nextPaymentDate || defaultDate,
+                                            installments: 1,
+                                            observations: 'Boleto gerado para o saldo restante',
+                                            maquininha_id: '',
+                                            plano_id: ''
+                                        }
+                                    ]);
+                                    setNextPaymentDate('');
+                                }}
+                                className="w-full mt-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Receipt size={18} />
+                                Gerar Boleto para o saldo restante
+                            </button>
                         </div>
                     )}
                 </div>

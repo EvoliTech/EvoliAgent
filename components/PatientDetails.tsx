@@ -37,6 +37,7 @@ import { googleCalendarService, GoogleEvent } from '../services/googleCalendarSe
 import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { userService } from '../services/userService';
+import { expenseService } from '../services/expenseService';
 
 export interface Category {
   id: string;
@@ -150,12 +151,19 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [openPaymentMenuId, setOpenPaymentMenuId] = React.useState<string | null>(null);
   const [editingPaymentBudget, setEditingPaymentBudget] = React.useState<any | null>(null);
 
-  const printReceipt = (treatments: any[], payment: PaymentData | null) => {
+  const printReceipt = (treatments: any[], paymentData: any) => {
     const w = window.open('', '_blank');
     if (!w) return;
 
+    const paymentsArray = Array.isArray(paymentData) ? paymentData : (paymentData ? [paymentData] : []);
+    const payment = paymentsArray.length > 0 ? paymentsArray[0] : null;
+
     const treatmentNames = treatments.map(t => `${t.treatmentName || t.tratamento} ${t.dente ? `(Dente ${t.dente})` : ''}`).join('<br/>');
-    const amount = payment ? payment.amount : treatments.reduce((sum, t) => sum + parseFloat(t.valor || '0'), 0);
+    const amount = paymentsArray.length > 0 
+      ? paymentsArray.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+      : treatments.reduce((sum, t) => sum + parseFloat(t.valor || '0'), 0);
+    const methodsStr = paymentsArray.length > 0 ? paymentsArray.map(p => p.method).join(', ') : 'Diversos';
+    const obsStr = paymentsArray.length > 0 ? paymentsArray.map(p => p.observations).filter(Boolean).join('; ') : '';
 
     const html = `
       <html>
@@ -198,12 +206,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           </div>
           <div class="row">
               <span class="label">Forma de Pagto.</span>
-              <span class="value">${payment ? payment.method : 'Diversos'}</span>
+              <span class="value">${methodsStr}</span>
           </div>
-          ${payment && payment.observations ? `
+          ${obsStr ? `
           <div class="row">
               <span class="label">Observações</span>
-              <span class="value">${payment.observations}</span>
+              <span class="value">${obsStr}</span>
           </div>` : ''}
           
           <div class="total">
@@ -1456,9 +1464,17 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           const paymentTreatments = budgets.flatMap(b => (b.treatments || []).map((t: any) => ({ ...t, budget: b })))
             .filter((t: any) => t && (t.status === 'Em andamento' || t.status === 'Finalizado' || t.status === 'Concluído'));
 
-          // total paid would be where paymentStatus === 'Pago'
-          const totalPago = paymentTreatments.filter(t => t.paymentStatus === 'Pago').reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
-          const aReceber = paymentTreatments.filter(t => t.paymentStatus !== 'Pago').reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
+          const totalCost = paymentTreatments.reduce((acc, t) => acc + (parseFloat(t.valor) || 0), 0);
+          const totalPago = paymentTreatments.reduce((acc, t) => {
+            if (t.payments && Array.isArray(t.payments)) {
+              const paidSum = t.payments
+                .filter((p: any) => p && p.method !== 'Boleto' && p.status !== 'pendente') 
+                .reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+              return acc + paidSum;
+            }
+            return acc;
+          }, 0);
+          const aReceber = Math.max(0, totalCost - totalPago);
 
           return (
             <div className="flex flex-col gap-6 animate-in fade-in max-w-[1200px] mx-auto w-full">
@@ -1563,7 +1579,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               <div className="flex flex-col gap-3">
                 {(() => {
                   const mappedTreatments = paymentTreatments.map(t => {
-                    const isPaid = t.paymentStatus === 'Pago';
+                    let isPaid = t.paymentStatus === 'Pago';
                     let dueDate: Date | null = null;
                     let approvalDate: Date | null = null;
                     let paymentDate: Date | null = null;
@@ -1586,10 +1602,20 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       }
                     }
 
-                    if (t.payments && t.payments.length > 0) {
-                      const payStr = t.payments[t.payments.length - 1].date;
-                      const parsedPay = new Date(payStr.includes('T') ? payStr : payStr + 'T12:00:00');
-                      if (!isNaN(parsedPay.getTime())) paymentDate = parsedPay;
+                    if (t.payments && Array.isArray(t.payments) && t.payments.length > 0) {
+                      const lastPayment = t.payments[t.payments.length - 1];
+                      const payStr = lastPayment ? String(lastPayment.date || lastPayment.createdAt || '') : '';
+                      if (payStr) {
+                         const parsedPay = new Date(payStr.includes('T') ? payStr : payStr + 'T12:00:00');
+                         if (!isNaN(parsedPay.getTime())) paymentDate = parsedPay;
+                      }
+                      
+                      const paidSum = t.payments.filter((p: any) => p && p.method !== 'Boleto' && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+                      if (paidSum >= parseFloat(t.valor || 0)) {
+                         isPaid = true;
+                      } else {
+                         isPaid = false;
+                      }
                     }
 
                     return { ...t, isPaid, isLate, approvalDate, paymentDate };
@@ -2130,7 +2156,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         onClose={() => setPayingTreatments([])}
         treatments={payingTreatments}
         patient={patient}
-        onProcessPayment={async (payment, isFullyPaid) => {
+        onProcessPayment={async (paymentsArr, isFullyPaid) => {
           if (payingTreatments.length === 0) return;
 
           let updatedBudgetsMap: any = {};
@@ -2145,7 +2171,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               const prevPayments = bTreatments[tIdx].payments || [];
               bTreatments[tIdx] = {
                 ...bTreatments[tIdx],
-                payments: [...prevPayments, payment],
+                payments: [...prevPayments, ...(Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr])],
                 paymentStatus: isFullyPaid ? 'Pago' : 'Pago parcialmente',
                 paymentCancellationReason: null // clearing justify if they pay again
               };
@@ -2162,7 +2188,103 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           }
 
           if (lastSaved) {
-            printReceipt(payingTreatments, payment);
+            try {
+              const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
+              
+              const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
+              
+              for (const p of paymentsArray) {
+                let valorReceita = parseFloat(p.amount);
+                let dataVencimento = new Date();
+                let isPaga = true;
+                let forma = p.method;
+
+                if (p.method === 'Pix' || p.method === 'Débito' || p.method === 'Crédito') {
+                    const maq = maquininhas?.find(m => m.id === p.maquininha_id);
+                    if (maq) {
+                        if (p.method === 'Pix') {
+                            valorReceita = valorReceita - (valorReceita * (maq.pix_fee || 0) / 100);
+                        } else if (p.method === 'Débito') {
+                            valorReceita = valorReceita - (valorReceita * (maq.debito_fee || 0) / 100);
+                            const dias = parseInt(maq.debito_dias || '0');
+                            dataVencimento.setDate(dataVencimento.getDate() + dias);
+                            isPaga = dias === 0;
+                        } else if (p.method === 'Crédito') {
+                            const inst = p.installments || 1;
+                            let fee = 0;
+                            if (inst === 1 && maq.credito_fees && maq.credito_fees.length > 0) {
+                                 fee = maq.credito_fees[0];
+                            } else if (maq.credito_fees && maq.credito_fees.length >= inst) {
+                                 fee = maq.credito_fees[inst - 1];
+                            }
+                            
+                            valorReceita = valorReceita - (valorReceita * fee / 100);
+                            
+                            if (maq.credito_forma === 'Antecipado') {
+                                 const dias = parseInt(maq.credito_dias_uma_vez || '0');
+                                 dataVencimento.setDate(dataVencimento.getDate() + dias);
+                                 isPaga = dias === 0;
+                                 
+                                 await expenseService.createExpense({
+                                    empresa_id: empresaId!,
+                                    titulo: `Recebimento: ${patient.name}`,
+                                    categoria: 'Tratamentos',
+                                    data_vencimento: dataVencimento.toISOString().split('T')[0],
+                                    valor: valorReceita,
+                                    is_recorrente: false,
+                                    is_paga: isPaga,
+                                    forma_pagamento: forma,
+                                    tipo: 'receita',
+                                    data_pagamento: isPaga ? new Date().toISOString().split('T')[0] : undefined,
+                                    observacoes: `Paciente: ${patient.name} | Parc: ${inst}x | Maquininha: ${maq.nome}. ${p.observations || ''}`
+                                 });
+                                 continue;
+                            } else {
+                                 const valorParcela = valorReceita / inst;
+                                 for (let i = 1; i <= inst; i++) {
+                                     const parcelaData = new Date();
+                                     parcelaData.setDate(parcelaData.getDate() + (i * 30)); 
+                                     await expenseService.createExpense({
+                                        empresa_id: empresaId!,
+                                        titulo: `Recebimento: ${patient.name} (${i}/${inst})`,
+                                        categoria: 'Tratamentos',
+                                        data_vencimento: parcelaData.toISOString().split('T')[0],
+                                        valor: valorParcela,
+                                        is_recorrente: false,
+                                        is_paga: false,
+                                        forma_pagamento: forma,
+                                        tipo: 'receita',
+                                        observacoes: `Paciente: ${patient.name} | Parcela ${i} de ${inst} | Maquininha: ${maq.nome}. ${p.observations || ''}`
+                                     });
+                                 }
+                                 continue;
+                            }
+                        }
+                    }
+                } else if (p.method === 'Boleto') {
+                    dataVencimento = new Date((p.date || new Date().toISOString().split('T')[0]) + 'T12:00:00');
+                    isPaga = false;
+                }
+
+                await expenseService.createExpense({
+                    empresa_id: empresaId!,
+                    titulo: `Recebimento: ${patient.name}`,
+                    categoria: 'Tratamentos',
+                    data_vencimento: dataVencimento.toISOString().split('T')[0],
+                    valor: valorReceita,
+                    is_recorrente: false,
+                    is_paga: isPaga,
+                    forma_pagamento: forma,
+                    tipo: 'receita',
+                    data_pagamento: isPaga ? new Date().toISOString().split('T')[0] : undefined,
+                    observacoes: `Paciente: ${patient.name}. ${p.observations || ''}`
+                });
+              }
+            } catch (finErr) {
+              console.error("Erro ao integrar com financeiro", finErr);
+            }
+
+            printReceipt(payingTreatments, paymentsArr);
             setPayingTreatments([]);
             setSelectedPayments([]);
           }
