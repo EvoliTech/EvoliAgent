@@ -124,6 +124,25 @@ export const AppointmentsList: React.FC = () => {
                 return timeA - timeB;
             });
 
+            // Buscar mapeamento de cliente_id no banco para os eventos retornados
+            const eventIds = allEvents.map(e => e.id).filter(Boolean);
+            if (eventIds.length > 0) {
+                const { data: dbAgendamentos } = await supabase
+                    .from('agendamentos')
+                    .select('google_event_id, cliente_id')
+                    .in('google_event_id', eventIds)
+                    .eq('IDEmpresa', empresaId);
+
+                if (dbAgendamentos && dbAgendamentos.length > 0) {
+                    const idMap = new Map(dbAgendamentos.map(a => [a.google_event_id, a.cliente_id]));
+                    allEvents.forEach(ev => {
+                        if (ev.id && idMap.has(ev.id)) {
+                            (ev as any).cliente_id = idMap.get(ev.id);
+                        }
+                    });
+                }
+            }
+
             setEvents(allEvents);
         } catch (error) {
             console.error('Error loading events:', error);
@@ -435,10 +454,25 @@ export const AppointmentsList: React.FC = () => {
                                             return line ? line.replace(label, '').trim() : '';
                                         };
 
-                                        const patientName = getField(event.description, 'Paciente:') || 
+                                        // Try to find patient by mapped cliente_id first
+                                        const clienteId = (event as any).cliente_id;
+                                        let foundPatient = clienteId ? patients.find(p => p.id === Number(clienteId)) : undefined;
+                                        
+                                        let patientName = foundPatient?.name || getField(event.description, 'Paciente:') || 
                                                             (event.summary.includes(' - Paciente:') ? event.summary.split(' - Paciente:')[1].trim() : event.summary.replace(/\[.*?\]/g, '').trim());
+                                        
+                                        if (!foundPatient) {
+                                            foundPatient = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
+                                        }
+
                                         const specialist = specialists.find(s => s.calendarId === event.calendarId || s.id === event.calendarId);
-                                        const type = getField(event.description, 'Tipo:');
+                                        
+                                        // Legacy import type fallback
+                                        let type = getField(event.description, 'Tipo:');
+                                        if (!type && event.summary.toUpperCase().includes('IMPORTAÇÃO DE SISTEMA LEGADO')) {
+                                            type = 'IMPORTAÇÃO';
+                                        }
+
                                         const obs = getField(event.description, 'Obs:');
                                         
                                         const isAgendado = status.id === 'confirmado' || status.id === 'pendente'; 
@@ -469,9 +503,8 @@ export const AppointmentsList: React.FC = () => {
                                                         <button 
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
-                                                                if (found) {
-                                                                    navigate(`/pacientes/${found.id}/visao-geral`);
+                                                                if (foundPatient) {
+                                                                    navigate(`/pacientes/${foundPatient.id}/visao-geral`);
                                                                 } else {
                                                                     navigate('/pacientes');
                                                                 }
@@ -539,9 +572,8 @@ export const AppointmentsList: React.FC = () => {
                                                     <button 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
-                                                            if (found) {
-                                                                navigate(`/pacientes/${found.id}/pagamentos`);
+                                                            if (foundPatient) {
+                                                                navigate(`/pacientes/${foundPatient.id}/pagamentos`);
                                                             } else {
                                                                 navigate('/pacientes');
                                                             }
@@ -577,9 +609,8 @@ export const AppointmentsList: React.FC = () => {
                                                                         }
 
                                                                         handleStatusUpdate(event, 'em atendimento');
-                                                                        const found = patients.find(p => p.name.toLowerCase() === patientName.toLowerCase());
-                                                                        if (found) {
-                                                                            navigate(`/pacientes/${found.id}/tratamentos`);
+                                                                        if (foundPatient) {
+                                                                            navigate(`/pacientes/${foundPatient.id}/tratamentos`);
                                                                         } else {
                                                                             navigate('/pacientes');
                                                                         }
