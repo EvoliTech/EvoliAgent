@@ -240,55 +240,23 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
     setIsImproving(true);
     try {
-      let configData = null;
-      const res = await supabase.from('integrations_config').select('client_secret, is_active').eq('service', 'OpenAi').eq('IDEmpresa', empresaId).maybeSingle();
-      configData = res.data;
-      if (res.error && res.error.code === '42703') {
-        const fallback = await supabase.from('integrations_config').select('client_secret').in('service', ['openai', 'OpenAi']).eq('IDEmpresa', empresaId).maybeSingle();
-        configData = fallback.data;
-      }
-
-      const apiKey = (configData && configData.is_active !== false) ? configData.client_secret : null;
-      const finalKey = apiKey || (import.meta as any).env.VITE_OPENAI_API_KEY;
-
-      if (!finalKey) {
-        alert("Sua chave de API da IA não foi informada. Vá até Menu > Configurações > Integrações, e salve a sua chave OpenAI.");
-        return;
-      }
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${finalKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um assistente especializado em odontologia. Sua tarefa é receber um texto de evolução clínica (frequentemente transcrito por voz, podendo conter erros ou falta de formatação), corrigir erros, melhorar a coesão, usar terminologia técnica adequada e formatar o texto em tom altamente profissional. Mantenha o sentido original e seja direto e objetivo sem blábláblá. Não adicione informações clínicas não citadas no original.'
-            },
-            {
-              role: 'user',
-              content: newEvoTexto
-            }
-          ],
-          temperature: 0.3
-        })
+      const { data, error } = await supabase.functions.invoke('openai-chat', {
+        body: { text: newEvoTexto, empresaId }
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Sua chave de API OpenAI salva nas configurações é inválida ou incorreta.");
-        }
-        throw new Error("Erro na comunicação com a IA. Tente novamente.");
+      if (error) {
+        throw new Error(error.message || "Erro na comunicação com a IA. Tente novamente.");
       }
 
-      const apiData = await response.json();
-      const improvedText = apiData.choices[0].message.content;
-      setNewEvoTexto(improvedText.trim());
+      if (data && data.error) {
+        throw new Error(data.error);
+      }
 
+      if (data && data.result) {
+        setNewEvoTexto(data.result.trim());
+      } else {
+        throw new Error("Resposta inválida da IA.");
+      }
     } catch (error: any) {
       alert("Erro ao melhorar o texto com IA: " + error.message);
     } finally {
