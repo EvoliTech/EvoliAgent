@@ -312,6 +312,9 @@ export const revenueService = {
                  dueDate = new Date();
                  dueDate.setDate(dueDate.getDate() + dias);
                  isPaga = dias === 0;
+            } else {
+                 dueDate.setMonth(dueDate.getMonth() + 1);
+                 isPaga = false;
             }
         }
     } else if (p.method === 'Boleto') {

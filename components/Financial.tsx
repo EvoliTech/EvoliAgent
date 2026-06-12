@@ -1596,7 +1596,7 @@ export const Financial: React.FC = () => {
                             )}
                           </div>
                           <p className="text-[11px] font-medium text-gray-400 mt-0.5">
-                            {t.isPaid ? 'Recebido' : 'A receber em: '} {new Date(t.date).toLocaleDateString()}
+                            {t.isPaid ? 'Recebido' : 'A receber em: '} {new Date(t.date.includes('T') ? t.date : t.date + 'T12:00:00').toLocaleDateString()}
                           </p>
                         </div>
                       </div>

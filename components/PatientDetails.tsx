@@ -204,7 +204,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           </div>
           <div class="row">
               <span class="label">Data Lançamento</span>
-              <span class="value">${payment ? new Date(payment.date).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="value">${payment ? new Date(typeof payment.date === 'string' && !payment.date.includes('T') ? payment.date + 'T12:00:00' : payment.date).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           <div class="row">
               <span class="label">Forma de Pagto.</span>
@@ -1672,7 +1672,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                             <span className="text-[14px] font-semibold text-gray-800 leading-tight">{t.treatmentName || t.tratamento}</span>
                             <div className="flex flex-col mt-1.5 gap-1">
                               {t.isPaid && t.paymentDate && (
-                                <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded w-fit mb-1">Pago em {t.paymentDate.toLocaleDateString('pt-BR')}</span>
+                                <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded w-fit mb-1">Pago em {new Date(typeof t.paymentDate === 'string' && !t.paymentDate.includes('T') ? t.paymentDate + 'T12:00:00' : t.paymentDate).toLocaleDateString('pt-BR')}</span>
                               )}
                               <div className="flex items-center gap-3 text-[12px] text-gray-500 font-medium">
                                 {(t.dente || t.faces) && <span>Dente {t.dente} {t.faces ? `- ${t.faces}` : ''}</span>}
