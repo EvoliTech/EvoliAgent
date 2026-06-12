@@ -669,13 +669,27 @@ export const Financial: React.FC = () => {
          boleto.paymentRaw.isPaid = true;
          boleto.paymentRaw.status = 'Pago';
          
+         const treatmentsCopy = JSON.parse(JSON.stringify(boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []));
+         
+         // Encontra e atualiza o tratamento e o pagamento específico
+         const tIdx = treatmentsCopy.findIndex((t: any) => t.id === boleto.tratamentoId);
+         if (tIdx !== -1) {
+             treatmentsCopy[tIdx].paymentStatus = 'Pago';
+             
+             const pIdx = treatmentsCopy[tIdx].payments?.findIndex((p: any) => p.id === boleto.paymentRaw.id);
+             if (pIdx !== -1) {
+                 treatmentsCopy[tIdx].payments[pIdx].isPaid = true;
+                 treatmentsCopy[tIdx].payments[pIdx].status = 'Pago';
+             }
+         }
+
          const budgetPayload = {
             id: boleto.budgetRaw.id,
             name: boleto.budgetRaw.nome || boleto.budgetRaw.name || '',
             date: boleto.budgetRaw.data_orcamento || boleto.budgetRaw.date || '',
             total: boleto.budgetRaw.total,
             status: boleto.budgetRaw.status,
-            treatments: boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []
+            treatments: treatmentsCopy
          };
          
          await budgetService.saveBudget(empresaId, boleto.pacienteId, budgetPayload as any);
