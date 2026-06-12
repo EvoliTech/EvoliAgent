@@ -1490,7 +1490,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           const totalPago = paymentTreatments.reduce((acc, t) => {
             if (t.payments && Array.isArray(t.payments)) {
               const paidSum = t.payments
-                .filter((p: any) => p && p.method !== 'Boleto' && p.status !== 'pendente') 
+                .filter((p: any) => p && p.status !== 'pendente' && (p.method !== 'Boleto' || p.status === 'Pago' || p.isPaid)) 
                 .reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
               return acc + paidSum;
             }
@@ -1634,8 +1634,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                          if (!isNaN(parsedPay.getTime())) paymentDate = parsedPay;
                       }
                       
-                      const paidSum = t.payments.filter((p: any) => p && p.method !== 'Boleto' && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
-                      const boletoSum = t.payments.filter((p: any) => p && p.method === 'Boleto' && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+                      const paidSum = t.payments.filter((p: any) => p && p.status !== 'pendente' && (p.method !== 'Boleto' || p.status === 'Pago' || p.isPaid)).reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+                      const boletoSum = t.payments.filter((p: any) => p && p.method === 'Boleto' && p.status !== 'Pago' && !p.isPaid && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
                       
                       if (paidSum >= parseFloat(t.valor || 0)) {
                          isPaid = true;
