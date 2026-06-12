@@ -254,8 +254,14 @@ export const revenueService = {
   ): Promise<{success: boolean, error?: string}> {
     const patientPaid = parseFloat(p.amount) || 0;
     let netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
-    let dateFallback = p.receiveDate || p.date || p.createdAt || new Date().toISOString().split('T')[0];
+    let dateFallback = p.receiveDate || p.date || p.createdAt;
+    if (!dateFallback || typeof dateFallback !== 'string' || dateFallback.trim() === '') {
+        dateFallback = new Date().toISOString().split('T')[0];
+    }
     let dueDate = new Date((dateFallback.includes('T') ? dateFallback.split('T')[0] : dateFallback) + 'T12:00:00');
+    if (isNaN(dueDate.getTime())) {
+        dueDate = new Date();
+    }
     let isPaga = true;
     
     // Lógica de Taxas e Parcelas (Maquininhas)
@@ -338,6 +344,39 @@ export const revenueService = {
     if (error) {
        console.error("Error creating physical revenues from payment", error);
        return { success: false, error: error.message || JSON.stringify(error) };
+    }
+    return { success: true };
+  },
+
+  async markBoletoAsPaidInRevenue(paymentId: string, empresaId: number): Promise<{success: boolean, error?: string}> {
+    // 1. Fetch the existing revenue by payment_id
+    const { data: receita } = await supabase.from('receitas').select('*').eq('payment_id', paymentId).single();
+    
+    if (!receita) {
+      return { success: false, error: "Receita vinculada não encontrada para este pagamento." };
+    }
+
+    // 2. Fetch the company's boleto fee
+    let deduction = 0;
+    const { data: comp } = await supabase.from('Empresa').select('configuracoes').eq('id', empresaId).single();
+    if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {
+        deduction = Number(comp.configuracoes.taxaBoleto);
+    }
+
+    // 3. Deduct fee from the original amount
+    const oldValor = Number(receita.valor) || 0;
+    const newValor = Math.max(0, oldValor - deduction);
+
+    // 4. Update the revenue to paid
+    const { error } = await supabase.from('receitas').update({
+        is_paga: true,
+        data_pagamento: new Date().toISOString().split('T')[0],
+        valor: newValor
+    }).eq('id', receita.id);
+
+    if (error) {
+      console.error("Error updating boleto revenue", error);
+      return { success: false, error: error.message || JSON.stringify(error) };
     }
     return { success: true };
   }

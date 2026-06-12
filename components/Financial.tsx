@@ -26,7 +26,7 @@ class FinancialErrorBoundary extends React.Component<any, ErrorBoundaryState> {
 }
 
 export const Financial: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes'>('painel');
+  const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes' | 'boletos'>('painel');
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -34,14 +34,14 @@ export const Financial: React.FC = () => {
   useEffect(() => {
     const parts = location.pathname.split('/');
     if (parts[1] === 'financeiro' && parts[2]) {
-      const tab = parts[2] as 'painel' | 'fluxo' | 'comissoes';
-      if (['painel', 'fluxo', 'comissoes'].includes(tab) && activeTab !== tab) {
+      const tab = parts[2] as 'painel' | 'fluxo' | 'comissoes' | 'boletos';
+      if (['painel', 'fluxo', 'comissoes', 'boletos'].includes(tab) && activeTab !== tab) {
         setActiveTab(tab);
       }
     }
   }, [location.pathname]);
 
-  const handleTabChange = (tab: 'painel' | 'fluxo' | 'comissoes') => {
+  const handleTabChange = (tab: 'painel' | 'fluxo' | 'comissoes' | 'boletos') => {
     setActiveTab(tab);
     navigate(`/financeiro/${tab}`, { replace: true });
   };
@@ -603,6 +603,105 @@ export const Financial: React.FC = () => {
     };
   }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, receitas, maquininhas, companySettings]);
 
+  const boletosData = useMemo(() => {
+    const vencidos: any[] = [];
+    const aVencer: any[] = [];
+    const pagos: any[] = [];
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    allBudgets.forEach(b => {
+      if (!b.tratamentos) return;
+      b.tratamentos.forEach((t: any) => {
+        if (!t.payments) return;
+        t.payments.forEach((p: any) => {
+          if (p.method === 'Boleto') {
+            const dateStr = p.date || p.receiveDate || new Date().toISOString();
+            const pDate = new Date(dateStr.includes('T') ? dateStr.split('T')[0] : dateStr);
+            pDate.setHours(0,0,0,0);
+            
+            const boletoObj = {
+               id: p.id,
+               budgetId: b.id,
+               paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Desconhecido',
+               pacienteId: b.paciente?.id || b.paciente_id,
+               tratamentoId: t.id,
+               tratamentoNome: t.treatmentName || t.tratamento,
+               valor: parseFloat(p.amount) || 0,
+               dataVencimento: pDate,
+               dataStr: dateStr,
+               status: p.status === 'Pago' || p.isPaid === true ? 'Pago' : 'Pendente',
+               observacao: p.observations || '',
+               paymentRaw: p,
+               treatmentRaw: t,
+               budgetRaw: b
+            };
+
+            if (boletoObj.status === 'Pago') {
+               if (isDateInFilter(dateStr)) {
+                 pagos.push(boletoObj);
+               }
+            } else {
+               if (pDate < hoje) {
+                 vencidos.push(boletoObj);
+               } else {
+                 aVencer.push(boletoObj);
+               }
+            }
+          }
+        });
+      });
+    });
+    
+    vencidos.sort((a,b) => a.dataVencimento.getTime() - b.dataVencimento.getTime());
+    aVencer.sort((a,b) => a.dataVencimento.getTime() - b.dataVencimento.getTime());
+    pagos.sort((a,b) => b.dataVencimento.getTime() - a.dataVencimento.getTime());
+
+    return { vencidos, aVencer, pagos };
+  }, [allBudgets, filterMonth, filterYear]);
+
+  const handlePayBoleto = async (boleto: any) => {
+    if (!empresaId) return;
+    if (window.confirm(`Confirma o pagamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}? A taxa de boleto será deduzida.`)) {
+       try {
+         // Atualiza o orçamento no banco
+         boleto.paymentRaw.isPaid = true;
+         boleto.paymentRaw.status = 'Pago';
+         
+         const budgetPayload = {
+            id: boleto.budgetRaw.id,
+            name: boleto.budgetRaw.nome || boleto.budgetRaw.name || '',
+            date: boleto.budgetRaw.data_orcamento || boleto.budgetRaw.date || '',
+            total: boleto.budgetRaw.total,
+            status: boleto.budgetRaw.status,
+            treatments: boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []
+         };
+         
+         await budgetService.saveBudget(empresaId, boleto.pacienteId, budgetPayload as any);
+         
+         // Cria ou atualiza a receita deduzindo a taxa
+         const res = await revenueService.markBoletoAsPaidInRevenue(
+           boleto.paymentRaw.id,
+           empresaId
+         );
+         
+         if (!res.success) {
+           throw new Error(res.error || 'Erro ao gerar receita do boleto');
+         }
+         
+         alert('Boleto marcado como pago e receita gerada com sucesso!');
+         
+         // Recarrega os dados
+         budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
+         revenueService.fetchRevenues(empresaId).then(setAllReceitas).catch(console.error);
+       } catch (err: any) {
+         console.error(err);
+         alert(`Erro ao dar baixa no boleto: ${err?.message || err}`);
+       }
+    }
+  };
+
   const handleSaveRules = async (specialistId: string, rules: CommissionRule[]) => {
     // Optimistic UI Update
     setCommissionedSpecialists(prev => {
@@ -707,6 +806,15 @@ export const Financial: React.FC = () => {
               }`}
           >
             Comissões
+          </button>
+          <button
+            onClick={() => handleTabChange('boletos')}
+            className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'boletos'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+          >
+            Boletos
           </button>
         </div>
 
@@ -1602,6 +1710,100 @@ export const Financial: React.FC = () => {
             </div>
           );
         })()}
+
+        {activeTab === 'boletos' && (
+          <div className="flex-1 flex flex-col p-4 md:p-8 bg-white rounded-b-xl">
+            <div className="mb-6">
+              <h2 className="text-[1.1rem] font-medium text-gray-800">Gestão de Boletos</h2>
+              <p className="text-sm text-gray-500">Acompanhe boletos pendentes, vencidos e pagos.</p>
+            </div>
+            
+            {/* Boletos Lists Will Go Here */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+               <div className="border border-gray-200 rounded-xl p-5 shadow-sm bg-white">
+                  <h3 className="text-sm font-semibold text-red-600 mb-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600"></div> Vencidos ({boletosData.vencidos.length})</h3>
+                  <div className="space-y-3">
+                    {boletosData.vencidos.length === 0 ? <p className="text-xs text-gray-400">Nenhum boleto vencido.</p> : 
+                     boletosData.vencidos.map((b: any) => (
+                       <div key={b.id} className="p-3 border border-red-100 bg-red-50/30 rounded-lg text-sm">
+                         <div className="flex justify-between font-semibold text-gray-800 mb-1">
+                           <span className="truncate pr-2">{b.paciente}</span>
+                           <span>R$ {b.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                         </div>
+                         <div className="text-xs text-gray-500 mb-2 truncate">{b.tratamentoNome}</div>
+                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-100">
+                           <span className="text-xs font-semibold text-red-600">Venceu em: {b.dataVencimento.toLocaleDateString()}</span>
+                           <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Dar Baixa</button>
+                         </div>
+                       </div>
+                     ))
+                    }
+                  </div>
+               </div>
+               <div className="border border-gray-200 rounded-xl p-5 shadow-sm bg-white">
+                  <h3 className="text-sm font-semibold text-blue-600 mb-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-600"></div> A Vencer ({boletosData.aVencer.length})</h3>
+                  <div className="space-y-3">
+                    {boletosData.aVencer.length === 0 ? <p className="text-xs text-gray-400">Nenhum boleto a vencer.</p> : 
+                     boletosData.aVencer.map((b: any) => (
+                       <div key={b.id} className="p-3 border border-blue-100 bg-blue-50/30 rounded-lg text-sm">
+                         <div className="flex justify-between font-semibold text-gray-800 mb-1">
+                           <span className="truncate pr-2">{b.paciente}</span>
+                           <span>R$ {b.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                         </div>
+                         <div className="text-xs text-gray-500 mb-2 truncate">{b.tratamentoNome}</div>
+                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-100">
+                           <span className="text-xs font-semibold text-blue-600">Vence em: {b.dataVencimento.toLocaleDateString()}</span>
+                           <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Dar Baixa</button>
+                         </div>
+                       </div>
+                     ))
+                    }
+                  </div>
+               </div>
+               <div className="border border-gray-200 rounded-xl p-5 shadow-sm bg-white">
+                  <h3 className="text-sm font-semibold text-emerald-600 mb-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-600"></div> Pagos (Mês Selecionado) ({boletosData.pagos.length})</h3>
+                  <div className="space-y-3">
+                    {boletosData.pagos.length === 0 ? <p className="text-xs text-gray-400">Nenhum boleto pago neste mês.</p> : 
+                     boletosData.pagos.map((b: any) => (
+                       <div key={b.id} className="p-3 border border-emerald-100 bg-emerald-50/30 rounded-lg text-sm">
+                         <div className="flex justify-between font-semibold text-gray-800 mb-1">
+                           <span className="truncate pr-2">{b.paciente}</span>
+                           <span className="text-emerald-700">R$ {b.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                         </div>
+                         <div className="text-xs text-gray-500 mb-2 truncate">{b.tratamentoNome}</div>
+                         <div className="flex justify-between items-center mt-2 pt-2 border-t border-emerald-100">
+                           <span className="text-xs font-semibold text-emerald-600">Pago: {b.dataVencimento.toLocaleDateString()}</span>
+                           <button onClick={() => {
+                               const win = window.open('', '_blank');
+                               if (win) {
+                                   win.document.write(`
+                                       <html><head><title>Recibo</title></head><body style="font-family: Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; line-height: 1.6;">
+                                           <h1 style="text-align: center; color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 20px;">RECIBO DE PAGAMENTO</h1>
+                                           <div style="margin-top: 30px;">
+                                               <p>Recebemos de <strong>${b.paciente}</strong>, a quantia de <strong>R$ ${b.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</strong>,</p>
+                                               <p>referente ao tratamento: <strong>${b.tratamentoNome}</strong>.</p>
+                                               <p style="margin-top: 40px;">Data do pagamento: <strong>${b.dataVencimento.toLocaleDateString()}</strong></p>
+                                               <div style="margin-top: 80px; text-align: center; border-top: 1px solid #000; width: 300px; margin-left: auto; margin-right: auto; padding-top: 10px;">
+                                                   Assinatura
+                                               </div>
+                                           </div>
+                                           <div style="margin-top: 40px; text-align: center;">
+                                                <button onclick="window.print()" style="padding: 10px 20px; cursor: pointer;">Imprimir</button>
+                                           </div>
+                                       </body></html>
+                                   `);
+                                   win.document.close();
+                               }
+                           }} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded">Recibo</button>
+                         </div>
+                       </div>
+                     ))
+                    }
+                  </div>
+               </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal Add/Edit Transaction */}
         {(showDetails === 'addDespesa' || showDetails === 'addReceita' || editingTransaction !== null) && (

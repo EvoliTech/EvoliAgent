@@ -61,13 +61,12 @@ export const budgetService = {
       tratamentos: budget.treatments
     };
 
-    // If ID is a purely numeric short random id (from frontend), we should omit it and let Supabase generate UUID
-    // Or if we want to enforce updates, we need to check if it's a valid UUID.
-    const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(budget.id);
+    // Verificamos se o ID indica um orçamento recém-criado na interface que ainda não foi salvo no banco
+    const isNew = String(budget.id).startsWith('new_');
 
     let savedBudget: any = null;
 
-    if (isUUID) {
+    if (!isNew) {
       // Update
       const { data, error } = await supabase
         .from('orcamentos')

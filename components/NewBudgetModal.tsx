@@ -594,7 +594,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
               else if (safeTreatments.length > 0 && !hasPending) finalStatus = 'Aguardando';
 
               const budget = {
-                id: initialData ? initialData.id : Math.floor(Math.random() * 10000000).toString(),
+                id: initialData ? initialData.id : `new_${Math.floor(Math.random() * 10000000)}`,
                 name: budgetName,
                 date: date.split('-').reverse().join('/'),
                 total: total,
