@@ -26,7 +26,7 @@ class FinancialErrorBoundary extends React.Component<any, ErrorBoundaryState> {
 }
 
 export const Financial: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes' | 'boletos'>('painel');
+  const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'a_receber' | 'comissoes' | 'boletos'>('painel');
   const [faturamentoPeriod, setFaturamentoPeriod] = useState<'dia' | 'mes'>('dia');
   const [showFaturamentoDetails, setShowFaturamentoDetails] = useState(false);
 
@@ -36,14 +36,14 @@ export const Financial: React.FC = () => {
   useEffect(() => {
     const parts = location.pathname.split('/');
     if (parts[1] === 'financeiro' && parts[2]) {
-      const tab = parts[2] as 'painel' | 'fluxo' | 'comissoes' | 'boletos';
-      if (['painel', 'fluxo', 'comissoes', 'boletos'].includes(tab) && activeTab !== tab) {
+      const tab = parts[2] as 'painel' | 'fluxo' | 'a_receber' | 'comissoes' | 'boletos';
+      if (['painel', 'fluxo', 'a_receber', 'comissoes', 'boletos'].includes(tab) && activeTab !== tab) {
         setActiveTab(tab);
       }
     }
   }, [location.pathname]);
 
-  const handleTabChange = (tab: 'painel' | 'fluxo' | 'comissoes' | 'boletos') => {
+  const handleTabChange = (tab: 'painel' | 'fluxo' | 'a_receber' | 'comissoes' | 'boletos') => {
     setActiveTab(tab);
     navigate(`/financeiro/${tab}`, { replace: true });
   };
@@ -918,6 +918,15 @@ export const Financial: React.FC = () => {
             Fluxo de caixa
           </button>
           <button
+            onClick={() => handleTabChange('a_receber')}
+            className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'a_receber'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+          >
+            A Receber
+          </button>
+          <button
             onClick={() => handleTabChange('comissoes')}
             className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'comissoes'
               ? 'border-blue-600 text-blue-600'
@@ -1652,6 +1661,50 @@ export const Financial: React.FC = () => {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {activeTab === 'a_receber' && (
+          <div className="flex-1 flex flex-col p-4 md:p-8 bg-[#fafafa]">
+             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6">
+                <div>
+                   <h2 className="text-[1.1rem] font-medium text-gray-800">Tratamentos A Receber</h2>
+                   <p className="text-sm text-gray-500 mt-1">Clique em um registro para ser levado direto ao prontuário do paciente.</p>
+                </div>
+                {renderDateFilters()}
+             </div>
+             
+             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                 <div className="flex items-center justify-between px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
+                    <div className="flex-1">Paciente / Tratamento</div>
+                    <div className="w-40 text-center">Data Origem</div>
+                    <div className="w-32 text-right">Valor Pendente</div>
+                 </div>
+                 <div className="flex flex-col divide-y divide-gray-100 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    {financialStats.transactions.filter((tx: any) => tx.type === 'pendente' && !tx.isManualRevenue).length === 0 ? (
+                       <div className="text-center py-12 text-gray-400 text-sm">Nenhum tratamento pendente de pagamento no período selecionado.</div>
+                    ) : (
+                       financialStats.transactions.filter((tx: any) => tx.type === 'pendente' && !tx.isManualRevenue).map((tx: any) => (
+                          <div 
+                             key={tx.id} 
+                             onClick={() => navigate(`/pacientes/${tx.patientId}`)}
+                             className="flex items-center justify-between px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors group"
+                          >
+                             <div className="flex-1 flex flex-col">
+                                <span className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{tx.patientName}</span>
+                                <span className="text-[13px] text-gray-500 mt-0.5">{tx.treatmentName}</span>
+                             </div>
+                             <div className="w-40 text-center text-sm text-gray-600">
+                                {new Date(tx.date.includes('T') ? tx.date : tx.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                             </div>
+                             <div className="w-32 text-right text-sm font-bold text-red-500">
+                                R$ {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                             </div>
+                          </div>
+                       ))
+                    )}
+                 </div>
+             </div>
           </div>
         )}
 
