@@ -601,6 +601,28 @@ export const Financial: React.FC = () => {
   const configuredSpecialists = specialists.filter(s => !!commissionedSpecialists[s.id]);
   const notConfiguredSpecialists = specialists.filter(s => !commissionedSpecialists[s.id]);
 
+  const incomeVsExpense = useMemo(() => {
+    const received = financialStats.paidTotal;
+    const paid = despesas.filter(d => d.is_paga).reduce((acc, d) => acc + (d.valor || 0), 0) + financialStats.planTaxesTotal;
+    const maxVal = Math.max(received, paid) || 1;
+    return [
+      { label: 'Entradas', value: received, color: 'bg-emerald-500', perc: (received / maxVal) * 100 },
+      { label: 'Saídas (inc. taxas)', value: paid, color: 'bg-red-500', perc: (paid / maxVal) * 100 }
+    ];
+  }, [financialStats.paidTotal, despesas, financialStats.planTaxesTotal]);
+
+  const commissionsBySpecialist = useMemo(() => {
+    const map: Record<string, number> = {};
+    financialStats.comissoesList.forEach(c => {
+      const prof = c.profissional || 'Outro';
+      if (!map[prof]) map[prof] = 0;
+      map[prof] += c.amount;
+    });
+    const items = Object.entries(map).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    const maxVal = items.length > 0 ? items[0].total : 1;
+    return items.map(item => ({ ...item, perc: (item.total / maxVal) * 100 }));
+  }, [financialStats.comissoesList]);
+
   return (
     <div className="w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-500 min-h-full">
       {/* Page Header */}
@@ -850,6 +872,51 @@ export const Financial: React.FC = () => {
                 </div>
               </div>
 
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 border-t border-gray-200 pt-8">
+              {/* Entradas vs Saídas Chart */}
+              <div className="flex flex-col">
+                <h3 className="text-sm font-medium text-gray-800 mb-6">Comparativo de Entradas e Saídas</h3>
+                <div className="flex flex-col gap-6">
+                  {incomeVsExpense.map(item => (
+                    <div key={item.label} className="flex flex-col">
+                      <div className="flex justify-between items-end mb-2">
+                        <span className="text-xs font-semibold text-gray-600">{item.label}</span>
+                        <span className="text-sm font-bold text-gray-800">R$ {item.value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                      </div>
+                      <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.perc}%`, transition: 'width 1s ease-in-out' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comissões Chart */}
+              <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-200 pt-8 md:pt-0 md:pl-8">
+                <h3 className="text-sm font-medium text-gray-800 mb-6">Comissões por Especialista</h3>
+                {commissionsBySpecialist.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[100px] text-gray-500 text-xs">
+                    Nenhuma comissão encontrada para este mês.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[180px] custom-scrollbar pr-2">
+                    {commissionsBySpecialist.map(item => (
+                      <div key={item.name} className="flex flex-col">
+                        <div className="flex justify-between items-end mb-1">
+                          <span className="text-xs font-medium text-gray-700 line-clamp-1 mr-2">{item.name}</span>
+                          <span className="text-xs font-semibold text-blue-600 whitespace-nowrap">R$ {item.total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${item.perc}%`, transition: 'width 1s ease-in-out' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Footer Text */}
