@@ -1377,11 +1377,6 @@ export const Financial: React.FC = () => {
             {/* Filters & Actions */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
               {renderDateFilters()}
-              <button
-                onClick={() => setShowDetails('addDespesa')}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md px-4 py-2 text-sm font-medium transition-colors border border-transparent shadow-sm">
-                Adicionar Despesa
-              </button>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm overflow-visible">
