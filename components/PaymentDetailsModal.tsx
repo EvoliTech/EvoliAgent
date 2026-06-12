@@ -80,6 +80,37 @@ export const PaymentDetailsModal: React.FC<PaymentDetailsModalProps> = ({ isOpen
                                         <div className="inline-flex mt-1 bg-gray-100 px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold text-gray-500 w-fit">
                                             Orç. #{budget.numero || budget.id.substring(0,8)}
                                         </div>
+
+                                        {t.payments && t.payments.length > 0 && (
+                                            <div className="mt-3 flex flex-col gap-1.5">
+                                                <span className="text-[11px] font-bold text-slate-500 uppercase">Pagamentos Realizados:</span>
+                                                <div className="flex flex-col gap-2">
+                                                    {t.payments.map((p: any, pIndex: number) => {
+                                                        const isBoleto = p.method === 'Boleto';
+                                                        let dateStr = '';
+                                                        if (p.date) {
+                                                            const d = new Date(p.date.includes('T') ? p.date : p.date + 'T12:00:00');
+                                                            if (!isNaN(d.getTime())) {
+                                                                dateStr = d.toLocaleDateString('pt-BR');
+                                                            }
+                                                        }
+                                                        return (
+                                                            <div key={p.id || pIndex} className="flex items-center gap-2">
+                                                                <div className={`px-2.5 py-1 rounded-md text-[12px] font-bold border ${isBoleto ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                                                    {p.method || 'Dinheiro'}
+                                                                    {isBoleto && dateStr && (
+                                                                        <span className="font-medium ml-1.5 opacity-80 font-normal">Vencimento: {dateStr}</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[13px] text-slate-600 font-semibold ml-1">
+                                                                    R$ {parseFloat(p.amount || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex flex-col items-end gap-1 shrink-0">
                                         <div className="flex items-center gap-1.5 border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">

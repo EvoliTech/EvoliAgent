@@ -148,6 +148,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [dateFilter, setDateFilter] = React.useState<{ start: string, end: string } | null>(null);
   const [showDatePicker, setShowDatePicker] = React.useState(false);
   const [cancelingPayments, setCancelingPayments] = React.useState<any[]>([]);
+  const [isEditingPaymentMode, setIsEditingPaymentMode] = React.useState(false);
   const [cancelJustification, setCancelJustification] = React.useState('');
   const [openPaymentMenuId, setOpenPaymentMenuId] = React.useState<string | null>(null);
   const [editingPaymentBudget, setEditingPaymentBudget] = React.useState<any | null>(null);
@@ -1601,6 +1602,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 {(() => {
                   const mappedTreatments = paymentTreatments.map(t => {
                     let isPaid = t.paymentStatus === 'Pago';
+                    let isBoletoPending = false;
+                    let hasPendingBalance = true;
                     let dueDate: Date | null = null;
                     let approvalDate: Date | null = null;
                     let paymentDate: Date | null = null;
@@ -1632,14 +1635,23 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       }
                       
                       const paidSum = t.payments.filter((p: any) => p && p.method !== 'Boleto' && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+                      const boletoSum = t.payments.filter((p: any) => p && p.method === 'Boleto' && p.status !== 'pendente').reduce((sum: number, p: any) => sum + (parseFloat(p?.amount) || 0), 0);
+                      
                       if (paidSum >= parseFloat(t.valor || 0)) {
                          isPaid = true;
+                         hasPendingBalance = false;
                       } else {
                          isPaid = false;
+                         if ((paidSum + boletoSum) >= parseFloat(t.valor || 0)) {
+                             isBoletoPending = true;
+                             hasPendingBalance = false;
+                         } else {
+                             hasPendingBalance = true;
+                         }
                       }
                     }
 
-                    return { ...t, isPaid, isLate, approvalDate, paymentDate };
+                    return { ...t, isPaid, isBoletoPending, hasPendingBalance, isLate, approvalDate, paymentDate };
                   }).filter(t => {
                     if (dateFilter) {
                       if (!t.approvalDate) return false;
@@ -1728,7 +1740,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                           <div className="col-span-2 flex items-center justify-between md:justify-center gap-3 w-full">
                             <span className="md:hidden text-xs text-gray-500 font-semibold">Status:</span>
                             <div className="flex items-center gap-2">
-                               {!t.isPaid && (
+                               {(!t.isPaid && t.hasPendingBalance) && (
                                  <button
                                    className="flex items-center gap-2 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
                                    onClick={() => setPayingTreatments([t])}
@@ -1736,8 +1748,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                    <CreditCard size={14} /> Pagar
                                  </button>
                                )}
-                               <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                                 {t.isPaid ? 'Pago' : t.isLate ? 'Em atraso' : 'Em aberto'}
+                               <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isBoletoPending ? 'bg-blue-50 text-blue-700 border-blue-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                 {t.isPaid ? 'Pago' : t.isBoletoPending ? 'Boleto a vencer' : t.isLate ? 'Em atraso' : 'Em aberto'}
                                </span>
                             </div>
                           </div>
@@ -1756,11 +1768,22 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                   </button>
 
                                   {openPaymentMenuId === t.id && (
+                                    <>
+                                    <div className="fixed inset-0 z-[50]" onClick={(e) => { e.stopPropagation(); setOpenPaymentMenuId(null); }}></div>
                                     <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
                                       <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                         onClick={() => { setEditingPaymentBudget(t.budget); setOpenPaymentMenuId(null); }}
                                       >
                                         <Edit2 size={16} className="text-gray-400" /> Editar e Detalhes
+                                      </button>
+                                      <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                        onClick={() => { 
+                                          setPayingTreatments([t]); 
+                                          setIsEditingPaymentMode(true); 
+                                          setOpenPaymentMenuId(null); 
+                                        }}
+                                      >
+                                        <CreditCard size={16} className="text-gray-400" /> Alterar forma de pagamento
                                       </button>
                                       <div className="h-px bg-gray-100 my-1"></div>
                                       <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5"
@@ -1769,6 +1792,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                         <X size={16} className="text-red-400" /> Cancelar pagamento
                                       </button>
                                     </div>
+                                    </>
                                   )}
                                 </div>
                             </div>
@@ -2174,9 +2198,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
       <PaymentModal
         isOpen={payingTreatments.length > 0}
-        onClose={() => setPayingTreatments([])}
+        onClose={() => { setPayingTreatments([]); setIsEditingPaymentMode(false); }}
         treatments={payingTreatments}
         patient={patient}
+        isEditingMode={isEditingPaymentMode}
         onProcessPayment={async (paymentsArr, isFullyPaid) => {
           if (payingTreatments.length === 0) return;
 
@@ -2192,7 +2217,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               const prevPayments = bTreatments[tIdx].payments || [];
               bTreatments[tIdx] = {
                 ...bTreatments[tIdx],
-                payments: [...prevPayments, ...(Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr])],
+                payments: isEditingPaymentMode ? (Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr]) : [...prevPayments, ...(Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr])],
                 paymentStatus: isFullyPaid ? 'Pago' : 'Pago parcialmente',
                 paymentCancellationReason: null // clearing justify if they pay again
               };
@@ -2215,6 +2240,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
               const totalTreatmentsCost = payingTreatments.reduce((acc, t) => acc + parseFloat(t.valor || '0'), 0);
               
+              if (isEditingPaymentMode) {
+                  for (const t of payingTreatments) {
+                      await revenueService.deleteRevenuesByTreatment(t.id, true);
+                  }
+              }
+
               for (const p of paymentsArray) {
                   for (const t of payingTreatments) {
                       const tCost = parseFloat(t.valor || '0');
@@ -2246,6 +2277,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             printReceipt(payingTreatments, paymentsArr);
             setPayingTreatments([]);
             setSelectedPayments([]);
+            setIsEditingPaymentMode(false);
           }
         }}
       />

@@ -24,6 +24,7 @@ interface PaymentModalProps {
     treatments: any[]; // The array of treatment objects
     patient: Patient;
     onProcessPayment: (payments: PaymentData[], isFullyPaid: boolean, nextPaymentDate?: string) => Promise<void>;
+    isEditingMode?: boolean;
 }
 
 const PAYMENT_METHODS = [
@@ -47,9 +48,9 @@ interface PaymentPartState {
     plano_id: string;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, treatments, patient, onProcessPayment }) => {
+export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, treatments, patient, onProcessPayment, isEditingMode }) => {
     const totalCost = (treatments || []).reduce((sum, t) => sum + parseFloat(t?.valor || '0'), 0);
-    const paidSoFar = (treatments || []).reduce((sum, t) => sum + (t?.payments || []).reduce((acc: number, p: any) => acc + (parseFloat(p.amount) || 0), 0), 0);
+    const paidSoFar = isEditingMode ? 0 : (treatments || []).reduce((sum, t) => sum + (t?.payments || []).reduce((acc: number, p: any) => acc + (parseFloat(p.amount) || 0), 0), 0);
     const remainingCost = Math.max(0, totalCost - paidSoFar);
 
     const now = new Date();
@@ -82,19 +83,32 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
 
     useEffect(() => {
         if (isOpen) {
-            setPaymentParts([{
-                id: Math.random().toString(),
-                method: 'Dinheiro',
-                amountStr: remainingCost.toFixed(2),
-                date: defaultDate,
-                installments: 1,
-                observations: '',
-                maquininha_id: '',
-                plano_id: ''
-            }]);
+            if (isEditingMode && treatments.length === 1 && treatments[0].payments && treatments[0].payments.length > 0) {
+                 setPaymentParts(treatments[0].payments.map((p: any) => ({
+                     id: p.id || Math.random().toString(),
+                     method: p.method || 'Dinheiro',
+                     amountStr: parseFloat(p.amount || 0).toFixed(2),
+                     date: p.date || defaultDate,
+                     installments: p.installments || 1,
+                     observations: p.observations || '',
+                     maquininha_id: p.maquininha_id || '',
+                     plano_id: p.plano_id || ''
+                 })));
+            } else {
+                 setPaymentParts([{
+                     id: Math.random().toString(),
+                     method: 'Dinheiro',
+                     amountStr: remainingCost.toFixed(2),
+                     date: defaultDate,
+                     installments: 1,
+                     observations: '',
+                     maquininha_id: '',
+                     plano_id: ''
+                 }]);
+            }
             setNextPaymentDate('');
         }
-    }, [isOpen, remainingCost]);
+    }, [isOpen, isEditingMode]);
 
     if (!isOpen || !treatments || treatments.length === 0) return null;
 
@@ -267,7 +281,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
 
                         <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center px-1">
                             {paidSoFar > 0 && (
-                                <span className="text-sm font-semibold text-emerald-600">Já pago: R$ {paidSoFar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-sm font-semibold text-emerald-600">Pago/Boleto: R$ {paidSoFar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             )}
                             <div className="flex flex-col items-end flex-1">
                                 <span className="text-sm text-slate-600 font-semibold">Valor em aberto</span>
