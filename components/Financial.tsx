@@ -27,6 +27,8 @@ class FinancialErrorBoundary extends React.Component<any, ErrorBoundaryState> {
 
 export const Financial: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'painel' | 'fluxo' | 'comissoes' | 'boletos'>('painel');
+  const [faturamentoPeriod, setFaturamentoPeriod] = useState<'dia' | 'mes'>('dia');
+  const [showFaturamentoDetails, setShowFaturamentoDetails] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -253,6 +255,108 @@ export const Financial: React.FC = () => {
     Object.values(groups).forEach(g => g.sort((a, b) => new Date(a.data_vencimento).getTime() - new Date(b.data_vencimento).getTime()));
     return groups;
   }, [allDespesas, allReceitas]);
+
+  const faturamentoStats = useMemo(() => {
+    let total = 0;
+    let totalTaxas = 0;
+    const byMethod: Record<string, number> = {};
+    const items: any[] = [];
+
+    const isDateInFaturamentoFilter = (dateStr?: string) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00');
+      if (isNaN(d.getTime())) return false;
+      const now = new Date();
+      if (faturamentoPeriod === 'dia') {
+        return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      } else {
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }
+    };
+
+    // 1. Vendas de Tratamentos (Bruto)
+    allBudgets.forEach(b => {
+      if (b.status !== 'Aprovado') return;
+      (b.tratamentos || []).forEach((t: any) => {
+        if (t.payments && t.payments.length > 0) {
+          t.payments.forEach((p: any) => {
+            if (!p) return;
+            const pDate = p.date || p.receiveDate || new Date().toISOString();
+            if (isDateInFaturamentoFilter(pDate)) {
+              const amount = parseFloat(p.amount) || 0;
+              let netReceived = p.planAmount !== undefined && p.planAmount !== null && p.planAmount !== '' ? parseFloat(p.planAmount) : amount;
+              const maq = maquininhas.find((m: any) => m.id === p.maquininha_id);
+              if (p.method === 'Pix') {
+                  if (maq && maq.pix_fee) {
+                      netReceived -= netReceived * (Number(maq.pix_fee) / 100);
+                  }
+              } else if (p.method === 'Débito') {
+                  if (maq && maq.debito_fee) {
+                      netReceived -= netReceived * (Number(maq.debito_fee) / 100);
+                  }
+              } else if (p.method === 'Crédito') {
+                  let installments = p.installments || 1;
+                  if (maq && maq.credito_fees) {
+                      let fee = 0;
+                      if (installments === 1 && maq.credito_fees.length > 0) fee = Number(maq.credito_fees[0]);
+                      else if (maq.credito_fees.length >= installments) fee = Number(maq.credito_fees[installments - 1]);
+                      netReceived -= netReceived * (fee / 100);
+                  }
+              } else if (p.method === 'Boleto') {
+                  const boletoFee = Number(companySettings?.configuracoes?.taxaBoleto) || 0;
+                  netReceived -= boletoFee;
+              }
+              const taxes = amount - netReceived;
+              total += amount;
+              totalTaxas += taxes;
+
+              const method = p.method || 'Outros';
+              byMethod[method] = (byMethod[method] || 0) + amount;
+              items.push({
+                id: Math.random().toString(),
+                title: t.treatmentName || t.tratamento || 'Tratamento',
+                paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                amount: amount,
+                method: method,
+                date: pDate,
+                type: 'Tratamento'
+              });
+            }
+          });
+        }
+      });
+    });
+
+    // 2. Entradas Manuais (exclui Tratamentos já contados acima)
+    allReceitas.forEach(r => {
+      if (r.categoria === 'Tratamentos') return;
+      const rDate = r.created_at || r.data_pagamento || r.data_vencimento || new Date().toISOString();
+      if (isDateInFaturamentoFilter(rDate)) {
+        const amount = Number(r.valor) || 0;
+        total += amount;
+        const method = r.forma_pagamento || 'Outros';
+        byMethod[method] = (byMethod[method] || 0) + amount;
+        items.push({
+          id: Math.random().toString(),
+          title: r.titulo || 'Entrada Manual',
+          paciente: r.paciente?.nome || r.paciente?.nome_completo || '-',
+          amount: amount,
+          method: method,
+          date: rDate,
+          type: 'Manual'
+        });
+      }
+    });
+
+    const breakdown = Object.entries(byMethod)
+      .map(([name, val]) => ({ name, val, perc: total > 0 ? (val / total) * 100 : 0 }))
+      .sort((a, b) => b.val - a.val);
+
+    // Sort items by date descending
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return { total, totalTaxas, totalLiquido: total - totalTaxas, breakdown, items };
+  }, [allBudgets, allReceitas, faturamentoPeriod, maquininhas, companySettings]);
 
   const despesasAgrupadas = useMemo(() => {
     const groups: Record<string, any[]> = {};
@@ -837,9 +941,99 @@ export const Financial: React.FC = () => {
         {activeTab === 'painel' && (
           <div className="flex-1 flex flex-col p-4 md:p-8">
 
+            {/* Faturamento Block */}
+            <div className="mb-10 bg-gradient-to-br from-blue-900 to-indigo-900 rounded-2xl shadow-lg p-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+              
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h2 className="text-xl font-bold text-white tracking-wide">Faturamento Bruto</h2>
+                    <div className="flex items-center bg-white/10 rounded-lg p-0.5 border border-white/10">
+                      <button
+                        onClick={() => setFaturamentoPeriod('dia')}
+                        className={`px-3 py-1 rounded-md text-[13px] font-semibold transition-all ${faturamentoPeriod === 'dia' ? 'bg-white text-indigo-900 shadow-sm' : 'text-blue-100 hover:text-white'}`}
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        onClick={() => setFaturamentoPeriod('mes')}
+                        className={`px-3 py-1 rounded-md text-[13px] font-semibold transition-all ${faturamentoPeriod === 'mes' ? 'bg-white text-indigo-900 shadow-sm' : 'text-blue-100 hover:text-white'}`}
+                      >
+                        Este Mês
+                      </button>
+                    </div>
+                  </div>
+                  <span className="text-blue-200 text-sm mb-4">Total vendido, independente de parcelamento.</span>
+                  
+                  <div className="text-4xl md:text-5xl font-black text-white flex items-baseline gap-2 mb-4">
+                    <span className="text-2xl text-blue-300 font-bold">R$</span>
+                    {faturamentoStats.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 pt-4 border-t border-white/20 w-fit pr-8">
+                    <div className="flex items-center gap-2 text-red-300 text-[13px] font-medium">
+                      <span>(–) Taxas de Intermediação (Cartão/Boleto):</span>
+                      <span className="font-bold">R$ {faturamentoStats.totalTaxas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-emerald-300 text-[14px] font-bold">
+                      <span>(=) Receita Líquida:</span>
+                      <span className="text-lg">R$ {faturamentoStats.totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowFaturamentoDetails(true)}
+                    className="mt-6 text-[12px] font-semibold bg-white/10 hover:bg-white/20 text-blue-100 px-3 py-1.5 rounded-lg transition-colors border border-white/10 flex items-center gap-1 w-fit"
+                  >
+                    <Eye size={14} /> Ver detalhes
+                  </button>
+                </div>
+
+                {faturamentoStats.breakdown.length > 0 && (
+                  <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 min-w-[280px]">
+                    <h3 className="text-blue-100 text-[13px] font-bold uppercase tracking-wider mb-3">Composição</h3>
+                    <div className="space-y-3">
+                      {faturamentoStats.breakdown.map((item, idx) => (
+                        <div key={idx} className="flex flex-col gap-1.5">
+                          <div className="flex justify-between text-[13px] font-medium text-white">
+                            <span className="flex items-center gap-1.5">
+                              {item.name === 'Crédito' && <div className="w-2 h-2 rounded-full bg-pink-400"></div>}
+                              {item.name === 'Débito' && <div className="w-2 h-2 rounded-full bg-blue-400"></div>}
+                              {item.name === 'Pix' && <div className="w-2 h-2 rounded-full bg-emerald-400"></div>}
+                              {item.name === 'Dinheiro' && <div className="w-2 h-2 rounded-full bg-yellow-400"></div>}
+                              {item.name === 'Boleto' && <div className="w-2 h-2 rounded-full bg-orange-400"></div>}
+                              {!['Crédito', 'Débito', 'Pix', 'Dinheiro', 'Boleto'].includes(item.name) && <div className="w-2 h-2 rounded-full bg-purple-400"></div>}
+                              {item.name}
+                            </span>
+                            <span>R$ {item.val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${
+                                item.name === 'Crédito' ? 'bg-pink-400' :
+                                item.name === 'Débito' ? 'bg-blue-400' :
+                                item.name === 'Pix' ? 'bg-emerald-400' :
+                                item.name === 'Dinheiro' ? 'bg-yellow-400' :
+                                item.name === 'Boleto' ? 'bg-orange-400' : 'bg-purple-400'
+                              }`} 
+                              style={{ width: `${Math.max(2, item.perc)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Header Content */}
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-6 md:mb-8">
-              <h2 className="text-[1.1rem] font-medium text-gray-800">Visão Geral</h2>
+              <div className="flex flex-col">
+                 <h2 className="text-[1.1rem] font-medium text-gray-800">Fluxo de Caixa (Realizado vs Previsto)</h2>
+                 <span className="text-xs text-gray-400 mt-0.5">Baseado nas datas de vencimento/recebimento de cada parcela.</span>
+              </div>
               {renderDateFilters()}
             </div>
 
@@ -1560,6 +1754,65 @@ export const Financial: React.FC = () => {
             onClose={() => setSelectedSpecialist(null)}
             onSave={(rules) => handleSaveRules(selectedSpecialist.id, rules)}
           />
+        )}
+
+        {/* Modals and Overlays */}
+        {showFaturamentoDetails && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between p-5 md:p-6 border-b border-gray-100 bg-gray-50/50">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Detalhes do Faturamento</h3>
+                  <p className="text-sm text-gray-500">
+                    {faturamentoPeriod === 'dia' ? 'Vendas realizadas hoje.' : 'Vendas realizadas neste mês.'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowFaturamentoDetails(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-5 md:p-6 bg-white custom-scrollbar">
+                {faturamentoStats.items.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <p>Nenhuma venda registrada no período selecionado.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {faturamentoStats.items.map((item, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-gray-100 rounded-xl hover:border-blue-200 hover:shadow-sm transition-all gap-3 bg-white">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-gray-800">{item.title}</span>
+                          {item.paciente && item.paciente !== '-' && (
+                            <span className="text-[13px] text-gray-500">{item.paciente}</span>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                             <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                               {item.type}
+                             </span>
+                             <span className="text-[11px] font-medium text-gray-400">
+                               {new Date(item.date.includes('T') ? item.date : item.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                             </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[15px] font-black text-gray-800">
+                            R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[12px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded mt-1">
+                            {item.method}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {showDetails === 'entradas' && (
