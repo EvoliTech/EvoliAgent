@@ -1395,39 +1395,27 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
-                                if (!window.confirm("Deseja realmente cancelar este tratamento e enviá-lo de volta ao orçamento pendente? As parcelas em aberto também serão apagadas.")) return;
+                                if (!window.confirm("Deseja realmente cancelar este tratamento e retorná-lo como pendente? As parcelas em aberto também serão apagadas.")) return;
                                 setOpenTreatmentMenuId(null);
                                 
                                 // Apagar receitas em aberto associadas a este tratamento
                                 await revenueService.deleteRevenuesByTreatment(t.id, true);
 
-                                // Procurar ou criar orçamento pendente
-                                const pendingBudget = budgets.find(b => b.status === 'Pendente');
-                                const treatmentToMove = { ...t, isPaid: false, payments: [], paymentStatus: 'Pendente' };
-                                delete treatmentToMove.budget; // Remover referência circular
+                                // Atualizar o tratamento atual para Pendente dentro do mesmo orçamento
+                                const updTreatments = t.budget.treatments.map((x: any) => 
+                                  x.id === t.id 
+                                    ? { ...x, status: 'Pendente', isPaid: false, payments: [], paymentStatus: 'Pendente', paymentCancellationReason: 'Cancelado pelo usuário', paymentCancellationDate: new Date().toISOString() } 
+                                    : x
+                                );
                                 
-                                let successMove = false;
-                                if (pendingBudget) {
-                                  const updPending = { ...pendingBudget, treatments: [...(pendingBudget.treatments || []), treatmentToMove] };
-                                  successMove = !!(await budgetService.saveBudget(empresaId!, Number(patient.id), updPending));
-                                } else {
-                                  const newPending = { name: 'Novo Orçamento', date: new Date().toISOString().split('T')[0], total: 0, status: 'Pendente', treatments: [treatmentToMove] };
-                                  successMove = !!(await budgetService.saveBudget(empresaId!, Number(patient.id), newPending as any));
-                                }
-
-                                if (successMove) {
-                                  const remainingTreatments = t.budget.treatments.filter((x: any) => x.id !== t.id);
-                                  const updOriginal = { ...t.budget, treatments: remainingTreatments };
-                                  
-                                  if (remainingTreatments.length === 0) {
-                                    await budgetService.deleteBudget(t.budget.id);
-                                  } else {
-                                    await budgetService.saveBudget(empresaId!, Number(patient.id), updOriginal);
-                                  }
-                                  
-                                  const saved = await budgetService.fetchBudgets(empresaId!, Number(patient.id));
-                                  setBudgets(saved as Budget[]);
-                                  alert("Tratamento cancelado com sucesso.");
+                                // Muda o status do orçamento para 'Aguardando' para que o botão 'Aprovar' volte a aparecer
+                                const updOriginal = { ...t.budget, treatments: updTreatments, status: 'Aguardando' };
+                                
+                                const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updOriginal);
+                                
+                                if (saved) {
+                                  setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
+                                  alert("Tratamento retornado para pendente com sucesso.");
                                 } else {
                                   alert("Erro ao cancelar tratamento.");
                                 }
