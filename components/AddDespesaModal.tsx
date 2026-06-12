@@ -32,12 +32,14 @@ interface ExpenseFiles {
 
 interface AddDespesaModalProps {
   onClose: () => void;
-  onSave: (despesa: DespesaType, files: ExpenseFiles) => void;
+  onSave: (despesa: DespesaType, files: ExpenseFiles) => Promise<void> | void;
   initialData?: DespesaType;
   type?: 'despesa' | 'receita';
+  isReadOnly?: boolean;
 }
 
-export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSave, initialData, type = 'despesa' }) => {
+export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSave, initialData, type = 'despesa', isReadOnly = false }) => {
+  const [isEditing, setIsEditing] = useState(!isReadOnly);
   const [isRecurring, setIsRecurring] = useState(initialData?.is_recorrente || false);
   const [isPaid, setIsPaid] = useState(initialData?.is_paga || false);
   const [paymentMethod, setPaymentMethod] = useState(initialData?.forma_pagamento || '');
@@ -45,6 +47,7 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
   const [nfFile, setNfFile] = useState<File | null>(null);
   const [compFile, setCompFile] = useState<File | null>(null);
   const [boletoFiles, setBoletoFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const nfRef = useRef<HTMLInputElement>(null);
   const compRef = useRef<HTMLInputElement>(null);
@@ -82,33 +85,42 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
     }
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const amountStr = formData.get('amount') as string;
-    const duracaoStr = formData.get('duracao_meses') as string;
-    
-    const newDespesa: DespesaType = {
-      ...(initialData || {}),
-      tipo: type,
-      titulo: formData.get('titulo') as string,
-      categoria: formData.get('categoria') as string,
-      data_vencimento: formData.get('dueDate') as string,
-      valor: parseFloat(amountStr.replace(/\./g, '').replace(',', '.')) || parseFloat(amountStr) || 0,
-      is_recorrente: isRecurring,
-      periodo_recorrencia: isRecurring ? formData.get('recurringPeriod') as string : undefined,
-      duracao_meses: isRecurring && duracaoStr ? parseInt(duracaoStr) : undefined,
-      is_paga: isPaid,
-      data_pagamento: isPaid ? formData.get('paymentDate') as string : undefined,
-      forma_pagamento: isPaid ? paymentMethod : undefined,
-      observacoes: formData.get('observacoes') as string,
-    };
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const amountStr = formData.get('amount') as string;
+      const duracaoStr = formData.get('duracao_meses') as string;
+      
+      const newDespesa: DespesaType = {
+        ...(initialData || {}),
+        tipo: type,
+        titulo: formData.get('titulo') as string,
+        categoria: formData.get('categoria') as string,
+        data_vencimento: formData.get('dueDate') as string,
+        valor: parseFloat(amountStr.replace(/\./g, '').replace(',', '.')) || parseFloat(amountStr) || 0,
+        is_recorrente: isRecurring,
+        periodo_recorrencia: isRecurring ? formData.get('recurringPeriod') as string : undefined,
+        duracao_meses: isRecurring && duracaoStr ? parseInt(duracaoStr) : undefined,
+        is_paga: isPaid,
+        data_pagamento: isPaid ? formData.get('paymentDate') as string : undefined,
+        forma_pagamento: isPaid ? paymentMethod : undefined,
+        observacoes: formData.get('observacoes') as string,
+      };
 
-    onSave(newDespesa, {
-      boletos: boletoFiles.length > 0 ? boletoFiles : undefined,
-      notaFiscal: nfFile,
-      comprovante: compFile
-    });
+      await onSave(newDespesa, {
+        boletos: boletoFiles.length > 0 ? boletoFiles : undefined,
+        notaFiscal: nfFile,
+        comprovante: compFile
+      });
+    } catch (err: any) {
+      console.error("Local submit error:", err);
+      alert(`Erro no formulário: ${err?.message || JSON.stringify(err)}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const FileZone = ({ 
@@ -117,14 +129,16 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
     inputRef, 
     label, 
     multiple = false, 
-    existingUrl 
+    existingUrl,
+    readOnly = false
   }: { 
     file: File | File[] | null, 
     onFileSet: (f: any) => void, 
     inputRef: React.RefObject<HTMLInputElement>, 
     label: string, 
     multiple?: boolean,
-    existingUrl?: string
+    existingUrl?: string,
+    readOnly?: boolean
   }) => {
     const isArray = Array.isArray(file);
     const hasFiles = isArray ? file.length > 0 : file !== null;
@@ -133,8 +147,8 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
       <div className="flex flex-col mb-4">
         <label className="mb-1.5 text-xs font-bold text-gray-700">{label}</label>
         <div 
-          className={`border-2 border-dashed ${hasFiles ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-[#f8fafc]'} rounded-lg p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors`}
-          onClick={() => inputRef.current?.click()}
+          className={`border-2 border-dashed ${hasFiles ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-[#f8fafc]'} rounded-lg p-4 flex flex-col items-center justify-center text-center ${readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-gray-50'} transition-colors`}
+          onClick={() => !readOnly && inputRef.current?.click()}
         >
           <input 
             type="file" 
@@ -165,7 +179,6 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
                   }
                 }
               }
-              // Reset the input value so the same file can be selected again if needed
               if (inputRef.current) inputRef.current.value = '';
             }} 
           />
@@ -175,9 +188,17 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
                 <Check size={16} />
               </div>
               <p className="text-sm font-semibold text-gray-700">{isArray ? `${file.length} arquivo(s) selecionado(s)` : (file as File).name}</p>
-              <button type="button" onClick={(e) => { e.stopPropagation(); onFileSet(multiple ? [] : null); }} className="text-xs text-red-500 hover:text-red-700 mt-1 flex items-center gap-1">
-                <Trash2 size={12} /> Remover
-              </button>
+              {!readOnly && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFileSet(null);
+                  }} 
+                  className="mt-2 text-xs font-bold text-red-500 hover:text-red-700 underline"
+                >
+                  Remover
+                </button>
+              )}
             </div>
           ) : existingUrl ? (
             <div className="flex flex-col items-center">
@@ -187,7 +208,11 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
               <a href={existingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-sm font-semibold text-blue-600 hover:underline mb-1">
                 Ver arquivo atual
               </a>
-              <p className="text-xs text-gray-500">Clique na área para substituir</p>
+              {!readOnly && (
+                <div className="mt-2">
+                  <span className="text-xs text-blue-600 hover:underline">Adicionar mais arquivos</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center">
@@ -196,11 +221,6 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
             </div>
           )}
         </div>
-        {multiple && !hasFiles && (
-          <p className="text-[10px] text-gray-400 mt-1 leading-tight">
-            Para recorrência: envie 1 PDF com todos juntos, ou selecione N arquivos (ex: 10) para dividir um por mês automaticamente.
-          </p>
-        )}
       </div>
     );
   };
@@ -209,179 +229,180 @@ export const AddDespesaModal: React.FC<AddDespesaModalProps> = ({ onClose, onSav
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row">
         
-        {/* Formulário Principal */}
-        <div className="flex-1 border-r border-gray-100">
+        <div className="flex-1 flex flex-col border-r border-gray-100">
           <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100">
-            <h3 className="text-lg font-bold text-gray-800">{titleText}</h3>
-            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 md:hidden p-1">
-              <X size={20} />
-            </button>
+            <h2 className="text-xl font-bold text-gray-800 tracking-tight">
+              {!isEditing ? 'Detalhes' : titleText}
+            </h2>
+            <div className="flex items-center gap-2">
+              {!isEditing && (
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditing(true)} 
+                  className="px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-bold transition-colors"
+                >
+                  Editar
+                </button>
+              )}
+              <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
           </div>
 
-          <form id="despesaForm" onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-1 gap-5">
-              {/* Titulo */}
-              <div className="flex flex-col">
-                <label className="mb-1.5 text-xs font-semibold text-gray-700">Título</label>
-                <input required name="titulo" defaultValue={initialData?.titulo} type="text" placeholder={`Descreva o nome da ${isReceita ? 'receita' : 'despesa'}`} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
-              </div>
+          <form id="despesaForm" onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+            <fieldset disabled={!isEditing} className="p-6">
+              <div className="grid grid-cols-1 gap-5">
+                <div className="flex flex-col">
+                  <label className="mb-1.5 text-xs font-semibold text-gray-700">Título</label>
+                  <input required name="titulo" defaultValue={initialData?.titulo} type="text" placeholder={`Descreva o nome da ${isReceita ? 'receita' : 'despesa'}`} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
+                </div>
 
-              {/* Cat, Date, Value Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex flex-col">
-                  <label className="mb-1.5 text-xs font-semibold text-gray-700">Categoria</label>
-                  <select name="categoria" defaultValue={initialData?.categoria || ''} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`}>
-                    <option value="">Selecionar</option>
-                    {!isReceita ? (
-                      <>
-                        <option value="Agua">Água</option>
-                        <option value="Luz">Luz</option>
-                        <option value="Aluguel">Aluguel</option>
-                        <option value="Salario">Salários</option>
-                        <option value="Materiais">Materiais Diversos</option>
-                        <option value="Comissões">Comissões</option>
-                        <option value="Outros">Outros</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="Servico">Serviço</option>
-                        <option value="Venda">Venda de Produto</option>
-                        <option value="Rendimento">Rendimento</option>
-                        <option value="Outros">Outros</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1.5 text-xs font-semibold text-gray-700">{isReceita ? 'Data recebimento (prev)' : 'Data vencimento'}</label>
-                  <input required name="dueDate" defaultValue={initialData?.data_vencimento?.split('T')[0]} type="date" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
-                </div>
-                <div className="flex flex-col">
-                  <label className="mb-1.5 text-xs font-semibold text-gray-700">Valor</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
-                    <input required name="amount" defaultValue={initialData?.valor} type="number" step="0.01" placeholder="0.00" className={`border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 w-full font-semibold`} />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="flex flex-col">
+                    <label className="mb-1.5 text-xs font-semibold text-gray-700">Categoria</label>
+                    <select name="categoria" defaultValue={initialData?.categoria || ''} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`}>
+                      <option value="">Selecionar</option>
+                      {!isReceita ? (
+                        <>
+                          <option value="Agua">Água</option>
+                          <option value="Luz">Luz</option>
+                          <option value="Aluguel">Aluguel</option>
+                          <option value="Salario">Salários</option>
+                          <option value="Materiais">Materiais Diversos</option>
+                          <option value="Comissões">Comissões</option>
+                          <option value="Outros">Outros</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="Servico">Serviço</option>
+                          <option value="Venda">Venda de Produto</option>
+                          <option value="Rendimento">Rendimento</option>
+                          <option value="Outros">Outros</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="mb-1.5 text-xs font-semibold text-gray-700">{isReceita ? 'Data recebimento (prev)' : 'Data vencimento'}</label>
+                    <input required name="dueDate" defaultValue={initialData?.data_vencimento?.split('T')[0]} type="date" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
+                  </div>
+                  <div className="flex flex-col">
+                    <label className="mb-1.5 text-xs font-semibold text-gray-700">Valor</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                      <input required name="amount" defaultValue={initialData?.valor} type="number" step="0.01" placeholder="0.00" className={`border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 w-full font-semibold`} />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Toggles Recorrencia */}
-              <div className="flex flex-col gap-3 mt-1 bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <div className="flex items-center gap-4">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} />
-                    <div className={`w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-${colorTheme}-600`}></div>
-                    <span className="ml-3 text-sm font-bold text-gray-700">{isReceita ? 'Receita recorrente' : 'Despesa recorrente'}</span>
-                  </label>
-                </div>
-
-                {isRecurring && (
-                  <div className={`bg-${colorTheme}-50 border border-${colorTheme}-100 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2`}>
-                    <div className="flex flex-col">
-                      <label className="mb-1.5 text-xs font-semibold text-gray-700">Frequência</label>
-                      <select name="recurringPeriod" defaultValue={initialData?.periodo_recorrencia || 'mensalmente'} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`}>
-                        <option value="semanalmente">Semanalmente</option>
-                        <option value="quinzenalmente">Quinzenalmente</option>
-                        <option value="mensalmente">Mensalmente</option>
-                        <option value="trimestralmente">Trimestralmente</option>
-                      </select>
-                    </div>
-                    <div className="flex flex-col">
-                      <label className="mb-1.5 text-xs font-semibold text-gray-700">Duração (meses)</label>
-                      <input required name="duracao_meses" defaultValue={initialData?.duracao_meses || 12} type="number" min="1" max="60" placeholder="Ex: 12" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
-                    </div>
+                <div className="flex flex-col gap-3 mt-1 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-4">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} />
+                      <div className={`w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-${colorTheme}-600`}></div>
+                      <span className="ml-3 text-sm font-bold text-gray-700">{isReceita ? 'Receita recorrente' : 'Despesa recorrente'}</span>
+                    </label>
                   </div>
-                )}
-              </div>
 
-              {/* Pagamento */}
-              <div className="flex flex-col mt-2">
-                <div className="flex items-center gap-4 mb-3">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} />
-                    <div className={`w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-${colorTheme}-600`}></div>
-                    <span className="ml-3 text-sm font-bold text-gray-700">{isReceita ? 'Marcar como RECEBIDA' : 'Marcar como PAGA'}</span>
-                  </label>
-                </div>
-
-                {isPaid && (
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-5 bg-[#f8fafc] p-4 rounded-lg border border-gray-200">
-                    <div className="flex flex-col">
-                      <label className="mb-1.5 text-xs font-semibold text-gray-700">{isReceita ? 'Data do recebimento' : 'Data de pagamento'}</label>
-                      <input required name="paymentDate" defaultValue={initialData?.data_pagamento?.split('T')[0] || initialData?.data_vencimento?.split('T')[0] || new Date().toISOString().split('T')[0]} type="date" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`} />
-                    </div>
-                    <div className="flex flex-col">
-                      <label className="mb-1.5 text-xs font-semibold text-gray-700">Forma de pagamento</label>
-                      <div className="flex flex-wrap gap-2">
-                        {renderPaymentMethodBtn('Dinheiro', '💵')}
-                        {renderPaymentMethodBtn('Crédito', '💳')}
-                        {renderPaymentMethodBtn('Débito', '💳')}
-                        {renderPaymentMethodBtn('Boleto', '🧾')}
-                        {renderPaymentMethodBtn('Cheque', '🎫')}
-                        {renderPaymentMethodBtn('Pix', '❖')}
-                        {renderPaymentMethodBtn('TED', '🔄')}
+                  {isRecurring && (
+                    <div className={`bg-${colorTheme}-50 border border-${colorTheme}-100 rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2`}>
+                      <div className="flex flex-col">
+                        <label className="mb-1.5 text-xs font-semibold text-gray-700">Frequência</label>
+                        <select name="recurringPeriod" defaultValue={initialData?.periodo_recorrencia || 'mensalmente'} className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`}>
+                          <option value="semanalmente">Semanalmente</option>
+                          <option value="quinzenalmente">Quinzenalmente</option>
+                          <option value="mensalmente">Mensalmente</option>
+                          <option value="trimestralmente">Trimestralmente</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1.5 text-xs font-semibold text-gray-700">Duração (meses)</label>
+                        <input required name="duracao_meses" defaultValue={initialData?.duracao_meses || 12} type="number" min="1" max="60" placeholder="Ex: 12" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500`} />
                       </div>
                     </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col mt-2">
+                  <div className="flex items-center gap-4 mb-3">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={isPaid} onChange={(e) => setIsPaid(e.target.checked)} />
+                      <div className={`w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-${colorTheme}-600`}></div>
+                      <span className="ml-3 text-sm font-bold text-gray-700">{isReceita ? 'Marcar como RECEBIDA' : 'Marcar como PAGA'}</span>
+                    </label>
                   </div>
-                )}
-              </div>
 
-              {/* Observações */}
-              <div className="flex flex-col">
-                <label className="mb-1.5 text-xs font-semibold text-gray-700">Observações Gerais</label>
-                <textarea name="observacoes" defaultValue={initialData?.observacoes} rows={2} placeholder="Digite aqui" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 resize-none`}></textarea>
-              </div>
+                  {isPaid && (
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-5 bg-[#f8fafc] p-4 rounded-lg border border-gray-200">
+                      <div className="flex flex-col">
+                        <label className="mb-1.5 text-xs font-semibold text-gray-700">{isReceita ? 'Data do recebimento' : 'Data de pagamento'}</label>
+                        <input required name="paymentDate" defaultValue={initialData?.data_pagamento?.split('T')[0] || initialData?.data_vencimento?.split('T')[0] || new Date().toISOString().split('T')[0]} type="date" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 bg-white`} />
+                      </div>
+                      <div className="flex flex-col">
+                        <label className="mb-1.5 text-xs font-semibold text-gray-700">Forma de pagamento</label>
+                        <div className="flex flex-wrap gap-2">
+                          {renderPaymentMethodBtn('Dinheiro', '💵')}
+                          {renderPaymentMethodBtn('Crédito', '💳')}
+                          {renderPaymentMethodBtn('Débito', '💳')}
+                          {renderPaymentMethodBtn('Boleto', '🧾')}
+                          {renderPaymentMethodBtn('Cheque', '🎫')}
+                          {renderPaymentMethodBtn('Pix', '❖')}
+                          {renderPaymentMethodBtn('TED', '🔄')}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-            </div>
+                <div className="flex flex-col">
+                  <label className="mb-1.5 text-xs font-semibold text-gray-700">Observações Gerais</label>
+                  <textarea name="observacoes" defaultValue={initialData?.observacoes} rows={2} placeholder="Digite aqui" className={`border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-${colorTheme}-500 resize-none`}></textarea>
+                </div>
+              </div>
+            </fieldset>
           </form>
         </div>
 
-        {/* Painel lateral de Anexos */}
-        <div className="w-full md:w-80 bg-gray-50 p-6 flex flex-col justify-between border-t md:border-t-0 md:border-l border-gray-100 shrink-0">
+        <div className="w-full md:w-80 bg-gray-50 p-6 flex flex-col justify-between border-t md:border-t-0 border-gray-100 shrink-0">
           <div>
-             <div className="flex justify-between items-center mb-6 md:mb-8">
-               <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Documentos Anexos</h3>
-               <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 hidden md:block">
-                 <X size={20} />
-               </button>
-             </div>
-             
-             {/* Boletos */}
+             <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-6">Documentos Anexos</h3>
              <FileZone 
                label="Boletos (Parcelas)" 
                file={boletoFiles} 
                onFileSet={setBoletoFiles} 
                inputRef={boletoRef} 
-               multiple={true}
+               multiple 
                existingUrl={initialData?.boleto_url || (initialData?.anexo_url && !initialData?.is_paga ? initialData.anexo_url : undefined)}
+               readOnly={!isEditing}
              />
-
-             {/* Nota Fiscal */}
              <FileZone 
-               label="Nota Fiscal (Geral)" 
                file={nfFile} 
                onFileSet={setNfFile} 
                inputRef={nfRef} 
+               label="Nota Fiscal" 
                existingUrl={initialData?.nota_fiscal_url}
+               readOnly={!isEditing}
              />
-
-             {/* Comprovante */}
-             <FileZone 
-               label="Comprovante de Pagto" 
-               file={compFile} 
-               onFileSet={setCompFile} 
-               inputRef={compRef}
-               existingUrl={initialData?.comprovante_url || (initialData?.anexo_url && initialData?.is_paga ? initialData.anexo_url : undefined)}
-             />
+              <FileZone 
+                file={compFile} 
+                onFileSet={setCompFile} 
+                inputRef={compRef} 
+                label="Comprovante de Pagamento" 
+                existingUrl={initialData?.comprovante_url || (initialData?.anexo_url && initialData?.is_paga ? initialData.anexo_url : undefined)}
+                readOnly={!isEditing}
+              />
           </div>
 
           <div className="flex flex-col gap-3 mt-6 pt-5 border-t border-gray-200">
-             <button type="button" onClick={onClose} className="w-full py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
-               Cancelar
+             <button disabled={isSubmitting} type="button" onClick={onClose} className="w-full py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+               Fechar
              </button>
-             <button type="submit" form="despesaForm" className={`w-full py-2.5 text-sm font-bold text-white bg-${colorTheme}-600 rounded-lg hover:bg-${colorTheme}-700 transition-colors shadow-md`}>
-               {btnText}
-             </button>
+             {isEditing && (
+               <button disabled={isSubmitting} type="submit" form="despesaForm" className={`w-full py-2.5 text-sm font-bold text-white bg-${colorTheme}-600 rounded-lg hover:bg-${colorTheme}-700 transition-colors shadow-md ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                 {isSubmitting ? 'Salvando...' : btnText}
+               </button>
+             )}
           </div>
         </div>
 

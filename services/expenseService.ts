@@ -73,6 +73,8 @@ async function uploadFile(file: File, empresaId: number, prefix: string): Promis
     const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
     return data.publicUrl;
   }
+  console.error('Upload Error to bucket', BUCKET_NAME, ':', uploadError);
+  alert(`Erro ao fazer upload do anexo: ${uploadError?.message || JSON.stringify(uploadError)}`);
   return '';
 }
 
@@ -117,12 +119,18 @@ export const expenseService = {
        }
     }
 
+    const cleanDespesa = { ...despesa };
+    delete cleanDespesa.tipo;
+    delete cleanDespesa.comprovante_url;
+    delete cleanDespesa.nota_fiscal_url;
+    delete cleanDespesa.boleto_url;
+
     const expensesToInsert: Despesa[] = [];
 
-    if (despesa.is_recorrente && despesa.periodo_recorrencia && despesa.duracao_meses) {
+    if (cleanDespesa.is_recorrente && cleanDespesa.periodo_recorrencia && cleanDespesa.duracao_meses) {
        const grupoId = generateUUID();
-       const totalOccurrences = calcOccurrences(despesa.periodo_recorrencia, despesa.duracao_meses);
-       let currentDate = new Date(despesa.data_vencimento + 'T12:00:00');
+       const totalOccurrences = calcOccurrences(cleanDespesa.periodo_recorrencia, cleanDespesa.duracao_meses);
+       let currentDate = new Date(cleanDespesa.data_vencimento + 'T12:00:00');
 
        for (let i = 0; i < totalOccurrences; i++) {
           // Lógica de distribuição dos boletos
@@ -134,23 +142,20 @@ export const expenseService = {
           }
 
           expensesToInsert.push({
-             ...despesa,
+             ...cleanDespesa,
              data_vencimento: currentDate.toISOString().split('T')[0],
              grupo_recorrente: grupoId,
-             is_paga: i === 0 ? despesa.is_paga : false,
-             data_pagamento: i === 0 ? despesa.data_pagamento : undefined,
-             forma_pagamento: i === 0 ? despesa.forma_pagamento : undefined,
-             comprovante_url: compUrl || undefined, // Shared on all rows to act as "Parent" file
-             nota_fiscal_url: nfUrl || undefined,   // Shared
-             boleto_url: parcelBoletoUrl,
-             // Remove anexo_url to favor new fields, but keep it if somehow legacy
+             is_paga: i === 0 ? cleanDespesa.is_paga : false,
+             data_pagamento: i === 0 ? cleanDespesa.data_pagamento : undefined,
+             forma_pagamento: i === 0 ? cleanDespesa.forma_pagamento : undefined,
+             anexo_url: compUrl || nfUrl || parcelBoletoUrl || cleanDespesa.anexo_url
           });
-          currentDate = addInterval(currentDate, despesa.periodo_recorrencia);
+          currentDate = addInterval(currentDate, cleanDespesa.periodo_recorrencia);
        }
     } else {
        expensesToInsert.push({
-         ...despesa,
-         boleto_url: boletosUrls.length > 0 ? boletosUrls[0] : undefined
+         ...cleanDespesa,
+         anexo_url: compUrl || nfUrl || (boletosUrls.length > 0 ? boletosUrls[0] : undefined) || cleanDespesa.anexo_url
        });
     }
 
@@ -161,7 +166,7 @@ export const expenseService = {
         
     if (error) {
        console.error("Error saving expense:", error);
-       return expensesToInsert.map((d, index) => ({ ...d, id: (Date.now() + index).toString() }));
+       throw error;
     }
 
     return data as Despesa[];
@@ -179,28 +184,33 @@ export const expenseService = {
   async updateExpense(id: string, updates: Partial<Despesa>, files?: ExpenseFiles): Promise<boolean> {
     if (updates.empresa_id) {
        if (files?.notaFiscal) {
-          updates.nota_fiscal_url = await uploadFile(files.notaFiscal, updates.empresa_id, 'nf');
+          updates.anexo_url = await uploadFile(files.notaFiscal, updates.empresa_id, 'nf');
        }
        if (files?.comprovante) {
-          updates.comprovante_url = await uploadFile(files.comprovante, updates.empresa_id, 'comp');
+          updates.anexo_url = await uploadFile(files.comprovante, updates.empresa_id, 'comp');
        }
        if (files?.boletos && files.boletos.length > 0) {
-          updates.boleto_url = await uploadFile(files.boletos[0], updates.empresa_id, 'bol');
+          updates.anexo_url = await uploadFile(files.boletos[0], updates.empresa_id, 'bol');
        }
     }
 
-    const { error } = await supabase.from('despesas').update(updates).eq('id', id);
+    const cleanUpdates = { ...updates };
+    delete cleanUpdates.tipo;
+    delete cleanUpdates.comprovante_url;
+    delete cleanUpdates.nota_fiscal_url;
+    delete cleanUpdates.boleto_url;
+
+    const { error } = await supabase.from('despesas').update(cleanUpdates).eq('id', id);
     if (error) {
        console.error("Error updating expense", error);
-       return false;
+       throw error;
     }
 
-    // Se tiver um grupo recorrente e as urls de NF/Comprovante mudaram, atualizamos todas as parcelas "irmãs"
-    if (updates.grupo_recorrente && (updates.nota_fiscal_url || updates.comprovante_url)) {
+    // Se tiver um grupo recorrente e a url de anexo mudou
+    if (cleanUpdates.grupo_recorrente && cleanUpdates.anexo_url) {
       const groupUpdates: any = {};
-      if (updates.nota_fiscal_url) groupUpdates.nota_fiscal_url = updates.nota_fiscal_url;
-      if (updates.comprovante_url) groupUpdates.comprovante_url = updates.comprovante_url;
-      await supabase.from('despesas').update(groupUpdates).eq('grupo_recorrente', updates.grupo_recorrente);
+      groupUpdates.anexo_url = cleanUpdates.anexo_url;
+      await supabase.from('despesas').update(groupUpdates).eq('grupo_recorrente', cleanUpdates.grupo_recorrente);
     }
 
     return true;

@@ -73,6 +73,8 @@ async function uploadFile(file: File, empresaId: number, prefix: string): Promis
     const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
     return data.publicUrl;
   }
+  console.error('Upload Error to bucket', BUCKET_NAME, ':', uploadError);
+  alert(`Erro ao fazer upload do anexo: ${uploadError?.message || JSON.stringify(uploadError)}`);
   return '';
 }
 
@@ -117,12 +119,18 @@ export const revenueService = {
        }
     }
 
+    const cleanReceita = { ...Receita };
+    delete cleanReceita.tipo;
+    delete cleanReceita.comprovante_url;
+    delete cleanReceita.nota_fiscal_url;
+    delete cleanReceita.boleto_url;
+
     const revenuesToInsert: Receita[] = [];
 
-    if (Receita.is_recorrente && Receita.periodo_recorrencia && Receita.duracao_meses) {
+    if (cleanReceita.is_recorrente && cleanReceita.periodo_recorrencia && cleanReceita.duracao_meses) {
        const grupoId = generateUUID();
-       const totalOccurrences = calcOccurrences(Receita.periodo_recorrencia, Receita.duracao_meses);
-       let currentDate = new Date(Receita.data_vencimento + 'T12:00:00');
+       const totalOccurrences = calcOccurrences(cleanReceita.periodo_recorrencia, cleanReceita.duracao_meses);
+       let currentDate = new Date(cleanReceita.data_vencimento + 'T12:00:00');
 
        for (let i = 0; i < totalOccurrences; i++) {
           // Lógica de distribuição dos boletos
@@ -134,23 +142,20 @@ export const revenueService = {
           }
 
           revenuesToInsert.push({
-             ...Receita,
+             ...cleanReceita,
              data_vencimento: currentDate.toISOString().split('T')[0],
              grupo_recorrente: grupoId,
-             is_paga: i === 0 ? Receita.is_paga : false,
-             data_pagamento: i === 0 ? Receita.data_pagamento : undefined,
-             forma_pagamento: i === 0 ? Receita.forma_pagamento : undefined,
-             comprovante_url: compUrl || undefined, // Shared on all rows to act as "Parent" file
-             nota_fiscal_url: nfUrl || undefined,   // Shared
-             boleto_url: parcelBoletoUrl,
-             // Remove anexo_url to favor new fields, but keep it if somehow legacy
+             is_paga: i === 0 ? cleanReceita.is_paga : false,
+             data_pagamento: i === 0 ? cleanReceita.data_pagamento : undefined,
+             forma_pagamento: i === 0 ? cleanReceita.forma_pagamento : undefined,
+             anexo_url: compUrl || nfUrl || parcelBoletoUrl || cleanReceita.anexo_url
           });
-          currentDate = addInterval(currentDate, Receita.periodo_recorrencia);
+          currentDate = addInterval(currentDate, cleanReceita.periodo_recorrencia);
        }
     } else {
        revenuesToInsert.push({
-         ...Receita,
-         boleto_url: boletosUrls.length > 0 ? boletosUrls[0] : undefined
+         ...cleanReceita,
+         anexo_url: compUrl || nfUrl || (boletosUrls.length > 0 ? boletosUrls[0] : undefined) || cleanReceita.anexo_url
        });
     }
 
@@ -161,7 +166,7 @@ export const revenueService = {
         
     if (error) {
        console.error("Error saving revenue:", error);
-       return revenuesToInsert.map((d, index) => ({ ...d, id: (Date.now() + index).toString() }));
+       throw error;
     }
 
     return data as Receita[];
@@ -179,28 +184,33 @@ export const revenueService = {
   async updateRevenue(id: string, updates: Partial<Receita>, files?: revenueFiles): Promise<boolean> {
     if (updates.empresa_id) {
        if (files?.notaFiscal) {
-          updates.nota_fiscal_url = await uploadFile(files.notaFiscal, updates.empresa_id, 'nf');
+          updates.anexo_url = await uploadFile(files.notaFiscal, updates.empresa_id, 'nf');
        }
        if (files?.comprovante) {
-          updates.comprovante_url = await uploadFile(files.comprovante, updates.empresa_id, 'comp');
+          updates.anexo_url = await uploadFile(files.comprovante, updates.empresa_id, 'comp');
        }
        if (files?.boletos && files.boletos.length > 0) {
-          updates.boleto_url = await uploadFile(files.boletos[0], updates.empresa_id, 'bol');
+          updates.anexo_url = await uploadFile(files.boletos[0], updates.empresa_id, 'bol');
        }
     }
 
-    const { error } = await supabase.from('receitas').update(updates).eq('id', id);
+    const cleanUpdates = { ...updates };
+    delete cleanUpdates.tipo;
+    delete cleanUpdates.comprovante_url;
+    delete cleanUpdates.nota_fiscal_url;
+    delete cleanUpdates.boleto_url;
+
+    const { error } = await supabase.from('receitas').update(cleanUpdates).eq('id', id);
     if (error) {
        console.error("Error updating revenue", error);
-       return false;
+       throw error;
     }
 
-    // Se tiver um grupo recorrente e as urls de NF/Comprovante mudaram, atualizamos todas as parcelas "irmãs"
-    if (updates.grupo_recorrente && (updates.nota_fiscal_url || updates.comprovante_url)) {
+    // Se tiver um grupo recorrente e a url de anexo mudou
+    if (cleanUpdates.grupo_recorrente && cleanUpdates.anexo_url) {
       const groupUpdates: any = {};
-      if (updates.nota_fiscal_url) groupUpdates.nota_fiscal_url = updates.nota_fiscal_url;
-      if (updates.comprovante_url) groupUpdates.comprovante_url = updates.comprovante_url;
-      await supabase.from('receitas').update(groupUpdates).eq('grupo_recorrente', updates.grupo_recorrente);
+      groupUpdates.anexo_url = cleanUpdates.anexo_url;
+      await supabase.from('receitas').update(groupUpdates).eq('grupo_recorrente', cleanUpdates.grupo_recorrente);
     }
 
     return true;

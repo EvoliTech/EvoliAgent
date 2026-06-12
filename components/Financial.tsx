@@ -50,7 +50,7 @@ export const Financial: React.FC = () => {
   const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
   const [selectedSpecialist, setSelectedSpecialist] = useState<Specialist | null>(null);
   const [showDetails, setShowDetails] = useState<'entradas' | 'saidas' | 'addDespesa' | 'addReceita' | null>(null);
-  const [editingTransaction, setEditingTransaction] = useState<{type: 'despesa' | 'receita', data: DespesaType} | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<{type: 'despesa' | 'receita', data: DespesaType, readOnly?: boolean} | null>(null);
   const [showCommissionsDetail, setShowCommissionsDetail] = useState<string | null>(null);
   const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
   const { empresaId } = useCompany();
@@ -62,6 +62,7 @@ export const Financial: React.FC = () => {
   const [maquininhas, setMaquininhas] = useState<any[]>([]);
   const [companySettings, setCompanySettings] = useState<any>(null);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   useEffect(() => {
     if (empresaId) {
@@ -145,9 +146,9 @@ export const Financial: React.FC = () => {
       setAllReceitas(refreshedR);
       setShowDetails(null);
       setEditingTransaction(null);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao salvar transação.');
+    } catch (err: any) {
+      console.error("Save transaction error:", err);
+      alert(`Erro detalhado ao salvar: ${err?.message || JSON.stringify(err)}`);
     }
   };
 
@@ -1189,7 +1190,7 @@ export const Financial: React.FC = () => {
               </button>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm overflow-x-auto">
+            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm overflow-visible">
               <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-800 border-b border-gray-100 min-w-[700px]">
                 <div className="flex-1 pl-12">Descrição</div>
                 <div className="flex items-center justify-between w-[48%] pl-8">
@@ -1205,7 +1206,7 @@ export const Financial: React.FC = () => {
                 {financialStats.transactions.filter(tx => tx.isPaid).length === 0 ? (
                   <div className="p-8 text-center text-sm text-gray-500">Nenhuma movimentação financeira encontrada.</div>
                 ) : financialStats.transactions.filter(tx => tx.isPaid).map((tx, idx) => (
-                  <div key={tx.id || idx} onClick={() => tx.patientId ? navigate(`/pacientes/${tx.patientId}/pagamentos`) : null} className={`flex items-center justify-between p-4 px-6 border-b border-gray-100 transition-colors group relative overflow-hidden ${tx.isPaid ? (tx.type === 'saida' ? 'bg-red-50/20 hover:bg-red-50/50' : 'bg-[#f6fbf8] hover:bg-[#eaf5ef]') : 'bg-white hover:bg-gray-50'} ${tx.patientId ? 'cursor-pointer' : ''}`}>
+                  <div key={tx.id || idx} onClick={() => tx.patientId ? navigate(`/pacientes/${tx.patientId}/pagamentos`) : null} className={`flex items-center justify-between p-4 px-6 border-b border-gray-100 transition-colors group relative ${tx.isPaid ? (tx.type === 'saida' ? 'bg-red-50/20 hover:bg-red-50/50' : 'bg-[#f6fbf8] hover:bg-[#eaf5ef]') : 'bg-white hover:bg-gray-50'} ${tx.patientId ? 'cursor-pointer' : ''}`}>
                     <div className="flex-1 flex items-start gap-3">
                       {tx.type === 'saida' ? (
                         <ArrowUpRight size={18} strokeWidth={2.5} className="text-red-500 mt-0.5 shrink-0" />
@@ -1249,9 +1250,30 @@ export const Financial: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <button className="w-8 flex justify-end text-gray-400 hover:text-gray-700 pr-1">
-                        <MoreVertical size={18} />
-                      </button>
+                      <div className="relative">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'todas-' + tx.id ? null : 'todas-' + tx.id); }}
+                          className="w-8 flex justify-end text-gray-400 hover:text-gray-700 pr-1"
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+                        {activeMenu === 'todas-' + tx.id && (
+                          <div className="absolute right-4 top-0 mt-8 w-48 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden z-50 py-1">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setActiveMenu(null); setEditingTransaction({ type: tx.type === 'saida' ? 'despesa' : 'receita', data: tx.rawData as any, readOnly: true }); }}
+                              className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            >
+                              <Eye size={15} /> Visualizar detalhes
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteDespesa(tx.id!, tx.type === 'entrada', e); }}
+                              className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 size={15} /> Excluir
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1259,7 +1281,7 @@ export const Financial: React.FC = () => {
             </div>
 
             {/* === DESPESAS (Saídas) === */}
-            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-6 md:mt-8 overflow-x-auto">
+            <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm mt-6 md:mt-8 overflow-visible">
               <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 text-xs font-bold text-gray-800 border-b border-gray-100 min-w-[700px]">
                 <div className="flex-1 pl-12">Despesas</div>
                 <div className="flex items-center justify-between w-[55%] pl-4">
@@ -1299,7 +1321,30 @@ export const Financial: React.FC = () => {
                               </button>
                             )}
                           </div>
-                          <button onClick={(e) => handleDeleteDespesa(d.id!, d.tipoOrigem === 'receita', e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir"><Trash2 size={16} /></button>
+                          <div className="relative">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'despesas-' + d.id ? null : 'despesas-' + d.id); }}
+                              className="w-8 flex justify-end text-gray-400 hover:text-gray-700 transition-colors pr-1"
+                            >
+                              <MoreVertical size={18} />
+                            </button>
+                            {activeMenu === 'despesas-' + d.id && (
+                              <div className="absolute right-4 top-0 mt-8 w-48 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden z-50 py-1">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setActiveMenu(null); setEditingTransaction({ type: d.tipoOrigem === 'receita' ? 'receita' : 'despesa', data: d, readOnly: true }); }}
+                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <Eye size={15} /> Visualizar detalhes
+                                </button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteDespesa(d.id!, d.tipoOrigem === 'receita', e); }}
+                                  className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                  <Trash2 size={15} /> Excluir
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1384,7 +1429,30 @@ export const Financial: React.FC = () => {
                                   </button>
                                 )}
                               </div>
-                              <button onClick={(e) => handleDeleteDespesa(d.id!, e)} className="w-8 flex justify-end text-gray-400 hover:text-red-500 transition-colors pr-1" title="Excluir parcela"><Trash2 size={14} /></button>
+                              <div className="relative">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === 'parcela-' + d.id ? null : 'parcela-' + d.id); }}
+                                  className="w-8 flex justify-end text-gray-400 hover:text-gray-700 transition-colors pr-1"
+                                >
+                                  <MoreVertical size={16} />
+                                </button>
+                                {activeMenu === 'parcela-' + d.id && (
+                                  <div className="absolute right-4 top-0 mt-8 w-48 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden z-50 py-1">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setActiveMenu(null); setEditingTransaction({ type: d.tipoOrigem === 'receita' ? 'receita' : 'despesa', data: d, readOnly: true }); }}
+                                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                      <Eye size={15} /> Visualizar detalhes
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteDespesa(d.id!, d.tipoOrigem === 'receita', e); }}
+                                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                    >
+                                      <Trash2 size={15} /> Excluir parcela
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -1824,21 +1892,12 @@ export const Financial: React.FC = () => {
           <AddDespesaModal
             type={editingTransaction ? editingTransaction.type : (showDetails === 'addReceita' ? 'receita' : 'despesa')}
             initialData={editingTransaction ? editingTransaction.data : undefined}
+            isReadOnly={editingTransaction?.readOnly}
             onClose={() => {
               setShowDetails(null);
               setEditingTransaction(null);
             }}
-            onSave={async (data) => {
-              if (data.tipo === 'receita') {
-                await revenueService.createRevenue(data as any, null);
-                revenueService.fetchRevenues(empresaId!).then(setAllReceitas);
-              } else {
-                await expenseService.createExpense(data as any, null);
-                expenseService.fetchExpenses(empresaId!).then((d) => setAllDespesas(d as DespesaType[]));
-              }
-              setShowDetails(null);
-              setEditingTransaction(null);
-            }}
+            onSave={handleSaveTransaction}
           />
         )}
 
