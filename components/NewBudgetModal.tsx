@@ -32,7 +32,6 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [valor, setValor] = useState('');
   const [denteId, setDenteId] = useState('');
   const [faces, setFaces] = useState('');
-  const [multiplicarPorDente, setMultiplicarPorDente] = useState(false);
   const [observacoes, setObservacoes] = useState('');
   const [isHarmonizacao, setIsHarmonizacao] = useState(false);
 
@@ -472,13 +471,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
-                  <div className={`w-10 h-5 rounded-full shadow-inner transition-colors flex items-center relative ${multiplicarPorDente ? 'bg-blue-600' : 'bg-gray-300'}`} onClick={() => setMultiplicarPorDente(!multiplicarPorDente)}>
-                    <div className={`w-4 h-4 rounded-full bg-white shadow-sm absolute top-0.5 transition-all ${multiplicarPorDente ? 'left-5' : 'left-0.5'}`} />
-                  </div>
-                  Multiplicar valor por dente
-                </label>
+              <div className="flex items-center justify-end pt-2">
                 <button
                   onClick={handleAddTreatment}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm shadow-md transition-all"
