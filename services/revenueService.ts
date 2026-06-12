@@ -301,6 +301,12 @@ export const revenueService = {
     } else if (p.method === 'Boleto') {
         installments = p.installments || 1;
         isPaga = p.status === 'Pago' || p.isPaid === true;
+        if (isPaga) {
+             const { data: comp } = await supabase.from('Empresa').select('configuracoes').eq('id', empresaId).single();
+             if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {
+                 netReceived -= Number(comp.configuracoes.taxaBoleto);
+             }
+        }
     }
 
     const isFuture = dueDate.getTime() > new Date().getTime() || (!isPaga && p.method === 'Boleto');

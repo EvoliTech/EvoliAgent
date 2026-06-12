@@ -60,6 +60,7 @@ export const Financial: React.FC = () => {
   const [allReceitas, setAllReceitas] = useState<any[]>([]);
   const [allBudgets, setAllBudgets] = useState<any[]>([]);
   const [maquininhas, setMaquininhas] = useState<any[]>([]);
+  const [companySettings, setCompanySettings] = useState<any>(null);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,6 +87,9 @@ export const Financial: React.FC = () => {
 
       supabase.from('maquininhas').select('*').eq('empresa_id', empresaId)
         .then(({ data, error }) => { if (error) console.error(error); else setMaquininhas(data || []); });
+
+      supabase.from('Empresa').select('*').eq('id', empresaId).single()
+        .then(({ data }) => setCompanySettings(data));
     }
   }, [empresaId]);
 
@@ -382,6 +386,34 @@ export const Financial: React.FC = () => {
             const patientPaid = parseFloat(p.amount) || 0;
             paidOnTrt += patientPaid;
             
+            const pDate = p.date || p.receiveDate || new Date().toISOString();
+            if (isDateInFilter(pDate)) {
+               let netReceived = p.planAmount !== undefined && p.planAmount !== null && p.planAmount !== '' ? parseFloat(p.planAmount) : patientPaid;
+               const maq = maquininhas.find(m => m.id === p.maquininha_id);
+               if (p.method === 'Pix') {
+                   if (maq && maq.pix_fee) {
+                       netReceived -= netReceived * (Number(maq.pix_fee) / 100);
+                   }
+               } else if (p.method === 'Débito') {
+                   if (maq && maq.debito_fee) {
+                       netReceived -= netReceived * (Number(maq.debito_fee) / 100);
+                   }
+               } else if (p.method === 'Crédito') {
+                   let installments = p.installments || 1;
+                   if (maq && maq.credito_fees) {
+                       let fee = 0;
+                       if (installments === 1 && maq.credito_fees.length > 0) fee = Number(maq.credito_fees[0]);
+                       else if (maq.credito_fees.length >= installments) fee = Number(maq.credito_fees[installments - 1]);
+                       netReceived -= netReceived * (fee / 100);
+                   }
+               } else if (p.method === 'Boleto' && (p.isPaid === true || p.status === 'Pago')) {
+                   const boletoFee = Number(companySettings?.configuracoes?.taxaBoleto) || 0;
+                   netReceived -= boletoFee;
+               }
+               const diff = patientPaid - netReceived;
+               if (diff > 0) planTaxesTotal += diff;
+            }
+            
             // Calculate apos_pagamento commission
             if (rule && rule.quandoRecebe === 'apos_pagamento') {
               let valComissao = 0;
@@ -569,7 +601,7 @@ export const Financial: React.FC = () => {
       inadimplenciaAmount, inadimplenciaCount: patientsInad.size,
       topTreatments, methodsData, planTaxesTotal, comissoesTotal, comissoesList
     };
-  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, receitas, maquininhas]);
+  }, [allBudgets, commissionedSpecialists, specialists, filterMonth, filterYear, despesas, receitas, maquininhas, companySettings]);
 
   const handleSaveRules = async (specialistId: string, rules: CommissionRule[]) => {
     // Optimistic UI Update

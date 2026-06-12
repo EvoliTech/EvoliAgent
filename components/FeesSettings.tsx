@@ -3,6 +3,7 @@ import { ArrowLeft, Save, Plus, X, CreditCard, Info, Calculator, QrCode, Edit2 }
 import { PageType } from '../types';
 import { supabase } from '../lib/supabase';
 import { useCompany } from '../contexts/CompanyContext';
+import { companyService, CompanySettings } from '../services/companyService';
 
 interface FeesSettingsProps {
     onNavigate: (page: PageType) => void;
@@ -36,6 +37,9 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingMachine, setEditingMachine] = useState<Partial<Machine>>(DEFAULT_MACHINE);
     const [isLoading, setIsLoading] = useState(true);
+    const [company, setCompany] = useState<CompanySettings | null>(null);
+    const [boletoFeeStr, setBoletoFeeStr] = useState<string>('0,00');
+    const [isSavingBoleto, setIsSavingBoleto] = useState(false);
     const { empresaId } = useCompany();
 
     const fetchMachines = async () => {
@@ -74,6 +78,15 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
 
     useEffect(() => {
         fetchMachines();
+        if (empresaId) {
+            companyService.fetchCompany(empresaId).then(data => {
+                if (data) {
+                    setCompany(data);
+                    const fee = data.configuracoes?.taxaBoleto || 0;
+                    setBoletoFeeStr(fee.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }
+            }).catch(console.error);
+        }
     }, [empresaId]);
 
     const handleSaveMachines = (newMachines: Machine[]) => {
@@ -167,6 +180,23 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
         }
     };
 
+    const handleSaveBoletoFee = async () => {
+        if (!company || !empresaId) return;
+        setIsSavingBoleto(true);
+        try {
+            const num = parseFloat(boletoFeeStr.replace(/\./g, '').replace(',', '.'));
+            const newConfig = { ...(company.configuracoes || {}), taxaBoleto: num };
+            await companyService.updateCompany(empresaId, { configuracoes: newConfig });
+            setCompany({ ...company, configuracoes: newConfig });
+            alert('Taxa de boleto salva com sucesso!');
+        } catch (e) {
+            console.error(e);
+            alert('Erro ao salvar taxa de boleto.');
+        } finally {
+            setIsSavingBoleto(false);
+        }
+    };
+
     return (
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between mb-8">
@@ -185,6 +215,37 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                 >
                     Adicionar máquina
                 </button>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6 p-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-800">Taxa Fixa de Boleto</h2>
+                        <p className="text-sm text-slate-500">Esta taxa só será deduzida quando o pagamento do boleto for confirmado.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">R$</span>
+                            <input
+                                type="text"
+                                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg w-32 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
+                                value={boletoFeeStr}
+                                onChange={(e) => {
+                                    const digits = e.target.value.replace(/\D/g, '');
+                                    const num = parseInt(digits || '0', 10) / 100;
+                                    setBoletoFeeStr(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                                }}
+                            />
+                        </div>
+                        <button
+                            onClick={handleSaveBoletoFee}
+                            disabled={isSavingBoleto}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+                        >
+                            {isSavingBoleto ? 'Salvando...' : 'Salvar'}
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 min-h-[60vh] flex flex-col p-6">
