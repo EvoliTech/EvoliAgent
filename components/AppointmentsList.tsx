@@ -22,6 +22,7 @@ import { useCompany } from '../contexts/CompanyContext';
 import { userService } from '../services/userService';
 import { specialistService } from '../services/specialistService';
 import { googleCalendarService, GoogleEvent } from '../services/googleCalendarService';
+import { supabase } from '../lib/supabase';
 import { Specialist, Patient } from '../types';
 import { patientService } from '../services/patientService';
 import { useNavigate } from 'react-router-dom';
@@ -118,29 +119,63 @@ export const AppointmentsList: React.FC = () => {
                 });
 
             const results = await Promise.all(promises);
-            const allEvents = results.flat().sort((a, b) => {
+            const apiEvents = results.flat();
+
+            // Buscar agendamentos locais para garantir que nenhum falte (caso Google falhe ou use UUID)
+            const { data: dbAgendamentos } = await supabase
+                .from('agendamentos')
+                .select('*')
+                .eq('IDEmpresa', empresaId)
+                .gte('data_inicio', start.toISOString())
+                .lte('data_fim', end.toISOString());
+
+            let dbEvents = dbAgendamentos || [];
+
+            // Filtrar dbEvents se um especialista específico estiver selecionado
+            if (selectedSpecialistId !== 'all') {
+                const spec = specialists.find(s => s.id === selectedSpecialistId || s.calendarId === selectedSpecialistId);
+                if (spec) {
+                    dbEvents = dbEvents.filter(a => a.especialista_id === spec.id || a.calendar_id === spec.calendarId);
+                } else {
+                    dbEvents = [];
+                }
+            }
+
+            const dbGoogleEvents: GoogleEvent[] = dbEvents.map(a => ({
+                id: a.google_event_id,
+                summary: a.titulo || '',
+                start: { dateTime: a.data_inicio },
+                end: { dateTime: a.data_fim },
+                calendarId: a.calendar_id || a.especialista_id,
+                status: a.status || 'confirmed',
+                description: '',
+            }));
+
+            // Mesclar evitando duplicatas (preferir API Google se existir)
+            const allEvents = [...apiEvents];
+            const apiEventIds = new Set(apiEvents.map(e => e.id));
+            
+            for (const dbEv of dbGoogleEvents) {
+                if (dbEv.id && !apiEventIds.has(dbEv.id)) {
+                    allEvents.push(dbEv);
+                }
+            }
+
+            // Ordenar por horário
+            allEvents.sort((a, b) => {
                 const timeA = new Date(a.start.dateTime || a.start.date || 0).getTime();
                 const timeB = new Date(b.start.dateTime || b.start.date || 0).getTime();
                 return timeA - timeB;
             });
 
-            // Buscar mapeamento de cliente_id no banco para os eventos retornados
-            const eventIds = allEvents.map(e => e.id).filter(Boolean);
-            if (eventIds.length > 0) {
-                const { data: dbAgendamentos } = await supabase
-                    .from('agendamentos')
-                    .select('google_event_id, cliente_id')
-                    .in('google_event_id', eventIds)
-                    .eq('IDEmpresa', empresaId);
-
-                if (dbAgendamentos && dbAgendamentos.length > 0) {
-                    const idMap = new Map(dbAgendamentos.map(a => [a.google_event_id, a.cliente_id]));
-                    allEvents.forEach(ev => {
-                        if (ev.id && idMap.has(ev.id)) {
-                            (ev as any).cliente_id = idMap.get(ev.id);
-                        }
-                    });
-                }
+            // Mapear cliente_id do banco para os eventos retornados
+            if (dbEvents.length > 0) {
+                const idMap = new Map(dbEvents.map(a => [a.google_event_id, a.cliente_id]));
+                allEvents.forEach(ev => {
+                    if (ev.id && idMap.has(ev.id)) {
+                        (ev as any).cliente_id = idMap.get(ev.id);
+                    }
+                });
             }
 
             setEvents(allEvents);
