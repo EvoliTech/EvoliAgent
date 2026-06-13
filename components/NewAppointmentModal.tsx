@@ -338,7 +338,7 @@ Obs: ${observations || '-'}`,
             // If the user has multiple calendars, I should allow selecting one.
 
             // If editing, preserve ID
-            const payload = { ...eventData, calendarId: selectedCalendarId, cliente_id: finalPhone };
+            const payload = { ...eventData, calendarId: selectedCalendarId, cliente_id: patientId ? String(patientId) : finalPhone };
             if (initialData?.id) {
                 (payload as any).id = initialData.id;
             }

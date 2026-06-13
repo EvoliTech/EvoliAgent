@@ -145,7 +145,7 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
                 start: { dateTime: startDate.toISOString() },
                 end: { dateTime: endDate.toISOString() },
                 calendarId: data.professional.calendarId || data.professional.id,
-                cliente_id: finalPhone,
+                cliente_id: data.patient?.id ? String(data.patient.id) : finalPhone,
             };
 
             await onSave(payload);
