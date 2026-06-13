@@ -109,7 +109,22 @@ export const googleCalendarService = {
         IDEmpresa: empresaId
     };
 
-    if (cliente_id) payload.cliente_id = cliente_id;
+    let resolvedClienteId = cliente_id;
+    if (resolvedClienteId && typeof resolvedClienteId === 'string' && resolvedClienteId.length >= 10) {
+        // Tenta buscar o cliente pelo telefone
+        const { data: clientData } = await supabase
+            .from('Cliente')
+            .select('id')
+            .eq('telefoneWhatsapp', resolvedClienteId)
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (clientData) {
+            resolvedClienteId = String(clientData.id);
+        }
+    }
+
+    if (resolvedClienteId) payload.cliente_id = resolvedClienteId;
 
     let { error: supabaseError } = await supabase
       .from('agendamentos')
@@ -157,7 +172,22 @@ export const googleCalendarService = {
         updated_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1)
     };
 
-    if (cliente_id !== undefined) updatePayload.cliente_id = cliente_id;
+    let resolvedClienteId = cliente_id;
+    if (resolvedClienteId && typeof resolvedClienteId === 'string' && resolvedClienteId.length >= 10) {
+        // Tenta buscar o cliente pelo telefone
+        const { data: clientData } = await supabase
+            .from('Cliente')
+            .select('id')
+            .eq('telefoneWhatsapp', resolvedClienteId)
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (clientData) {
+            resolvedClienteId = String(clientData.id);
+        }
+    }
+
+    if (resolvedClienteId !== undefined) updatePayload.cliente_id = resolvedClienteId;
 
     let { error: supabaseError } = await supabase
       .from('agendamentos')
