@@ -15,7 +15,7 @@ export const budgetService = {
   async fetchBudgets(empresaId: number, pacienteId: number): Promise<Budget[]> {
     const { data, error } = await supabase
       .from('orcamentos')
-      .select('*, orcamento_itens(*)')
+      .select('*, orcamento_itens(*, orcamento_item_pagamentos(*))')
       .eq('empresa_id', empresaId)
       .eq('paciente_id', pacienteId)
       .order('created_at', { ascending: false });
@@ -32,7 +32,7 @@ export const budgetService = {
       .from('orcamentos')
       .select(`
         *,
-        orcamento_itens(*),
+        orcamento_itens(*, orcamento_item_pagamentos(*)),
         paciente:Cliente (
           id, nome, nome_completo, cpf
         )
@@ -57,8 +57,7 @@ export const budgetService = {
       nome: budget.name,
       data_orcamento: budget.date,
       total: budget.total,
-      status: budget.status,
-      tratamentos: budget.treatments
+      status: budget.status
     };
 
     // Verificamos se o ID indica um orçamento recém-criado na interface que ainda não foi salvo no banco
@@ -111,10 +110,39 @@ export const budgetService = {
         profissional: t.profissional || null,
         convenio: t.convenio || null,
         status: t.status || 'Aguardando',
-        observacoes: t.observacoes || null
+        observacoes: t.observacoes || null,
+        payment_status: t.paymentStatus || null,
+        payment_cancellation_reason: t.paymentCancellationReason || null
       }));
 
       const { data: insertedItems, error: insertError } = await supabase.from('orcamento_itens').insert(itemsPayload).select();
+      
+      // Separar e salvar os pagamentos na terceira tabela
+      const paymentsPayload: any[] = [];
+      budget.treatments.forEach((t: any, index: number) => {
+        const itemId = itemsPayload[index].id;
+        if (t.payments && Array.isArray(t.payments)) {
+          t.payments.forEach((p: any) => {
+            paymentsPayload.push({
+              orcamento_item_id: itemId,
+              date: p.date,
+              amount: p.amount ? Number(p.amount) : 0,
+              method: p.method || null,
+              installments: p.installments ? Number(p.installments) : 1,
+              observations: p.observations || null
+            });
+          });
+        }
+      });
+
+      if (paymentsPayload.length > 0) {
+        const { error: paymentError } = await supabase.from('orcamento_item_pagamentos').insert(paymentsPayload);
+        if (paymentError) {
+          console.error('Erro ao inserir pagamentos na terceira tabela:', paymentError);
+          alert('Atenção: Ocorreu um erro ao salvar os pagamentos no banco de dados. Veja o console.');
+        }
+      }
+      
       if (insertError) {
         console.error('Error inserting budget items:', insertError);
         savedBudget.orcamento_itens = itemsPayload;
@@ -157,10 +185,11 @@ export const budgetService = {
   },
 
   mapToBudget(dbBudget: any): Budget {
-    let treatments = dbBudget.tratamentos || [];
+    let treatments: any[] = [];
     
     if (dbBudget.orcamento_itens && Array.isArray(dbBudget.orcamento_itens) && dbBudget.orcamento_itens.length > 0) {
       treatments = dbBudget.orcamento_itens.map((item: any) => {
+        // Fallback para ler do jsonb antigo caso o item ainda não tenha sido migrado no banco
         const jsonTreatment = (dbBudget.tratamentos || []).find((t: any) => t.id === item.id) || {};
         return {
           id: item.id,
@@ -173,11 +202,14 @@ export const budgetService = {
           convenio: item.convenio,
           status: item.status,
           observacoes: item.observacoes,
-          payments: jsonTreatment.payments || [],
-          paymentStatus: jsonTreatment.paymentStatus || null,
-          paymentCancellationReason: jsonTreatment.paymentCancellationReason || null
+          payments: item.orcamento_item_pagamentos || item.payments || jsonTreatment.payments || [],
+          paymentStatus: item.payment_status || item.paymentStatus || jsonTreatment.paymentStatus || null,
+          paymentCancellationReason: item.payment_cancellation_reason || item.paymentCancellationReason || jsonTreatment.paymentCancellationReason || null
         };
       });
+    } else if (dbBudget.tratamentos && Array.isArray(dbBudget.tratamentos)) {
+      // Fallback para caso existam orçamentos antigos que não tenham orcamento_itens
+      treatments = dbBudget.tratamentos;
     }
 
     return {
