@@ -178,7 +178,7 @@ export const Financial: React.FC = () => {
       const b = allBudgets.find(b => b.id === com.budgetId);
       if (b) {
         let updated = false;
-        (b.tratamentos || []).forEach((t: any) => {
+        (b.tratamentos || b.treatments || []).forEach((t: any) => {
           if (t.id === com.treatmentId || t.treatmentName === com.treatmentName || t.tratamento === com.treatmentName) {
             if (com.paymentId) {
               const p = t.payments?.find((pay: any) => pay.id === com.paymentId);
@@ -227,11 +227,27 @@ export const Financial: React.FC = () => {
     expenseService.fetchExpenses(empresaId).then((data) => setAllDespesas(data as DespesaType[])).catch(console.error);
   };
 
+  const parseDateStr = (dateStr?: string) => {
+    if (!dateStr) return null;
+    let parsedStr = dateStr;
+    if (typeof dateStr === 'string' && dateStr.includes('/') && dateStr.split('/')[0].length === 2) {
+      const parts = dateStr.split(' ')[0].split('/');
+      if (parts.length === 3) parsedStr = `${parts[2]}-${parts[1]}-${parts[0]}T12:00:00`;
+    } else if (typeof dateStr === 'string' && !dateStr.includes('T')) {
+      if (dateStr.length <= 10) {
+        parsedStr = dateStr + 'T12:00:00';
+      } else {
+        parsedStr = dateStr.replace(' ', 'T');
+      }
+    }
+    const d = new Date(parsedStr);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   const isDateInFilter = (dateStr?: string) => {
     if (filterMonth === 'all') return true;
-    if (!dateStr) return false;
-    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00');
-    if (isNaN(d.getTime())) return false;
+    const d = parseDateStr(dateStr);
+    if (!d) return false;
     return (d.getMonth() + 1).toString() === filterMonth && d.getFullYear().toString() === filterYear;
   };
 
@@ -263,9 +279,8 @@ export const Financial: React.FC = () => {
     const items: any[] = [];
 
     const isDateInFaturamentoFilter = (dateStr?: string) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T12:00:00');
-      if (isNaN(d.getTime())) return false;
+      const d = parseDateStr(dateStr);
+      if (!d) return false;
       const now = new Date();
       if (faturamentoPeriod === 'dia') {
         return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -277,12 +292,13 @@ export const Financial: React.FC = () => {
     // 1. Vendas de Tratamentos (Bruto)
     allBudgets.forEach(b => {
       if (b.status !== 'Aprovado') return;
-      (b.tratamentos || []).forEach((t: any) => {
+      (b.tratamentos || b.treatments || []).forEach((t: any) => {
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
             if (!p) return;
+            const saleDate = b.data_orcamento || b.date || b.created_at || new Date().toISOString();
             const pDate = p.date || p.receiveDate || new Date().toISOString();
-            if (isDateInFaturamentoFilter(pDate)) {
+            if (isDateInFaturamentoFilter(saleDate)) {
               const amount = parseFloat(p.amount) || 0;
               let netReceived = p.planAmount !== undefined && p.planAmount !== null && p.planAmount !== '' ? parseFloat(p.planAmount) : amount;
               const maq = maquininhas.find((m: any) => m.id === p.maquininha_id);
@@ -329,7 +345,8 @@ export const Financial: React.FC = () => {
 
     // 2. Entradas Manuais (exclui Tratamentos já contados acima)
     allReceitas.forEach(r => {
-      if (r.categoria === 'Tratamentos') return;
+      const isFromTreatment = !!(r.orcamento_id || r.tratamento_id || r.payment_id);
+      if (r.categoria === 'Tratamentos' || isFromTreatment) return;
       const rDate = r.created_at || r.data_pagamento || r.data_vencimento || new Date().toISOString();
       if (isDateInFaturamentoFilter(rDate)) {
         const amount = Number(r.valor) || 0;
@@ -469,7 +486,7 @@ export const Financial: React.FC = () => {
       if (b.status !== 'Aprovado') return;
       const pacId = b.paciente?.id || b.paciente_id || '';
 
-      (b.tratamentos || []).forEach((t: any) => {
+      (b.tratamentos || b.treatments || []).forEach((t: any) => {
         const trtName = t.treatmentName || t.tratamento || 'Outro';
         const convenioName = t.convenio || 'Particular';
         const itemVal = parseFloat(t.valor || 0);
@@ -488,6 +505,7 @@ export const Financial: React.FC = () => {
         if (t.payments && t.payments.length > 0) {
           t.payments.forEach((p: any) => {
             if (!p) return;
+            if (p.method === 'Boleto' && p.status !== 'Pago' && !p.isPaid) return; // Ignore unpaid boletos
             const patientPaid = parseFloat(p.amount) || 0;
             paidOnTrt += patientPaid;
             
@@ -554,13 +572,13 @@ export const Financial: React.FC = () => {
 
         const remaining = Math.max(0, itemVal - paidOnTrt);
 
-        if (remaining > 0 && (t.status === 'Em andamento' || t.status === 'Finalizado')) {
-          const pendDate = b.date || b.created_at || new Date().toISOString();
+        if (remaining > 0 && (t.status === 'Em andamento' || t.status === 'Finalizado' || t.status === 'Concluído')) {
+          const pendDate = b.data_orcamento || b.date || b.created_at || new Date().toISOString();
           if (isDateInFilter(pendDate)) {
             pendingTotal += remaining;
 
             // Consider inadimplente if treatment is finalized but not paid, or older than 30 days
-            if (t.status === 'Finalizado' || (b.date && new Date(b.date).getTime() < new Date().getTime() - 1000 * 60 * 60 * 24 * 30)) {
+            if (t.status === 'Finalizado' || t.status === 'Concluído' || ((b.data_orcamento || b.date) && (() => { const pd = parseDateStr(b.data_orcamento || b.date); return pd ? pd.getTime() < new Date().getTime() - 1000 * 60 * 60 * 24 * 30 : false; })())) {
               inadimplenciaAmount += remaining;
               if (pacId) patientsInad.add(pacId);
             }
@@ -570,7 +588,7 @@ export const Financial: React.FC = () => {
               treatmentName: trtName,
               patientName: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
               cpf: b.paciente?.cpf || '',
-              date: b.date || b.created_at,
+              date: b.data_orcamento || b.date || b.created_at,
               amount: remaining,
               originalAmount: remaining,
               planFee: 0,
@@ -582,7 +600,7 @@ export const Financial: React.FC = () => {
         }
 
         // Treatments sum
-        if (itemVal > 0 && isDateInFilter(b.date || b.created_at)) {
+        if (itemVal > 0 && isDateInFilter(b.data_orcamento || b.date || b.created_at)) {
           if (!treatmentsSummary[trtName]) {
             treatmentsSummary[trtName] = { count: 0, amount: 0 };
           }
@@ -628,26 +646,33 @@ export const Financial: React.FC = () => {
 
     receitas.forEach(r => {
       const netReceived = r.valor;
+      const isFromTreatment = !!(r.orcamento_id || r.tratamento_id || r.payment_id);
+
       if (r.is_paga) {
         paidTotal += netReceived;
       } else {
-        pendingTotal += netReceived;
+        if (!isFromTreatment) {
+          pendingTotal += netReceived;
+        }
       }
-      transactions.push({
-        id: r.id || ('rec_' + Math.random()),
-        treatmentName: r.titulo,
-        patientName: 'Receita (' + (r.categoria || 'Outros') + ')',
-        cpf: '',
-        date: r.data_pagamento || r.data_vencimento,
-        amount: r.valor,
-        originalAmount: r.valor,
-        planFee: 0,
-        isPaid: r.is_paga,
-        type: r.is_paga ? 'entrada' : 'pendente',
-        isManualRevenue: true,
-        patientId: r.cliente_id,
-        rawData: { ...r, tipo: 'receita' } // Keep reference for editing and identify as receita
-      });
+
+      if (r.is_paga || !isFromTreatment) {
+        transactions.push({
+          id: r.id || ('rec_' + Math.random()),
+          treatmentName: r.titulo,
+          patientName: 'Receita (' + (r.categoria || 'Outros') + ')',
+          cpf: '',
+          date: r.data_pagamento || r.data_vencimento,
+          amount: r.valor,
+          originalAmount: r.valor,
+          planFee: 0,
+          isPaid: r.is_paga,
+          type: r.is_paga ? 'entrada' : 'pendente',
+          isManualRevenue: true,
+          patientId: r.cliente_id,
+          rawData: { ...r, tipo: 'receita' } // Keep reference for editing and identify as receita
+        });
+      }
     });
 
     despesas.forEach(d => {
@@ -717,13 +742,15 @@ export const Financial: React.FC = () => {
     hoje.setHours(0, 0, 0, 0);
 
     allBudgets.forEach(b => {
-      if (!b.tratamentos) return;
-      b.tratamentos.forEach((t: any) => {
+      const treatments = b.tratamentos || b.treatments;
+      if (!treatments) return;
+      treatments.forEach((t: any) => {
         if (!t.payments) return;
         t.payments.forEach((p: any) => {
           if (p.method === 'Boleto') {
             const dateStr = p.date || p.receiveDate || new Date().toISOString();
-            const pDate = new Date(dateStr.includes('T') ? dateStr.split('T')[0] : dateStr);
+            const parsedD = parseDateStr(dateStr) || new Date();
+            const pDate = new Date(parsedD);
             pDate.setHours(0,0,0,0);
             
             const boletoObj = {
@@ -1897,7 +1924,7 @@ export const Financial: React.FC = () => {
                             )}
                           </div>
                           <p className="text-[11px] font-medium text-gray-400 mt-0.5">
-                            {t.isPaid ? 'Recebido' : 'A receber em: '} {new Date(t.date.includes('T') ? t.date : t.date + 'T12:00:00').toLocaleDateString()}
+                            {t.isPaid ? 'Recebido' : 'A receber em: '} {parseDateStr(t.date)?.toLocaleDateString() || new Date(t.date).toLocaleDateString()}
                           </p>
                         </div>
                       </div>

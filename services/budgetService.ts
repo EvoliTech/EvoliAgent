@@ -57,7 +57,8 @@ export const budgetService = {
       nome: budget.name,
       data_orcamento: budget.date,
       total: budget.total,
-      status: budget.status
+      status: budget.status,
+      tratamentos: budget.treatments
     };
 
     // Verificamos se o ID indica um orçamento recém-criado na interface que ainda não foi salvo no banco
@@ -202,9 +203,9 @@ export const budgetService = {
           convenio: item.convenio,
           status: item.status,
           observacoes: item.observacoes,
-          payments: item.orcamento_item_pagamentos || item.payments || jsonTreatment.payments || [],
-          paymentStatus: item.payment_status || item.paymentStatus || jsonTreatment.paymentStatus || null,
-          paymentCancellationReason: item.payment_cancellation_reason || item.paymentCancellationReason || jsonTreatment.paymentCancellationReason || null
+          payments: (jsonTreatment.payments && jsonTreatment.payments.length > 0 ? jsonTreatment.payments : null) || item.orcamento_item_pagamentos || item.payments || [],
+          paymentStatus: jsonTreatment.paymentStatus || item.payment_status || item.paymentStatus || null,
+          paymentCancellationReason: jsonTreatment.paymentCancellationReason || item.payment_cancellation_reason || item.paymentCancellationReason || null
         };
       });
     } else if (dbBudget.tratamentos && Array.isArray(dbBudget.tratamentos)) {
