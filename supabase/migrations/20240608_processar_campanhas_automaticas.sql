@@ -31,10 +31,9 @@ BEGIN
         JOIN public."Empresa" e ON e.id::text = cl."IDEmpresa"::text
         WHERE cc.status = 'pendente' 
           AND c.status = 'active'
-          AND c.type NOT IN ('aniversario', 'aniversariantes')
     LOOP
         -- Prevenção de Spam
-        IF EXISTS (SELECT 1 FROM public.campaign_logs WHERE campaign_id = r.campaign_id AND cliente_id::text = r.cliente_id::text) THEN
+        IF r.type NOT IN ('aniversario', 'aniversariantes') AND EXISTS (SELECT 1 FROM public.campaign_logs WHERE campaign_id = r.campaign_id AND cliente_id::text = r.cliente_id::text) THEN
             UPDATE public.campaign_contacts SET status = 'bloqueado_spam' WHERE id = r.contact_id;
             CONTINUE;
         END IF;

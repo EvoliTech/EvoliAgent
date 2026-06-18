@@ -311,6 +311,7 @@ const [loading, setLoading] = useState(false);
    };
 
    const isPending = (patientId: string, currentCampaignId: string) => {
+      if (activeTab === 'aniversariantes') return false;
       return isGloballyContacted48h(patientId, currentCampaignId) || isInAnotherUnsentCampaign(patientId, currentCampaignId);
    };
 
@@ -529,6 +530,11 @@ const [loading, setLoading] = useState(false);
                                  {patient.birthdayType === 'hoje' && !isPending(patient.id, currentCampId) && (
                                     <div className="absolute -top-3 -right-3 bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5 animate-pulse">
                                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Hoje!
+                                    </div>
+                                 )}
+                                 {patient.birthdayType === 'amanha' && !isPending(patient.id, currentCampId) && (
+                                    <div className="absolute -top-3 -right-3 bg-blue-100 text-blue-700 border border-blue-200 font-bold text-[10px] uppercase tracking-wider px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+                                       <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>Amanhã!
                                     </div>
                                  )}
 
