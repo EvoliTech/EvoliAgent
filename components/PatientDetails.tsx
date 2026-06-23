@@ -276,9 +276,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
       if (appts) {
         const cleanPhone = patient.phone ? patient.phone.replace(/\D/g, '') : null;
         const filteredAppts = appts.filter(a => {
-          const matchedId = String(a.cliente_id) === String(patientIdNum);
-          const matchedPhone = cleanPhone && String(a.cliente_id) === cleanPhone;
-          const matchesTitle = a.titulo && a.titulo.toLowerCase().includes(patient.name.toLowerCase());
+          const matchedId = a.cliente_id != null && String(a.cliente_id) === String(patientIdNum);
+          const matchedPhone = cleanPhone && a.cliente_id != null && String(a.cliente_id) === cleanPhone;
+          const matchesTitle = !a.cliente_id && a.titulo && a.titulo.toLowerCase().includes(patient.name.toLowerCase());
           return matchedId || matchedPhone || matchesTitle;
         });
         setAppointmentHistory(filteredAppts);
