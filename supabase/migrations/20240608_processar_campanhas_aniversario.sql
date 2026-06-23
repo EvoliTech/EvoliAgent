@@ -11,9 +11,9 @@ BEGIN
             c.id AS campaign_id
         FROM public."Cliente" cl
         JOIN public.campaigns c ON c.empresa_id::text = cl."IDEmpresa"::text AND c.type IN ('aniversario', 'aniversariantes') AND c.status = 'active'
-        WHERE cl."dataNascimento" IS NOT NULL
-          AND EXTRACT(MONTH FROM cl."dataNascimento"::date) = EXTRACT(MONTH FROM NOW())
-          AND EXTRACT(DAY FROM cl."dataNascimento"::date) = EXTRACT(DAY FROM NOW())
+        WHERE cl.data_nascimento IS NOT NULL
+          AND EXTRACT(MONTH FROM cl.data_nascimento::date) = EXTRACT(MONTH FROM NOW())
+          AND EXTRACT(DAY FROM cl.data_nascimento::date) = EXTRACT(DAY FROM NOW())
     LOOP
         -- Prevenção de Spam / Duplicidade
         IF EXISTS (

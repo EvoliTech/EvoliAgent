@@ -96,13 +96,27 @@ export const googleCalendarService = {
       throw new Error(googleError?.message || googleData?.error);
     }
 
+    let realEspecialistaId = calendarId;
+    if (calendarId && calendarId !== 'primary') {
+        const { data: specData } = await supabase
+            .from('especialistas')
+            .select('id')
+            .eq('calendar_id', calendarId)
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (specData) {
+            realEspecialistaId = specData.id;
+        }
+    }
+
     const payload: any = {
         google_event_id: googleData.id,
         calendar_id: calendarId || 'primary',
         titulo: googleData.summary,
         data_inicio: googleData.start.dateTime || googleData.start.date,
         data_fim: googleData.end.dateTime || googleData.end.date,
-        especialista_id: calendarId, // Using calendarId as specialist reference
+        especialista_id: realEspecialistaId,
         status: googleData.status || 'confirmed',
         created_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1),
         updated_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1),
@@ -171,6 +185,22 @@ export const googleCalendarService = {
         status: googleData.status || 'confirmed',
         updated_at: new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, -1)
     };
+
+    if (calendarId && calendarId !== 'primary') {
+        updatePayload.calendar_id = calendarId;
+        const { data: specData } = await supabase
+            .from('especialistas')
+            .select('id')
+            .eq('calendar_id', calendarId)
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+
+        if (specData) {
+            updatePayload.especialista_id = specData.id;
+        } else {
+            updatePayload.especialista_id = calendarId;
+        }
+    }
 
     let resolvedClienteId = cliente_id;
     if (resolvedClienteId && typeof resolvedClienteId === 'string' && resolvedClienteId.length >= 10) {
