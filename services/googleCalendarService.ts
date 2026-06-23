@@ -255,7 +255,17 @@ export const googleCalendarService = {
     });
 
     if (googleError || (data && data.error)) {
-      throw new Error(googleError?.message || data?.error);
+      const errMsg = String(googleError?.message || data?.error);
+      const isAlreadyDeleted = errMsg.toLowerCase().includes('not found') || 
+                               errMsg.toLowerCase().includes('gone') || 
+                               errMsg.toLowerCase().includes('deleted') ||
+                               errMsg.toLowerCase().includes('failed to send a request');
+      
+      if (!isAlreadyDeleted) {
+        throw new Error(errMsg);
+      } else {
+        console.warn('Event already deleted in Google Calendar, proceeding to clean up local DB');
+      }
     }
 
     // 2. Delete mirror in Supabase
