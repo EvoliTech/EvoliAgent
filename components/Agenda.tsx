@@ -186,6 +186,38 @@ export const Agenda: React.FC = () => {
   };
 
   // Render Helpers
+  const formatEventTitle = (event: GoogleEvent, specialistName: string) => {
+    const tags = ['[PENDENTE]', '[CONFIRMADO]', '[CONCLUIDO]', '[CONCLUÍDO]', '[CANCELADO]', '[EM ATENDIMENTO]', '[CHECKOUT]', '[MISSED]'];
+    let extractedTags = '';
+    let cleanSummary = event.summary || '';
+    
+    tags.forEach(tag => {
+        if (cleanSummary.toUpperCase().includes(tag)) {
+            const regex = new RegExp(tag.replace(/\[/g, '\\[').replace(/\]/g, '\\]'), 'i');
+            const match = cleanSummary.match(regex);
+            if (match) {
+                extractedTags += match[0] + ' ';
+                cleanSummary = cleanSummary.replace(regex, '').trim();
+            }
+        }
+    });
+
+    const getField = (text: string | undefined, label: string) => {
+        if (!text) return '';
+        const lines = text.split('\n');
+        const line = lines.find(l => l.startsWith(label));
+        return line ? line.replace(label, '').trim() : '';
+    };
+
+    const patientName = getField(event.description, 'Paciente:') || 'Paciente não identificado';
+
+    const displayTitle = (event.summary || '').includes(' - Paciente:')
+        ? cleanSummary
+        : `${specialistName} - Paciente: ${patientName}`;
+
+    return (extractedTags + displayTitle).trim();
+  };
+
   const renderMonthGrid = () => {
     // Basic logic to generate 7x6 grid
     const year = currentDate.getFullYear();
@@ -220,14 +252,17 @@ export const Agenda: React.FC = () => {
 
           {/* Events list */}
           <div className="flex-1 overflow-y-auto no-scrollbar space-y-1">
-            {dayEvents.map((ev, idx) => (
-              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[9px] md:text-xs px-1 md:px-2 py-0.5 md:py-1 rounded truncate cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`} title={ev.summary}>
+            {dayEvents.map((ev, idx) => {
+              const specialistName = specialists.find(s => s.calendarId === ev.calendarId || s.id === ev.calendarId)?.name || 'Clínica';
+              const formattedTitle = formatEventTitle(ev, specialistName);
+              return (
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[9px] md:text-xs px-1 md:px-2 py-0.5 md:py-1 rounded truncate cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`} title={formattedTitle}>
                 {ev.start?.dateTime
-                  ? `${new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${ev.summary}`
-                  : `[Dia Todo] ${ev.summary}`
+                  ? `${new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${formattedTitle}`
+                  : `[Dia Todo] ${formattedTitle}`
                 }
               </div>
-            ))}
+            )})}
           </div>
 
           {/* Add on hover (simplified) */}
@@ -272,14 +307,17 @@ export const Agenda: React.FC = () => {
             </span>
           </div>
           <div className="flex-1 overflow-y-auto no-scrollbar space-y-1.5">
-            {dayEvents.map((ev, idx) => (
-              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[10px] md:text-xs px-2 py-1 rounded cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200 shadow-sm border border-blue-200/50'}`} title={ev.summary}>
+            {dayEvents.map((ev, idx) => {
+              const specialistName = specialists.find(s => s.calendarId === ev.calendarId || s.id === ev.calendarId)?.name || 'Clínica';
+              const formattedTitle = formatEventTitle(ev, specialistName);
+              return (
+              <div key={ev.id || idx} onClick={(e) => { e.stopPropagation(); handleEventClick(ev); }} className={`text-[10px] md:text-xs px-2 py-1 rounded cursor-pointer transition-colors ${ev.start?.date ? 'bg-red-100 text-red-700 hover:bg-red-200 font-medium' : 'bg-blue-100 text-blue-700 hover:bg-blue-200 shadow-sm border border-blue-200/50'}`} title={formattedTitle}>
                 {ev.start?.dateTime
-                  ? <><span className="font-bold">{new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> {ev.summary}</>
-                  : <><span className="font-bold">[Dia Todo]</span> {ev.summary}</>
+                  ? <><span className="font-bold">{new Date(ev.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> {formattedTitle}</>
+                  : <><span className="font-bold">[Dia Todo]</span> {formattedTitle}</>
                 }
               </div>
-            ))}
+            )})}
           </div>
           <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100">
             <button onClick={(e) => { e.stopPropagation(); handleNewAppointmentClick(new Date(currentDay)); }} className="p-1.5 bg-white shadow-sm border border-gray-200 hover:bg-gray-50 rounded-full text-blue-600">
