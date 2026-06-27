@@ -2173,80 +2173,148 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         onProcessPayment={async (paymentsArr, isFullyPaid) => {
           if (payingTreatments.length === 0) return;
 
-          let updatedBudgetsMap: any = {};
+          try {
+            let boletosLinks: string[] = [];
+            const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
+            const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
+            const totalTreatmentsCost = payingTreatments.reduce((acc, t) => acc + parseFloat(t.valor || '0'), 0);
+            
+            if (isEditingPaymentMode) {
+                for (const t of payingTreatments) {
+                    await revenueService.deleteRevenuesByTreatment(t.id, true);
+                }
+            }
 
-          payingTreatments.forEach(t => {
-            if (!updatedBudgetsMap[t.budget.id]) {
-              updatedBudgetsMap[t.budget.id] = { ...t.budget, treatments: [...t.budget.treatments] };
-            }
-            const bTreatments = updatedBudgetsMap[t.budget.id].treatments;
-            const tIdx = bTreatments.findIndex((xt: any) => xt.id === t.id);
-            if (tIdx >= 0) {
-              const prevPayments = bTreatments[tIdx].payments || [];
-              bTreatments[tIdx] = {
-                ...bTreatments[tIdx],
-                payments: isEditingPaymentMode ? (Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr]) : [...prevPayments, ...(Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr])],
-                paymentStatus: isFullyPaid ? 'Pago' : 'Pago parcialmente',
-                paymentCancellationReason: null // clearing justify if they pay again
-              };
-            }
-          });
+            // 1. Create revenues and call n8n
+            for (let i = 0; i < paymentsArray.length; i++) {
+                let p = paymentsArray[i];
+                for (const t of payingTreatments) {
+                    const tCost = parseFloat(t.valor || '0');
+                    const proportion = totalTreatmentsCost > 0 ? (tCost / totalTreatmentsCost) : (1 / payingTreatments.length);
+                    
+                    const splitP = { ...p, amount: p.amount * proportion };
+                    if (p.planAmount !== undefined) {
+                        splitP.planAmount = p.planAmount * proportion;
+                    }
 
-          let lastSaved = null;
-          for (const budgetId of Object.keys(updatedBudgetsMap)) {
-            const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updatedBudgetsMap[budgetId]);
-            if (saved) {
-              setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
-              lastSaved = saved;
+                    const res = await revenueService.createRevenuesFromPayment(
+                        empresaId!, 
+                        Number(patient.id), 
+                        t.budget.id, 
+                        t.id, 
+                        splitP, 
+                        maquininhas || [], 
+                        patient.name, 
+                        t.treatmentName || t.tratamento || 'Tratamento'
+                    );
+                    
+                    if (res && res.success && res.receitaId && splitP.method === 'Boleto') {
+                       try {
+                           const createUrl = import.meta.env.VITE_N8N_CREATE_BOLETO_URL;
+                           if (createUrl) {
+                              const n8nPayload = {
+                                  empresa_id: empresaId,
+                                  paciente_id: patient.id,
+                                  tratamento_id: t.id,
+                                  valor: splitP.amount,
+                                  vencimento: splitP.date || splitP.receiveDate || new Date().toISOString().split('T')[0],
+                                  externalReference: res.receitaId,
+                                  name: patient.name,
+                                  cpf: patient.cpf,
+                                  phone: patient.phone,
+                                  cep: patient.cep,
+                                  endereco_rua: patient.enderecoRua,
+                                  endereco_numero: patient.enderecoNumero,
+                                  endereco_bairro: patient.enderecoBairro
+                              };
+                              const n8nRes = await fetch(createUrl, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify(n8nPayload)
+                              });
+                              
+                              if (n8nRes.ok) {
+                                  const n8nData = await n8nRes.json();
+                                  if (n8nData.asaas_payment_id || n8nData.link_boleto) {
+                                      // Update the receita in DB
+                                      await supabase.from('receitas').update({
+                                          asaas_payment_id: n8nData.asaas_payment_id,
+                                          status_asaas: 'PENDING',
+                                          link_boleto: n8nData.link_boleto,
+                                          linha_digitavel: n8nData.linha_digitavel
+                                      }).eq('id', res.receitaId);
+                                      
+                                      // Modify the payment object in memory so it gets saved to budget JSON
+                                      paymentsArray[i] = {
+                                          ...paymentsArray[i],
+                                          asaas_payment_id: n8nData.asaas_payment_id,
+                                          status_asaas: 'PENDING',
+                                          link_boleto: n8nData.link_boleto,
+                                          linha_digitavel: n8nData.linha_digitavel
+                                      };
+
+                                      if (n8nData.link_boleto) {
+                                          boletosLinks.push(n8nData.link_boleto);
+                                      }
+                                  }
+                              } else {
+                                  alert("Erro ao comunicar com n8n/Asaas para gerar boleto.");
+                              }
+                           } else {
+                               alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
+                           }
+                       } catch (e) {
+                           console.error("Erro ao integrar com n8n (Asaas):", e);
+                           alert("Erro na integração com Asaas.");
+                       }
+                    } else if (res && !res.success) {
+                      alert(`Erro ao registrar receita física no banco de dados: ${res.error}`);
+                    }
+                }
             }
+
+            // 2. Save Budget with the updated payments array
+            let updatedBudgetsMap: any = {};
+            payingTreatments.forEach(t => {
+              if (!updatedBudgetsMap[t.budget.id]) {
+                updatedBudgetsMap[t.budget.id] = { ...t.budget, treatments: [...t.budget.treatments] };
+              }
+              const bTreatments = updatedBudgetsMap[t.budget.id].treatments;
+              const tIdx = bTreatments.findIndex((xt: any) => xt.id === t.id);
+              if (tIdx >= 0) {
+                const prevPayments = bTreatments[tIdx].payments || [];
+                bTreatments[tIdx] = {
+                  ...bTreatments[tIdx],
+                  payments: isEditingPaymentMode ? paymentsArray : [...prevPayments, ...paymentsArray],
+                  paymentStatus: isFullyPaid ? 'Pago' : 'Pago parcialmente',
+                  paymentCancellationReason: null
+                };
+              }
+            });
+
+            for (const budgetId of Object.keys(updatedBudgetsMap)) {
+              const saved = await budgetService.saveBudget(empresaId!, Number(patient.id), updatedBudgetsMap[budgetId]);
+              if (saved) {
+                setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
+              }
+            }
+
+          } catch (finErr) {
+            console.error("Erro ao gerar registros financeiros:", finErr);
           }
-
-          if (lastSaved) {
-            try {
-              const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
-              
-              const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
-              const totalTreatmentsCost = payingTreatments.reduce((acc, t) => acc + parseFloat(t.valor || '0'), 0);
-              
-              if (isEditingPaymentMode) {
-                  for (const t of payingTreatments) {
-                      await revenueService.deleteRevenuesByTreatment(t.id, true);
-                  }
-              }
-
-              for (const p of paymentsArray) {
-                  for (const t of payingTreatments) {
-                      const tCost = parseFloat(t.valor || '0');
-                      const proportion = totalTreatmentsCost > 0 ? (tCost / totalTreatmentsCost) : (1 / payingTreatments.length);
-                      
-                      const splitP = { ...p, amount: p.amount * proportion };
-                      if (p.planAmount !== undefined) {
-                          splitP.planAmount = p.planAmount * proportion;
-                      }
-
-                      const res = await revenueService.createRevenuesFromPayment(
-                          empresaId!, 
-                          Number(patient.id), 
-                          t.budget.id, 
-                          t.id, 
-                          splitP, 
-                          maquininhas || [], 
-                          patient.name, 
-                          t.treatmentName || t.tratamento || 'Tratamento'
-                      );
-                      if (res && !res.success) {
-                        alert(`Erro ao registrar receita física no banco de dados: ${res.error}`);
-                      }
-                  }
-              }
-            } catch (finErr) {
-              console.error("Erro ao gerar registros financeiros:", finErr);
+          
+          if (boletosLinks.length > 0) {
+            boletosLinks.forEach(link => window.open(link, '_blank'));
+            // Se houve outros métodos de pagamento além do boleto, imprime o recibo normal
+            if (paymentsArray.some(p => p.method !== 'Boleto')) {
+              printReceipt(payingTreatments, paymentsArr);
             }
+          } else {
             printReceipt(payingTreatments, paymentsArr);
-            setPayingTreatments([]);
-            setSelectedPayments([]);
-            setIsEditingPaymentMode(false);
           }
+          setPayingTreatments([]);
+          setSelectedPayments([]);
+          setIsEditingPaymentMode(false);
         }}
       />
 

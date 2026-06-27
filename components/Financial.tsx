@@ -747,7 +747,7 @@ export const Financial: React.FC = () => {
       treatments.forEach((t: any) => {
         if (!t.payments) return;
         t.payments.forEach((p: any) => {
-          if (p.method === 'Boleto') {
+          if (p.method === 'Boleto' && p.status_asaas !== 'DELETED') {
             const dateStr = p.date || p.receiveDate || new Date().toISOString();
             const parsedD = parseDateStr(dateStr) || new Date();
             const pDate = new Date(parsedD);
@@ -763,8 +763,11 @@ export const Financial: React.FC = () => {
                valor: parseFloat(p.amount) || 0,
                dataVencimento: pDate,
                dataStr: dateStr,
-               status: p.status === 'Pago' || p.isPaid === true ? 'Pago' : 'Pendente',
+               status: p.status_asaas === 'RECEIVED' ? 'Pago' : 'Pendente',
                observacao: p.observations || '',
+               asaas_payment_id: p.asaas_payment_id,
+               link_boleto: p.link_boleto,
+               linha_digitavel: p.linha_digitavel,
                paymentRaw: p,
                treatmentRaw: t,
                budgetRaw: b
@@ -775,7 +778,7 @@ export const Financial: React.FC = () => {
                  pagos.push(boletoObj);
                }
             } else {
-               if (pDate < hoje) {
+               if (p.status_asaas === 'OVERDUE' || (p.status_asaas !== 'RECEIVED' && pDate < hoje)) {
                  vencidos.push(boletoObj);
                } else {
                  aVencer.push(boletoObj);
@@ -793,25 +796,35 @@ export const Financial: React.FC = () => {
     return { vencidos, aVencer, pagos };
   }, [allBudgets, filterMonth, filterYear]);
 
-  const handlePayBoleto = async (boleto: any) => {
+  const handleCancelBoleto = async (boleto: any) => {
     if (!empresaId) return;
-    if (window.confirm(`Confirma o pagamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}? A taxa de boleto será deduzida.`)) {
+    if (window.confirm(`Confirma o cancelamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', {minimumFractionDigits:2})}?`)) {
        try {
+         const cancelUrl = import.meta.env.VITE_N8N_CANCEL_BOLETO_URL;
+         if (cancelUrl && boleto.asaas_payment_id) {
+             const n8nRes = await fetch(cancelUrl, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ asaas_payment_id: boleto.asaas_payment_id })
+             });
+             if (!n8nRes.ok) {
+                 throw new Error("Falha ao comunicar com n8n/Asaas para cancelar.");
+             }
+         }
+       
          // Atualiza o orçamento no banco
-         boleto.paymentRaw.isPaid = true;
-         boleto.paymentRaw.status = 'Pago';
+         boleto.paymentRaw.status_asaas = 'DELETED';
+         boleto.paymentRaw.status = 'Cancelado';
          
          const treatmentsCopy = JSON.parse(JSON.stringify(boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []));
          
          // Encontra e atualiza o tratamento e o pagamento específico
          const tIdx = treatmentsCopy.findIndex((t: any) => t.id === boleto.tratamentoId);
          if (tIdx !== -1) {
-             treatmentsCopy[tIdx].paymentStatus = 'Pago';
-             
              const pIdx = treatmentsCopy[tIdx].payments?.findIndex((p: any) => p.id === boleto.paymentRaw.id);
              if (pIdx !== -1) {
-                 treatmentsCopy[tIdx].payments[pIdx].isPaid = true;
-                 treatmentsCopy[tIdx].payments[pIdx].status = 'Pago';
+                 treatmentsCopy[tIdx].payments[pIdx].status_asaas = 'DELETED';
+                 treatmentsCopy[tIdx].payments[pIdx].status = 'Cancelado';
              }
          }
 
@@ -826,24 +839,19 @@ export const Financial: React.FC = () => {
          
          await budgetService.saveBudget(empresaId, boleto.pacienteId, budgetPayload as any);
          
-         // Cria ou atualiza a receita deduzindo a taxa
-         const res = await revenueService.markBoletoAsPaidInRevenue(
-           boleto.paymentRaw.id,
-           empresaId
-         );
-         
-         if (!res.success) {
-           throw new Error(res.error || 'Erro ao gerar receita do boleto');
+         const { data: receita } = await supabase.from('receitas').select('*').eq('payment_id', boleto.paymentRaw.id).single();
+         if (receita) {
+            await supabase.from('receitas').update({ status_asaas: 'DELETED' }).eq('id', receita.id);
          }
          
-         alert('Boleto marcado como pago e receita gerada com sucesso!');
+         alert('Boleto cancelado com sucesso!');
          
          // Recarrega os dados
          budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
          revenueService.fetchRevenues(empresaId).then(setAllReceitas).catch(console.error);
        } catch (err: any) {
          console.error(err);
-         alert(`Erro ao dar baixa no boleto: ${err?.message || err}`);
+         alert(`Erro ao cancelar boleto: ${err?.message || err}`);
        }
     }
   };
@@ -2143,7 +2151,10 @@ export const Financial: React.FC = () => {
                          <div className="text-xs text-gray-500 mb-2 truncate">{b.tratamentoNome}</div>
                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-red-100">
                            <span className="text-xs font-semibold text-red-600">Venceu em: {b.dataVencimento.toLocaleDateString()}</span>
-                           <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Dar Baixa</button>
+                           <div className="flex gap-2">
+                             {b.link_boleto && <a href={b.link_boleto} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Visualizar</a>}
+                             <button onClick={() => handleCancelBoleto(b)} className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Cancelar</button>
+                           </div>
                          </div>
                        </div>
                      ))
@@ -2163,7 +2174,10 @@ export const Financial: React.FC = () => {
                          <div className="text-xs text-gray-500 mb-2 truncate">{b.tratamentoNome}</div>
                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-blue-100">
                            <span className="text-xs font-semibold text-blue-600">Vence em: {b.dataVencimento.toLocaleDateString()}</span>
-                           <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Dar Baixa</button>
+                           <div className="flex gap-2">
+                             {b.link_boleto && <a href={b.link_boleto} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Visualizar</a>}
+                             <button onClick={() => handleCancelBoleto(b)} className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Cancelar</button>
+                           </div>
                          </div>
                        </div>
                      ))

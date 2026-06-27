@@ -482,7 +482,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                         disabled={isProcessing}
                         className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm shadow-md shadow-blue-200 transition-all flex items-center gap-2"
                     >
-                        {isProcessing ? 'Processando...' : <><CreditCard size={16} /> Confirmar Pagamento</>}
+                        {isProcessing 
+                            ? (paymentParts.some(p => p.method === 'Boleto') ? 'Gerando Boleto(s)...' : 'Processando...') 
+                            : <><CreditCard size={16} /> Confirmar Pagamento</>}
                     </button>
                 </div>
             </div>

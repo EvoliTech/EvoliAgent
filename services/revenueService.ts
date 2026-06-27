@@ -261,7 +261,7 @@ export const revenueService = {
     maquininhas: any[],
     patientName: string,
     treatmentName: string
-  ): Promise<{success: boolean, error?: string}> {
+  ): Promise<{success: boolean, error?: string, receitaId?: string}> {
     const patientPaid = parseFloat(p.amount) || 0;
     let netReceived = p.planAmount !== undefined ? parseFloat(p.planAmount) : patientPaid;
     let dateFallback = p.receiveDate || p.date || p.createdAt;
@@ -338,7 +338,7 @@ export const revenueService = {
         }
     }
 
-    const { error } = await supabase.from('receitas').insert([{
+    const { data, error } = await supabase.from('receitas').insert([{
         empresa_id: empresaId,
         cliente_id: clienteId,
         orcamento_id: orcamentoId,
@@ -352,13 +352,13 @@ export const revenueService = {
         is_paga: !isFuture,
         data_pagamento: !isFuture ? dueDate.toISOString().split('T')[0] : undefined,
         forma_pagamento: p.method
-    }]);
+    }]).select().single();
 
     if (error) {
        console.error("Error creating physical revenues from payment", error);
        return { success: false, error: error.message || JSON.stringify(error) };
     }
-    return { success: true };
+    return { success: true, receitaId: data.id };
   },
 
   async markBoletoAsPaidInRevenue(paymentId: string, empresaId: number): Promise<{success: boolean, error?: string}> {
