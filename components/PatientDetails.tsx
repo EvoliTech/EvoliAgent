@@ -2173,10 +2173,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         onProcessPayment={async (paymentsArr, isFullyPaid) => {
           if (payingTreatments.length === 0) return;
 
+          let boletosLinks: string[] = [];
+          const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
+
           try {
-            let boletosLinks: string[] = [];
             const { data: maquininhas } = await supabase.from('maquininhas').select('*').eq('empresa_id', empresaId);
-            const paymentsArray = Array.isArray(paymentsArr) ? paymentsArr : [paymentsArr];
             const totalTreatmentsCost = payingTreatments.reduce((acc, t) => acc + parseFloat(t.valor || '0'), 0);
             
             if (isEditingPaymentMode) {
@@ -2239,47 +2240,79 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                               endereco_numero: patient.enderecoNumero,
                               endereco_bairro: patient.enderecoBairro
                           };
-                          const n8nRes = await fetch(createUrl, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(n8nPayload)
-                          });
+                          const controller = new AbortController();
+                          // Aumentando o timeout para 25 segundos para dar tempo ao n8n/Asaas gerar o boleto
+                          const timeoutId = setTimeout(() => controller.abort(), 25000); 
                           
-                          if (n8nRes.ok) {
-                              const n8nData = await n8nRes.json();
-                              if (n8nData.asaas_payment_id || n8nData.link_boleto) {
-                                  // Update ALL related receitas in DB with the SAME boleto link
-                                  for (const rid of createdReceitaIds) {
-                                      await supabase.from('receitas').update({
-                                          asaas_payment_id: n8nData.asaas_payment_id,
-                                          status_asaas: 'PENDING',
-                                          link_boleto: n8nData.link_boleto,
-                                          linha_digitavel: n8nData.linha_digitavel
-                                      }).eq('id', rid);
+                          let n8nData: any = null;
+                          try {
+                              const n8nRes = await fetch(createUrl, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify(n8nPayload),
+                                  signal: controller.signal
+                              });
+                              if (n8nRes.ok) {
+                                  let parsed = await n8nRes.json();
+                                  if (Array.isArray(parsed)) parsed = parsed[0];
+                                  if (parsed && (parsed.asaas_payment_id || parsed.link_boleto)) {
+                                      n8nData = parsed;
                                   }
-                                  
-                                  // Modify the payment object in memory so it gets saved to budget JSON
-                                  paymentsArray[i] = {
-                                      ...paymentsArray[i],
+                              }
+                          } catch (fetchErr: any) {
+                              console.warn("Webhook demorou a responder ou falhou, verificando banco de dados...", fetchErr.message);
+                          } finally {
+                              clearTimeout(timeoutId);
+                          }
+                          
+                          // Fallback: Se o fetch não pegou o boleto, checar no banco de dados
+                          if (!n8nData) {
+                              let foundInDb = false;
+                              for (let attempt = 0; attempt < 15; attempt++) {
+                                  const { data: checkData } = await supabase.from('receitas').select('asaas_payment_id, link_boleto, linha_digitavel').eq('id', createdReceitaIds[0]).single();
+                                  if (checkData && (checkData.asaas_payment_id || checkData.link_boleto)) {
+                                      n8nData = checkData;
+                                      foundInDb = true;
+                                      break;
+                                  }
+                                  await new Promise(r => setTimeout(r, 1000));
+                              }
+                              
+                              if (!foundInDb) {
+                                  alert("O n8n iniciou a geração do boleto, mas demorou para devolver o link. Por favor, feche e abra o paciente novamente ou verifique as faturas geradas na aba de orçamentos.");
+                              }
+                          }
+                          
+                          if (n8nData) {
+                              // Update ALL related receitas in DB with the SAME boleto link
+                              for (const rid of createdReceitaIds) {
+                                  await supabase.from('receitas').update({
                                       asaas_payment_id: n8nData.asaas_payment_id,
                                       status_asaas: 'PENDING',
                                       link_boleto: n8nData.link_boleto,
                                       linha_digitavel: n8nData.linha_digitavel
-                                  };
-
-                                  if (n8nData.link_boleto) {
-                                      boletosLinks.push(n8nData.link_boleto);
-                                  }
+                                  }).eq('id', rid);
                               }
-                          } else {
-                              alert("Erro ao comunicar com n8n/Asaas para gerar boleto.");
+                              
+                              // Modify the payment object in memory so it gets saved to budget JSON
+                              paymentsArray[i] = {
+                                  ...paymentsArray[i],
+                                  asaas_payment_id: n8nData.asaas_payment_id,
+                                  status_asaas: 'PENDING',
+                                  link_boleto: n8nData.link_boleto,
+                                  linha_digitavel: n8nData.linha_digitavel
+                              };
+
+                              if (n8nData.link_boleto) {
+                                  boletosLinks.push(n8nData.link_boleto);
+                              }
                           }
                        } else {
                            alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
                        }
-                   } catch (e) {
+                   } catch (e: any) {
                        console.error("Erro ao integrar com n8n (Asaas):", e);
-                       alert("Erro na integração com Asaas.");
+                       alert(`Erro na integração com Asaas: ${e.message}`);
                    }
                 }
             }
