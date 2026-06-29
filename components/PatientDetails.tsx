@@ -2188,6 +2188,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             // 1. Create revenues and call n8n
             for (let i = 0; i < paymentsArray.length; i++) {
                 let p = paymentsArray[i];
+                let createdReceitaIds: string[] = [];
+
+                // Create revenues in DB for each treatment
                 for (const t of payingTreatments) {
                     const tCost = parseFloat(t.valor || '0');
                     const proportion = totalTreatmentsCost > 0 ? (tCost / totalTreatmentsCost) : (1 / payingTreatments.length);
@@ -2208,68 +2211,76 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         t.treatmentName || t.tratamento || 'Tratamento'
                     );
                     
-                    if (res && res.success && res.receitaId && splitP.method === 'Boleto') {
-                       try {
-                           const createUrl = import.meta.env.VITE_N8N_CREATE_BOLETO_URL;
-                           if (createUrl) {
-                              const n8nPayload = {
-                                  empresa_id: empresaId,
-                                  paciente_id: patient.id,
-                                  tratamento_id: t.id,
-                                  valor: splitP.amount,
-                                  vencimento: splitP.date || splitP.receiveDate || new Date().toISOString().split('T')[0],
-                                  externalReference: res.receitaId,
-                                  name: patient.name,
-                                  cpf: patient.cpf,
-                                  phone: patient.phone,
-                                  cep: patient.cep,
-                                  endereco_rua: patient.enderecoRua,
-                                  endereco_numero: patient.enderecoNumero,
-                                  endereco_bairro: patient.enderecoBairro
-                              };
-                              const n8nRes = await fetch(createUrl, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify(n8nPayload)
-                              });
-                              
-                              if (n8nRes.ok) {
-                                  const n8nData = await n8nRes.json();
-                                  if (n8nData.asaas_payment_id || n8nData.link_boleto) {
-                                      // Update the receita in DB
+                    if (res && res.success && res.receitaId) {
+                        createdReceitaIds.push(res.receitaId);
+                    } else if (res && !res.success) {
+                        alert(`Erro ao registrar receita física no banco de dados: ${res.error}`);
+                    }
+                }
+
+                // Call n8n ONCE per boleto payment, unifying the treatments
+                if (createdReceitaIds.length > 0 && p.method === 'Boleto') {
+                   try {
+                       const createUrl = import.meta.env.VITE_N8N_CREATE_BOLETO_URL;
+                       if (createUrl) {
+                          const treatmentIds = payingTreatments.map(t => t.id).join(',');
+                          const n8nPayload = {
+                              empresa_id: empresaId,
+                              paciente_id: patient.id,
+                              tratamento_id: treatmentIds,
+                              valor: p.amount, // Total amount for this payment
+                              vencimento: p.date || p.receiveDate || new Date().toISOString().split('T')[0],
+                              externalReference: createdReceitaIds[0], // Reference the first revenue
+                              name: patient.name,
+                              cpf: patient.cpf,
+                              phone: patient.phone,
+                              cep: patient.cep,
+                              endereco_rua: patient.enderecoRua,
+                              endereco_numero: patient.enderecoNumero,
+                              endereco_bairro: patient.enderecoBairro
+                          };
+                          const n8nRes = await fetch(createUrl, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify(n8nPayload)
+                          });
+                          
+                          if (n8nRes.ok) {
+                              const n8nData = await n8nRes.json();
+                              if (n8nData.asaas_payment_id || n8nData.link_boleto) {
+                                  // Update ALL related receitas in DB with the SAME boleto link
+                                  for (const rid of createdReceitaIds) {
                                       await supabase.from('receitas').update({
                                           asaas_payment_id: n8nData.asaas_payment_id,
                                           status_asaas: 'PENDING',
                                           link_boleto: n8nData.link_boleto,
                                           linha_digitavel: n8nData.linha_digitavel
-                                      }).eq('id', res.receitaId);
-                                      
-                                      // Modify the payment object in memory so it gets saved to budget JSON
-                                      paymentsArray[i] = {
-                                          ...paymentsArray[i],
-                                          asaas_payment_id: n8nData.asaas_payment_id,
-                                          status_asaas: 'PENDING',
-                                          link_boleto: n8nData.link_boleto,
-                                          linha_digitavel: n8nData.linha_digitavel
-                                      };
-
-                                      if (n8nData.link_boleto) {
-                                          boletosLinks.push(n8nData.link_boleto);
-                                      }
+                                      }).eq('id', rid);
                                   }
-                              } else {
-                                  alert("Erro ao comunicar com n8n/Asaas para gerar boleto.");
+                                  
+                                  // Modify the payment object in memory so it gets saved to budget JSON
+                                  paymentsArray[i] = {
+                                      ...paymentsArray[i],
+                                      asaas_payment_id: n8nData.asaas_payment_id,
+                                      status_asaas: 'PENDING',
+                                      link_boleto: n8nData.link_boleto,
+                                      linha_digitavel: n8nData.linha_digitavel
+                                  };
+
+                                  if (n8nData.link_boleto) {
+                                      boletosLinks.push(n8nData.link_boleto);
+                                  }
                               }
-                           } else {
-                               alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
-                           }
-                       } catch (e) {
-                           console.error("Erro ao integrar com n8n (Asaas):", e);
-                           alert("Erro na integração com Asaas.");
+                          } else {
+                              alert("Erro ao comunicar com n8n/Asaas para gerar boleto.");
+                          }
+                       } else {
+                           alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
                        }
-                    } else if (res && !res.success) {
-                      alert(`Erro ao registrar receita física no banco de dados: ${res.error}`);
-                    }
+                   } catch (e) {
+                       console.error("Erro ao integrar com n8n (Asaas):", e);
+                       alert("Erro na integração com Asaas.");
+                   }
                 }
             }
 
