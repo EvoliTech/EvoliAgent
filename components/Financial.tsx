@@ -741,6 +741,8 @@ export const Financial: React.FC = () => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
+    const boletosMap = new Map<string, any>();
+
     allBudgets.forEach(b => {
       const treatments = b.tratamentos || b.treatments;
       if (!treatments) return;
@@ -753,40 +755,53 @@ export const Financial: React.FC = () => {
             const pDate = new Date(parsedD);
             pDate.setHours(0,0,0,0);
             
-            const boletoObj = {
-               id: p.id,
-               budgetId: b.id,
-               paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Desconhecido',
-               pacienteId: b.paciente?.id || b.paciente_id,
-               tratamentoId: t.id,
-               tratamentoNome: t.treatmentName || t.tratamento,
-               valor: parseFloat(p.amount) || 0,
-               dataVencimento: pDate,
-               dataStr: dateStr,
-               status: p.status_asaas === 'RECEIVED' ? 'Pago' : 'Pendente',
-               observacao: p.observations || '',
-               asaas_payment_id: p.asaas_payment_id,
-               link_boleto: p.link_boleto,
-               linha_digitavel: p.linha_digitavel,
-               paymentRaw: p,
-               treatmentRaw: t,
-               budgetRaw: b
-            };
+            const groupKey = p.asaas_payment_id || p.id;
 
-            if (boletoObj.status === 'Pago') {
-               if (isDateInFilter(dateStr)) {
-                 pagos.push(boletoObj);
-               }
+            if (boletosMap.has(groupKey)) {
+                const existing = boletosMap.get(groupKey);
+                const tName = t.treatmentName || t.tratamento;
+                if (!existing.tratamentoNome.includes(tName)) {
+                    existing.tratamentoNome += ` + ${tName}`;
+                }
             } else {
-               if (p.status_asaas === 'OVERDUE' || (p.status_asaas !== 'RECEIVED' && pDate < hoje)) {
-                 vencidos.push(boletoObj);
-               } else {
-                 aVencer.push(boletoObj);
-               }
+                const boletoObj = {
+                   id: p.id,
+                   budgetId: b.id,
+                   paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Desconhecido',
+                   pacienteId: b.paciente?.id || b.paciente_id,
+                   tratamentoId: t.id,
+                   tratamentoNome: t.treatmentName || t.tratamento,
+                   valor: parseFloat(p.amount) || 0,
+                   dataVencimento: pDate,
+                   dataStr: dateStr,
+                   status: p.status_asaas === 'RECEIVED' ? 'Pago' : 'Pendente',
+                   observacao: p.observations || '',
+                   asaas_payment_id: p.asaas_payment_id,
+                   link_boleto: p.link_boleto,
+                   linha_digitavel: p.linha_digitavel,
+                   paymentRaw: p,
+                   treatmentRaw: t,
+                   budgetRaw: b
+                };
+                boletosMap.set(groupKey, boletoObj);
             }
           }
         });
       });
+    });
+
+    boletosMap.forEach((boletoObj) => {
+        if (boletoObj.status === 'Pago') {
+           if (isDateInFilter(boletoObj.dataStr)) {
+             pagos.push(boletoObj);
+           }
+        } else {
+           if (boletoObj.paymentRaw.status_asaas === 'OVERDUE' || (boletoObj.paymentRaw.status_asaas !== 'RECEIVED' && boletoObj.dataVencimento < hoje)) {
+             vencidos.push(boletoObj);
+           } else {
+             aVencer.push(boletoObj);
+           }
+        }
     });
     
     vencidos.sort((a,b) => a.dataVencimento.getTime() - b.dataVencimento.getTime());
