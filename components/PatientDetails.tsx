@@ -2225,6 +2225,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                        const createUrl = import.meta.env.VITE_N8N_CREATE_BOLETO_URL;
                        if (createUrl) {
                           const treatmentIds = payingTreatments.map(t => t.id).join(',');
+                          
+                          const parcelInfo = paymentsArray.length > 1 ? ` (Parcela ${i + 1}/${paymentsArray.length})` : '';
+                          const treatmentNames = payingTreatments.map(t => t.treatmentName || t.tratamento).join(', ');
+                          const drs = Array.from(new Set(payingTreatments.map(t => t.profissional).filter(Boolean))).join(', ');
+                          const descriptionText = `Tratamento(s): ${treatmentNames}${parcelInfo}${drs ? ` - Dr(a): ${drs}` : ''}`.substring(0, 255);
+                          
                           const n8nPayload = {
                               empresa_id: empresaId,
                               paciente_id: patient.id,
@@ -2238,7 +2244,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                               cep: patient.cep,
                               endereco_rua: patient.enderecoRua,
                               endereco_numero: patient.enderecoNumero,
-                              endereco_bairro: patient.enderecoBairro
+                              endereco_bairro: patient.enderecoBairro,
+                              description: descriptionText
                           };
                           const controller = new AbortController();
                           // Aumentando o timeout para 25 segundos para dar tempo ao n8n/Asaas gerar o boleto
