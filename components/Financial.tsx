@@ -297,7 +297,7 @@ export const Financial: React.FC = () => {
           t.payments.forEach((p: any) => {
             if (!p) return;
             const saleDate = b.data_orcamento || b.date || b.created_at || new Date().toISOString();
-            const pDate = p.date || p.receiveDate || new Date().toISOString();
+            const pDate = ((p.isPaid === true || p.status === 'Pago') && p.paymentDate) ? p.paymentDate : (p.date || p.receiveDate || new Date().toISOString());
             if (isDateInFaturamentoFilter(saleDate)) {
               const amount = parseFloat(p.amount) || 0;
               let netReceived = p.planAmount !== undefined && p.planAmount !== null && p.planAmount !== '' ? parseFloat(p.planAmount) : amount;
@@ -509,7 +509,7 @@ export const Financial: React.FC = () => {
             const patientPaid = parseFloat(p.amount) || 0;
             paidOnTrt += patientPaid;
             
-            const pDate = p.date || p.receiveDate || new Date().toISOString();
+            const pDate = ((p.isPaid === true || p.status === 'Pago') && p.paymentDate) ? p.paymentDate : (p.date || p.receiveDate || new Date().toISOString());
             if (isDateInFilter(pDate)) {
                let netReceived = p.planAmount !== undefined && p.planAmount !== null && p.planAmount !== '' ? parseFloat(p.planAmount) : patientPaid;
                const maq = maquininhas.find(m => m.id === p.maquininha_id);
@@ -557,7 +557,7 @@ export const Financial: React.FC = () => {
                   treatmentName: trtName,
                   profissional: profNameForCommission,
                   treatment: trtName,
-                  date: p.date || p.receiveDate || new Date().toISOString(),
+                  date: ((p.isPaid === true || p.status === 'Pago') && p.paymentDate) ? p.paymentDate : (p.date || p.receiveDate || new Date().toISOString()),
                   amount: valComissao,
                   paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
                   status: p.isComissaoPaga ? 'Repassado' : 'A repassar',
@@ -750,7 +750,7 @@ export const Financial: React.FC = () => {
         if (!t.payments) return;
         t.payments.forEach((p: any) => {
           if (p.method === 'Boleto' && p.status_asaas !== 'DELETED') {
-            const dateStr = p.date || p.receiveDate || new Date().toISOString();
+            const dateStr = ((p.isPaid === true || p.status === 'Pago') && p.paymentDate) ? p.paymentDate : (p.date || p.receiveDate || new Date().toISOString());
             const parsedD = parseDateStr(dateStr) || new Date();
             const pDate = new Date(parsedD);
             pDate.setHours(0,0,0,0);
