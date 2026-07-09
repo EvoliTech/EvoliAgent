@@ -151,7 +151,18 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [isEditingPaymentMode, setIsEditingPaymentMode] = React.useState(false);
   const [cancelJustification, setCancelJustification] = React.useState('');
   const [openPaymentMenuId, setOpenPaymentMenuId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenPaymentMenuId(null);
+      setOpenBudgetMenuId(null);
+      setOpenTreatmentMenuId(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
   const [editingPaymentBudget, setEditingPaymentBudget] = React.useState<any | null>(null);
+  const [patientReceitas, setPatientReceitas] = React.useState<any[]>([]);
 
   const printReceipt = (treatments: any[], paymentData: any) => {
     const w = window.open('', '_blank');
@@ -382,6 +393,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         const patientIdNum = Number(patient.id);
         const fetchedBudgets = await budgetService.fetchBudgets(empresaId, patientIdNum);
         setBudgets(fetchedBudgets as Budget[]);
+
+        const recs = await revenueService.fetchRevenues(empresaId);
+        setPatientReceitas(recs.filter((r: any) => String(r.cliente_id) === String(patient.id) || String(r.paciente?.id) === String(patient.id)));
 
         const evos = await evolutionService.fetchEvolutions(empresaId, patientIdNum);
         setEvolutions(evos);
@@ -1099,16 +1113,14 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
                         <div className="relative">
                           <button
-                            onClick={() => setOpenBudgetMenuId(openBudgetMenuId === budget.id ? null : budget.id)}
+                            onClick={(e) => { e.stopPropagation(); setOpenBudgetMenuId(openBudgetMenuId === budget.id ? null : budget.id); }}
                             className="p-1.5 bg-gray-50 rounded border border-gray-100 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
                           >
                             <MoreVertical size={18} />
                           </button>
 
                           {openBudgetMenuId === budget.id && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setOpenBudgetMenuId(null)} />
-                              <div className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-2 animate-in fade-in zoom-in-95">
+                              <div className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 py-2 animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
                                 <button className="w-full text-left px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                   <Copy size={14} className="text-gray-400" /> Duplicar orçamento
                                 </button>
@@ -1135,7 +1147,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                   <Trash2 size={14} className="text-red-400" /> Excluir
                                 </button>
                               </div>
-                            </>
                           )}
                         </div>
                       </div>
@@ -1326,14 +1337,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         }}>Finalizar</button>
                       )}
 
-                      <button className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors ml-1" onClick={() => setOpenTreatmentMenuId(openTreatmentMenuId === t.id ? null : t.id)}>
+                      <button className="p-1 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors ml-1" onClick={(e) => { e.stopPropagation(); setOpenTreatmentMenuId(openTreatmentMenuId === t.id ? null : t.id); }}>
                         <MoreVertical size={20} />
                       </button>
 
                       {openTreatmentMenuId === t.id && (
-                        <>
-                        <div className="fixed inset-0 z-[50]" onClick={(e) => { e.stopPropagation(); setOpenTreatmentMenuId(null); }}></div>
-                        <div className="absolute top-[110%] right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                        <div className="absolute top-[110%] right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-xl z-50 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-100" onClick={e => e.stopPropagation()}>
                           {t.paymentStatus !== 'Pago' && (
                             <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-blue-600 hover:bg-blue-50 flex items-center gap-2.5 transition-colors border-b border-gray-50 bg-blue-50/30"
                               onClick={() => {
@@ -1407,7 +1416,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                             <span className="rotate-180 text-red-500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg></span> Cancelar tratamento
                           </button>
                         </div>
-                        </>
                       )}
                     </div>
                   </div>
@@ -1594,7 +1602,14 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       }
                     }
 
+                    let totalInstallments = 0;
+                    let paidInstallments = 0;
+
                     if (t.payments && Array.isArray(t.payments) && t.payments.length > 0) {
+                      const boletos = t.payments.filter((p: any) => p && p.method === 'Boleto' && p.status !== 'pendente');
+                      totalInstallments = boletos.length;
+                      paidInstallments = boletos.filter((p: any) => p.status === 'Pago' || p.isPaid).length;
+
                       const lastPayment = t.payments[t.payments.length - 1];
                       const payStr = lastPayment ? String(lastPayment.date || lastPayment.createdAt || '') : '';
                       if (payStr) {
@@ -1619,7 +1634,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       }
                     }
 
-                    return { ...t, isPaid, isBoletoPending, hasPendingBalance, isLate, approvalDate, paymentDate };
+                    return { ...t, isPaid, isBoletoPending, hasPendingBalance, isLate, approvalDate, paymentDate, totalInstallments, paidInstallments };
                   }).filter(t => {
                     if (dateFilter) {
                       if (!t.approvalDate) return false;
@@ -1672,8 +1687,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       {mappedTreatments.length === 0 ? (
                         <div className="text-center py-12 text-sm text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">Nenhum pagamento correspondente para "{pagamentosFilter}".</div>
                       ) : mappedTreatments.map(t => (
-                        <div key={t.id || Math.random()} className={`bg-white border rounded-xl p-4 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 transition-colors shadow-sm relative ${selectedPayments.includes(t.id) ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 hover:border-blue-300'}`}>
-                          <div className="col-span-1 flex items-center pl-0 md:pl-2">
+                        <div key={t.id || Math.random()} 
+                          onClick={() => setEditingPaymentBudget(t.budget)}
+                          className={`cursor-pointer bg-white border rounded-xl p-4 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 transition-colors shadow-sm relative ${selectedPayments.includes(t.id) ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 hover:border-blue-300'}`}>
+                          <div className="col-span-1 flex items-center pl-0 md:pl-2" onClick={(e) => e.stopPropagation()}>
                             <input type="checkbox"
                               checked={selectedPayments.includes(t.id)}
                               onChange={(e) => setSelectedPayments(prev => e.target.checked ? [...prev, t.id] : prev.filter(id => id !== t.id))}
@@ -1716,9 +1733,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                    <CreditCard size={14} /> Pagar
                                  </button>
                                )}
-                               <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : t.isBoletoPending ? 'bg-blue-50 text-blue-700 border-blue-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                                 {t.isPaid ? 'Pago' : t.isBoletoPending ? 'Boleto a vencer' : t.isLate ? 'Em atraso' : 'Em aberto'}
-                               </span>
+                                <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${t.isPaid ? 'bg-green-50 text-green-700 border-green-200' : (t.isBoletoPending && t.paidInstallments > 0 && t.paidInstallments < t.totalInstallments) ? 'bg-orange-50 text-orange-700 border-orange-200' : t.isBoletoPending ? 'bg-blue-50 text-blue-700 border-blue-200' : t.isLate ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                 {t.isPaid ? 'Pago' : (t.isBoletoPending && t.paidInstallments > 0 && t.paidInstallments < t.totalInstallments) ? `${t.paidInstallments}/${t.totalInstallments} pagas` : t.isBoletoPending ? 'Boleto a vencer' : t.isLate ? 'Em atraso' : 'Em aberto'}
+                                </span>
                             </div>
                           </div>
                           <div className="col-span-3 flex items-center justify-between md:justify-end gap-3 pt-3 md:pt-0 border-t md:border-0 border-gray-100 w-full mt-1 md:mt-0">
@@ -1730,22 +1747,25 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                 <div className="relative">
                                   <button
                                     className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
-                                    onClick={() => setOpenPaymentMenuId(openPaymentMenuId === t.id ? null : t.id)}
+                                    onClick={(e) => { e.stopPropagation(); setOpenPaymentMenuId(openPaymentMenuId === t.id ? null : t.id); }}
                                   >
                                     <MoreVertical size={18} />
                                   </button>
 
                                   {openPaymentMenuId === t.id && (
-                                    <>
-                                    <div className="fixed inset-0 z-[50]" onClick={(e) => { e.stopPropagation(); setOpenPaymentMenuId(null); }}></div>
-                                    <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95">
+                                    <div className="absolute top-[80%] right-[30px] mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-[60] py-1.5 overflow-hidden animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
                                       <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                         onClick={() => { setEditingPaymentBudget(t.budget); setOpenPaymentMenuId(null); }}
                                       >
                                         <Edit2 size={16} className="text-gray-400" /> Editar e Detalhes
                                       </button>
                                       <button className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
-                                        onClick={() => { 
+                                        onClick={(e) => { 
+                                          e.stopPropagation();
+                                          if (t.isPaid || (t.isBoletoPending && t.paidInstallments > 0)) {
+                                            alert("Após identificado o pagamento ou confirmação de pagamento não é possível alterar a forma de pagamento. Só é possível alterar quando o boleto ainda não foi compensado, ou não foi dado baixa. Para outras formas de pagamento, será preciso cancelar o pagamento primeiro.");
+                                            return;
+                                          }
                                           setPayingTreatments([t]); 
                                           setIsEditingPaymentMode(true); 
                                           setOpenPaymentMenuId(null); 
@@ -1760,7 +1780,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                         <X size={16} className="text-red-400" /> Cancelar pagamento
                                       </button>
                                     </div>
-                                    </>
                                   )}
                                 </div>
                             </div>
@@ -2445,6 +2464,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         budgetTreatments={editingPaymentBudget?.treatments || []}
         budget={editingPaymentBudget}
         patient={patient}
+        patientReceitas={patientReceitas}
         onSave={async (updBudget) => {
           if (!empresaId) return;
           const saved = await budgetService.saveBudget(empresaId, Number(patient.id), updBudget);
