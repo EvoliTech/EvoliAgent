@@ -1,0 +1,83 @@
+{
+  "name": "Asaas - Consultar Saldo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "asaas/balance",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-balance",
+      "name": "Webhook Saldo",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "Empresa",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.query.empresa_id }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-get-empresa",
+      "name": "Supabase Get Empresa",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://sandbox.asaas.com/api/v3/finance/balance",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ ($json.asaas_api_key || '').trim() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-asaas-balance",
+      "name": "Asaas Saldo API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Saldo": {
+      "main": [
+        [
+          {
+            "node": "Supabase Get Empresa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Get Empresa": {
+      "main": [
+        [
+          {
+            "node": "Asaas Saldo API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

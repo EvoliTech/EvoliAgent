@@ -1,0 +1,87 @@
+{
+  "name": "Asaas - Transferência (Saque Pix)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asaas/transfer",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-transfer",
+      "name": "Webhook Saque",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "Empresa",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.empresa_id }}"
+            }
+          ]
+        }
+      },
+      "id": "supabase-get-empresa-transfer",
+      "name": "Supabase Get Empresa",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sandbox.asaas.com/api/v3/transfers",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ ($json.asaas_api_key || '').trim() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"value\": {{ $node[\"Webhook Saque\"].json[\"body\"][\"value\"] }},\n  \"pixAddressKey\": \"{{ $node[\"Webhook Saque\"].json[\"body\"][\"pixAddressKey\"] }}\",\n  \"pixAddressKeyType\": \"{{ $node[\"Webhook Saque\"].json[\"body\"][\"pixAddressKeyType\"] }}\",\n  \"operationType\": \"{{ $node[\"Webhook Saque\"].json[\"body\"][\"operationType\"] }}\"\n}",
+        "options": {}
+      },
+      "id": "http-asaas-transfer",
+      "name": "Asaas Transfer API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [650, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Saque": {
+      "main": [
+        [
+          {
+            "node": "Supabase Get Empresa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Get Empresa": {
+      "main": [
+        [
+          {
+            "node": "Asaas Transfer API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
