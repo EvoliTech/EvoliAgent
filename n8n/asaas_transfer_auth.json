@@ -1,0 +1,41 @@
+{
+  "name": "Asaas - Autorização de Saque",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "asaas/transfer-auth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-transfer-auth",
+      "name": "Webhook Autorização",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      status: 'APPROVED'\n    }\n  }\n];"
+      },
+      "id": "approve-code",
+      "name": "Retorna APPROVED",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Autorização": {
+      "main": [
+        [
+          {
+            "node": "Retorna APPROVED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
