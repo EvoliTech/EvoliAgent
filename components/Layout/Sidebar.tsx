@@ -86,6 +86,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
               return (
                 <button
                   key={item.id}
+                  id={`tour-${item.id}`}
                   disabled={isDisabled}
                   onClick={() => onNavigate(item.id as PageType)}
                   className={`
@@ -121,6 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
               return (
                 <button
                   key={item.id}
+                  id={`tour-${item.id}`}
                   disabled={isDisabled}
                   onClick={() => onNavigate(item.id as PageType)}
                   className={`

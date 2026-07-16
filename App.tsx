@@ -29,6 +29,9 @@ import { Loader2 } from 'lucide-react';
 import { useCompany } from './contexts/CompanyContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { SubUserSelection } from './components/SubUserSelection';
+import { OnboardingTour } from './components/OnboardingTour';
+import { FirstAccessSetupModal } from './components/FirstAccessSetupModal';
+import { subUserService } from './services/userService';
 
 export default function App() {
   const location = useLocation();
@@ -40,6 +43,8 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isFirstAccessTour, setIsFirstAccessTour] = useState(false);
+  const [showSetupModal, setShowSetupModal] = useState(false);
 
   const [subUserRole, setSubUserRole] = useState<string | null>(null);
   const [subUserName, setSubUserName] = useState<string>('');
@@ -202,10 +207,13 @@ export default function App() {
 
   // Render main authenticated area
   const renderProtected = () => {
+    const activeRole = isFirstAccessTour ? 'admin' : subUserRole;
+    const activePerms = isFirstAccessTour ? ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security'] : subUserPermissions;
+
     const hasAccess = (permission: string) => {
-      if (!subUserRole) return false;
-      if (subUserRole === 'admin') return true;
-      return subUserPermissions.includes(permission);
+      if (!activeRole) return false;
+      if (activeRole === 'admin') return true;
+      return activePerms.includes(permission);
     };
 
     return (
@@ -213,8 +221,8 @@ export default function App() {
         <Sidebar
           activePage={currentPage}
           onNavigate={(page) => { navigateTo(page); setIsMobileMenuOpen(false); }}
-          subUserRole={subUserRole || 'admin'}
-          subUserPermissions={subUserPermissions}
+          subUserRole={activeRole || 'admin'}
+          subUserPermissions={activePerms}
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
         />
@@ -224,8 +232,8 @@ export default function App() {
             onNavigate={navigateTo}
             onLogout={handleLogout}
             onSwitchProfile={handleSwitchProfile}
-            subUserRole={subUserRole || 'admin'}
-            subUserPermissions={subUserPermissions}
+            subUserRole={activeRole || 'admin'}
+            subUserPermissions={activePerms}
             subUserName={subUserName}
             userEmail={session?.user.email || ''}
             onMenuClick={() => setIsMobileMenuOpen(true)}
@@ -323,10 +331,51 @@ export default function App() {
     );
   }
 
-  if (!subUserRole) {
-    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} onLogout={handleLogout} />;
+  if (!subUserRole && !isFirstAccessTour) {
+    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} onLogout={handleLogout} onFirstAccess={() => setIsFirstAccessTour(true)} />;
   }
 
   // Render protected area inside ProtectedRoute for future extensibility
-  return <ProtectedRoute>{renderProtected()}</ProtectedRoute>;
+  return (
+    <ProtectedRoute>
+      {renderProtected()}
+      {isFirstAccessTour && !showSetupModal && (
+        <OnboardingTour onTourFinish={async () => {
+          // Marca no localStorage que o tour já foi concluído/pulado (Garantia à prova de falhas)
+          localStorage.setItem('clinica_tour_skipped', 'true');
+          
+          // Tenta salvar silenciosamente a estrutura do admin padrão no banco
+          if (empresaId) {
+            try {
+              await subUserService.saveSubUsers(empresaId, {
+                admin: {
+                  id: 'admin',
+                  name: 'Administrador',
+                  password: 'admin',
+                  icon: 'crown',
+                  permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
+                }
+              });
+            } catch (err) {
+              console.error("Erro ao salvar sub-usuário no fim do tour. Ignorando para não travar a tela:", err);
+            }
+          }
+          
+          // Garante que o modal vai aparecer de qualquer forma
+          setShowSetupModal(true);
+        }} />
+      )}
+      {showSetupModal && (
+        <FirstAccessSetupModal 
+          empresaId={empresaId!}
+          onSetupComplete={() => {
+            setShowSetupModal(false);
+            setIsFirstAccessTour(false);
+            // Simulate login as admin to proceed
+            handleSubUserLoginSuccess('admin', 'Administrador', ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']);
+          }}
+        />
+      )}
+    </ProtectedRoute>
+  );
 }

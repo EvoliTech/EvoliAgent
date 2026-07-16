@@ -129,6 +129,16 @@ export const userService = {
 };
 
 export const subUserService = {
+    async checkIfFirstAccess(empresaId: number): Promise<boolean> {
+        const { data } = await supabase
+            .from('integrations_config')
+            .select('id')
+            .eq('service', 'sub_users')
+            .eq('IDEmpresa', empresaId)
+            .maybeSingle();
+        return !data;
+    },
+
     async getSubUsers(empresaId: number): Promise<Record<string, SubUserProfile>> {
         const { data, error } = await supabase
             .from('integrations_config')
@@ -161,20 +171,6 @@ export const subUserService = {
                 password: 'admin',
                 icon: 'crown',
                 permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
-            },
-            gestor: {
-                id: 'gestor',
-                name: 'Gestor',
-                password: 'gestor',
-                icon: 'briefcase',
-                permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
-            },
-            concierge: {
-                id: 'concierge',
-                name: 'Concierge',
-                password: 'concierge',
-                icon: 'headphones',
-                permissions: ['agenda', 'appointments', 'patients']
             }
         };
 

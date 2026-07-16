@@ -6,6 +6,7 @@ interface SubUserSelectionProps {
   empresaId: number;
   onLoginSuccess: (role: string, name: string, permissions: string[]) => void;
   onLogout: () => void;
+  onFirstAccess?: () => void;
 }
 
 const iconConfig: Record<string, { icon: React.ComponentType<any>, colorClass: string, iconColor: string }> = {
@@ -41,7 +42,7 @@ const iconConfig: Record<string, { icon: React.ComponentType<any>, colorClass: s
   }
 };
 
-export const SubUserSelection: React.FC<SubUserSelectionProps> = ({ empresaId, onLoginSuccess, onLogout }) => {
+export const SubUserSelection: React.FC<SubUserSelectionProps> = ({ empresaId, onLoginSuccess, onLogout, onFirstAccess }) => {
   const [profiles, setProfiles] = useState<Record<string, SubUserProfile>>({});
   const [loading, setLoading] = useState(true);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -53,6 +54,13 @@ export const SubUserSelection: React.FC<SubUserSelectionProps> = ({ empresaId, o
   useEffect(() => {
     const loadSubUsers = async () => {
       try {
+        const isFirst = await subUserService.checkIfFirstAccess(empresaId);
+        const skippedLocally = localStorage.getItem('clinica_tour_skipped') === 'true';
+        
+        if (isFirst && !skippedLocally && onFirstAccess) {
+          onFirstAccess();
+          return;
+        }
         const data = await subUserService.getSubUsers(empresaId);
         setProfiles(data);
       } catch (err) {

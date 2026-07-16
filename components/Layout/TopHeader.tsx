@@ -143,6 +143,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
           <button onClick={() => setIsSearchOpen(true)} className="p-2 rounded-full transition-colors hover:bg-gray-100" title="Busca Global"><Search size={20} /></button>
           
           <button 
+            id="tour-message-center"
             onClick={() => onNavigate('message-center')} 
             className={`p-2 rounded-full transition-all relative ${hasBirthday ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100' : 'hover:bg-gray-100'}`}
             title="Central de Mensagens"
@@ -153,7 +154,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ activePage, onNavigate, on
             )}
           </button>
 
-          <button onClick={() => onNavigate('settings')} className={`p-2 rounded-full transition-colors ${activePage === 'settings' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`}><Settings size={20} /></button>
+          <button id="tour-settings" onClick={() => onNavigate('settings')} className={`p-2 rounded-full transition-colors ${activePage === 'settings' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'}`}><Settings size={20} /></button>
         </div>
 
         {/* Account Dropdown */}
