@@ -200,7 +200,7 @@ export const subUserService = {
             sanitized.admin = defaults.admin;
         } else {
             sanitized.admin.permissions = defaults.admin.permissions;
-            sanitized.admin.name = 'Administrador';
+            sanitized.admin.name = sanitized.admin.name || 'Administrador';
             sanitized.admin.icon = 'crown';
         }
 

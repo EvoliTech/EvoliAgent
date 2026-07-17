@@ -331,8 +331,17 @@ export default function App() {
     );
   }
 
-  if (!subUserRole && !isFirstAccessTour) {
-    return <SubUserSelection empresaId={empresaId} onLoginSuccess={handleSubUserLoginSuccess} onLogout={handleLogout} onFirstAccess={() => setIsFirstAccessTour(true)} />;
+  if (!subUserRole && !isFirstAccessTour && !showSetupModal) {
+    return <SubUserSelection 
+      empresaId={empresaId} 
+      onLoginSuccess={handleSubUserLoginSuccess} 
+      onLogout={handleLogout} 
+      onFirstAccess={() => setIsFirstAccessTour(true)} 
+      onRequireSetupModal={() => {
+        setIsFirstAccessTour(true);
+        setShowSetupModal(true);
+      }}
+    />;
   }
 
   // Render protected area inside ProtectedRoute for future extensibility
@@ -343,23 +352,6 @@ export default function App() {
         <OnboardingTour onTourFinish={async () => {
           // Marca no localStorage que o tour já foi concluído/pulado (Garantia à prova de falhas)
           localStorage.setItem('clinica_tour_skipped', 'true');
-          
-          // Tenta salvar silenciosamente a estrutura do admin padrão no banco
-          if (empresaId) {
-            try {
-              await subUserService.saveSubUsers(empresaId, {
-                admin: {
-                  id: 'admin',
-                  name: 'Administrador',
-                  password: 'admin',
-                  icon: 'crown',
-                  permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
-                }
-              });
-            } catch (err) {
-              console.error("Erro ao salvar sub-usuário no fim do tour. Ignorando para não travar a tela:", err);
-            }
-          }
           
           // Garante que o modal vai aparecer de qualquer forma
           setShowSetupModal(true);
