@@ -132,7 +132,7 @@ export const subUserService = {
     async checkIfFirstAccess(empresaId: number): Promise<boolean> {
         const { data } = await supabase
             .from('integrations_config')
-            .select('id')
+            .select('service')
             .eq('service', 'sub_users')
             .eq('IDEmpresa', empresaId)
             .maybeSingle();
@@ -218,26 +218,26 @@ export const subUserService = {
             is_active: true
         };
 
-        // Check if exists
-        const { data: existing } = await supabase
+        // Tenta atualizar primeiro para evitar qualquer problema com constraints de upsert
+        const { data: updated, error: updateError } = await supabase
             .from('integrations_config')
-            .select('service')
+            .update(payload)
             .eq('service', 'sub_users')
             .eq('IDEmpresa', empresaId)
-            .maybeSingle();
+            .select();
 
-        if (existing) {
-            const { error } = await supabase
-                .from('integrations_config')
-                .update(payload)
-                .eq('service', 'sub_users')
-                .eq('IDEmpresa', empresaId);
-            if (error) throw error;
-        } else {
-            const { error } = await supabase
+        if (updateError) throw updateError;
+
+        // Se não atualizou nenhuma linha, significa que não existe, então insere
+        if (!updated || updated.length === 0) {
+            const { error: insertError } = await supabase
                 .from('integrations_config')
                 .insert([payload]);
-            if (error) throw error;
+            
+            // Se der erro de duplicidade no insert, é porque a linha já existe e a sequence pode estar dessincronizada, 
+            // mas como acabamos de tentar um update e deu 0, pode ser uma restrição RLS impedindo a visão.
+            // Para garantir que não trave a UI, podemos lançar o erro para ser tratado pelo componente.
+            if (insertError) throw insertError;
         }
     }
 };
