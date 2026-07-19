@@ -360,11 +360,11 @@ export default function App() {
       {showSetupModal && (
         <FirstAccessSetupModal 
           empresaId={empresaId!}
-          onSetupComplete={() => {
+          onSetupComplete={(adminName) => {
             setShowSetupModal(false);
             setIsFirstAccessTour(false);
             // Simulate login as admin to proceed
-            handleSubUserLoginSuccess('admin', 'Administrador', ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']);
+            handleSubUserLoginSuccess('admin', adminName, ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']);
           }}
         />
       )}
