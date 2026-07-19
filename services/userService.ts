@@ -215,29 +215,36 @@ export const subUserService = {
             service: 'sub_users',
             client_id: 'sub_users',
             client_secret: JSON.stringify(sanitized),
-            is_active: true
+            is_active: true,
+            is_admin_panel: false
         };
 
-        // Tenta atualizar primeiro para evitar qualquer problema com constraints de upsert
+        // Passo 1: Tenta atualizar a linha existente
         const { data: updated, error: updateError } = await supabase
             .from('integrations_config')
-            .update(payload)
+            .update({
+                client_secret: payload.client_secret,
+                is_active: payload.is_active,
+                is_admin_panel: payload.is_admin_panel
+            })
             .eq('service', 'sub_users')
             .eq('IDEmpresa', empresaId)
             .select();
 
         if (updateError) throw updateError;
 
-        // Se não atualizou nenhuma linha, significa que não existe, então insere
+        // Passo 2: Se não existe, insere
         if (!updated || updated.length === 0) {
             const { error: insertError } = await supabase
                 .from('integrations_config')
                 .insert([payload]);
-            
-            // Se der erro de duplicidade no insert, é porque a linha já existe e a sequence pode estar dessincronizada, 
-            // mas como acabamos de tentar um update e deu 0, pode ser uma restrição RLS impedindo a visão.
-            // Para garantir que não trave a UI, podemos lançar o erro para ser tratado pelo componente.
-            if (insertError) throw insertError;
+
+            if (insertError) {
+                if (insertError.code === '23505') {
+                    console.error('[saveSubUsers] ERRO: A sequence do banco de dados está dessincronizada. Execute no SQL Editor do Supabase: SELECT setval(pg_get_serial_sequence(\'integrations_config\', \'id\'), COALESCE((SELECT MAX(id) FROM integrations_config), 0));');
+                }
+                throw insertError;
+            }
         }
     }
 };

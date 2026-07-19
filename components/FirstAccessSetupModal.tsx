@@ -4,7 +4,7 @@ import { subUserService } from '../services/userService';
 
 interface FirstAccessSetupModalProps {
   empresaId: number;
-  onSetupComplete: () => void;
+  onSetupComplete: (adminName: string) => void;
 }
 
 export const FirstAccessSetupModal: React.FC<FirstAccessSetupModalProps> = ({ empresaId, onSetupComplete }) => {
@@ -36,12 +36,6 @@ export const FirstAccessSetupModal: React.FC<FirstAccessSetupModalProps> = ({ em
       };
 
       if (createOthers) {
-        config.gestor = {
-          name: 'Gestor',
-          password: '123',
-          icon: 'briefcase',
-          permissions: ['agenda', 'appointments', 'patients', 'financeiro', 'campaigns', 'inventory', 'gallery', 'prosthesis-control', 'integrations', 'security']
-        };
         config.concierge = {
           name: 'Recepcionista',
           password: '123',
@@ -51,7 +45,7 @@ export const FirstAccessSetupModal: React.FC<FirstAccessSetupModalProps> = ({ em
       }
 
       await subUserService.saveSubUsers(empresaId, config);
-      onSetupComplete();
+      onSetupComplete(adminName);
     } catch (err) {
       console.error(err);
       setError('Ocorreu um erro ao criar a equipe. Tente novamente.');
@@ -100,8 +94,9 @@ export const FirstAccessSetupModal: React.FC<FirstAccessSetupModalProps> = ({ em
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Senha de Acesso</label>
               <input
-                type="password"
+                type="text"
                 required
+                autoComplete="off"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -122,8 +117,8 @@ export const FirstAccessSetupModal: React.FC<FirstAccessSetupModalProps> = ({ em
                 />
               </div>
               <label htmlFor="createOthers" className="text-sm text-gray-600 cursor-pointer">
-                <span className="font-medium text-gray-800 block mb-1">Criar perfis adicionais (Opcional)</span>
-                Isso criará automaticamente os perfis de "Gestor" e "Recepcionista" com a senha padrão <b>123</b> para você configurar depois nas Configurações.
+                <span className="font-medium text-gray-800 block mb-1">Criar perfil da Recepção (Opcional)</span>
+                Isso criará automaticamente o perfil "Recepcionista" com a senha padrão <b>123</b> e acesso limitado (sem Financeiro). Você pode configurar depois nas Configurações.
               </label>
             </div>
           </div>
