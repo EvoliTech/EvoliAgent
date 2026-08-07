@@ -39,6 +39,11 @@ import { AppointmentDetailsModal } from './AppointmentDetailsModal';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { userService } from '../services/userService';
 import { expenseService } from '../services/expenseService';
+import { AssinarEvolucaoModal } from './AssinarEvolucaoModal';
+import { ShareSignatureLinkModal } from './ShareSignatureLinkModal';
+import { assinafyService } from '../services/assinafyService';
+import { generateEvolutionsPdf } from '../lib/pdfGenerator';
+import { companyService } from '../services/companyService';
 
 export interface Category {
   id: string;
@@ -128,6 +133,65 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [isRecording, setIsRecording] = React.useState(false);
   const [isImproving, setIsImproving] = React.useState(false);
   const recognitionRef = React.useRef<any>(null);
+
+  // Signature State
+  const [isAssinarModalOpen, setIsAssinarModalOpen] = React.useState(false);
+  const [shareSigningUrl, setShareSigningUrl] = React.useState<string | null>(null);
+  const [isSigning, setIsSigning] = React.useState(false);
+
+  const handleRequestSignature = async (selectedIds: string[], contactValue: string, method: 'Email' | 'Whatsapp') => {
+    try {
+      setIsSigning(true);
+      const evosToSign = evolutions.filter(e => selectedIds.includes(e.id as string));
+      
+      const companyData = await companyService.fetchCompany(empresaId!);
+      const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
+      const compInfo = { name: companyData?.nome || 'Clínica', phone: companyData?.telefoneWhatsapp };
+
+      // 1. Generate PDF
+      const pdfBlob = generateEvolutionsPdf(patientInfo, compInfo, evosToSign);
+
+      // 2. Upload to Assinafy
+      const docName = `evolucoes_${patient.name.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      const documentId = await assinafyService.createDocument(pdfBlob, docName);
+
+      if (!documentId) throw new Error('Falha ao criar documento na Assinafy');
+
+      // 3. Create Signer using the confirmed contact
+      const signerId = await assinafyService.createSigner(
+        patient.name,
+        method === 'Email' ? contactValue : (patient.email || ''),
+        method === 'Whatsapp' ? contactValue : undefined
+      );
+      
+      if (!signerId) throw new Error('Falha ao criar signatário na Assinafy');
+
+      // 4. Create Assignment and get signing URL
+      const signingUrl = await assinafyService.createAssignment(documentId, signerId, method);
+
+      if (!signingUrl) throw new Error('Falha ao criar solicitação de assinatura');
+
+      // 5. Update local database
+      for (const id of selectedIds) {
+        await evolutionService.updateEvolutionSignature(id, documentId, 'pending_signature');
+      }
+
+      setEvolutions(prev => prev.map(e => 
+        selectedIds.includes(e.id as string) 
+          ? { ...e, assinafy_document_id: documentId, assinafy_status: 'pending_signature' } 
+          : e
+      ));
+
+      setIsAssinarModalOpen(false);
+      setShareSigningUrl(signingUrl);
+
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Erro ao processar assinatura');
+    } finally {
+      setIsSigning(false);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -1970,7 +2034,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-gray-800">Histórico</h3>
                 <div className="flex gap-3">
-                  <button className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 bg-blue-50/50 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors">
+                  <button 
+                    onClick={() => setIsAssinarModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 border border-blue-200 text-blue-700 bg-blue-50/50 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors"
+                  >
                     <FileText size={16} /> Assinar digitalmente
                   </button>
                   <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
@@ -2106,6 +2173,24 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             </div>
           </div>
         </div>
+      )}
+
+      {isAssinarModalOpen && (
+        <AssinarEvolucaoModal
+          evolutions={evolutions}
+          patientEmail={patient.email || ''}
+          patientPhone={patient.telefone || ''}
+          onClose={() => setIsAssinarModalOpen(false)}
+          onSubmit={handleRequestSignature}
+          isLoading={isSigning}
+        />
+      )}
+
+      {shareSigningUrl && (
+        <ShareSignatureLinkModal
+          signingUrl={shareSigningUrl}
+          onClose={() => setShareSigningUrl(null)}
+        />
       )}
 
       {/* New Budget Modal */}

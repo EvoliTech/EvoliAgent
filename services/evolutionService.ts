@@ -14,6 +14,8 @@ export interface Evolucao {
   data_evolucao: string;
   profissional: string;
   created_at?: string;
+  assinafy_document_id?: string;
+  assinafy_status?: string;
 }
 
 export const evolutionService = {
@@ -47,7 +49,9 @@ export const evolutionService = {
         orcamento_numero: evolution.orcamento_numero,
         texto: evolution.texto,
         data_evolucao: evolution.data_evolucao,
-        profissional: evolution.profissional
+        profissional: evolution.profissional,
+        assinafy_document_id: evolution.assinafy_document_id,
+        assinafy_status: evolution.assinafy_status
       })
       .select()
       .single();
@@ -57,6 +61,22 @@ export const evolutionService = {
       return null;
     }
     return data as Evolucao;
+  },
+
+  async updateEvolutionSignature(evolutionId: string, documentId: string, status: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('evolucoes')
+      .update({
+        assinafy_document_id: documentId,
+        assinafy_status: status
+      })
+      .eq('id', evolutionId);
+
+    if (error) {
+      console.error('Error updating evolution signature:', error);
+      return false;
+    }
+    return true;
   },
 
   async deleteEvolution(evolutionId: string): Promise<boolean> {
