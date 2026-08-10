@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, PenTool, Mail, MessageCircle } from 'lucide-react';
+import { X, PenTool, Mail } from 'lucide-react';
 import { Evolucao } from '../services/evolutionService';
 
 interface AssinarEvolucaoModalProps {
@@ -7,18 +7,16 @@ interface AssinarEvolucaoModalProps {
   patientEmail?: string;
   patientPhone?: string;
   onClose: () => void;
-  onSubmit: (selectedIds: string[], contactValue: string, method: 'Email' | 'Whatsapp') => void;
+  onSubmit: (selectedIds: string[], contactValue: string, method: 'Email') => void;
   isLoading?: boolean;
 }
 
 export const AssinarEvolucaoModal: React.FC<AssinarEvolucaoModalProps> = ({
-  evolutions, patientEmail, patientPhone, onClose, onSubmit, isLoading
+  evolutions, patientEmail, onClose, onSubmit, isLoading
 }) => {
   const availableEvolutions = evolutions.filter(e => e.assinafy_status !== 'certificated' && e.assinafy_status !== 'pending_signature');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [method, setMethod] = useState<'Email' | 'Whatsapp'>('Email');
   const [email, setEmail] = useState(patientEmail || '');
-  const [phone, setPhone] = useState(patientPhone || '');
 
   const handleSelectAll = (checked: boolean) => {
     setSelectedIds(checked ? availableEvolutions.map(e => e.id as string) : []);
@@ -28,23 +26,11 @@ export const AssinarEvolucaoModal: React.FC<AssinarEvolucaoModalProps> = ({
     setSelectedIds(prev => checked ? [...prev, id] : prev.filter(x => x !== id));
   };
 
-  // Format phone to E.164
-  const formatPhone = (p: string) => {
-    const digits = p.replace(/\D/g, '');
-    if (digits.startsWith('55')) return `+${digits}`;
-    return `+55${digits}`;
-  };
-
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const isPhoneValid = phone.replace(/\D/g, '').length >= 10;
-  const canSubmit = selectedIds.length > 0 && (method === 'Email' ? isEmailValid : isPhoneValid);
+  const canSubmit = selectedIds.length > 0 && isEmailValid;
 
   const handleSubmit = () => {
-    if (method === 'Email') {
-      onSubmit(selectedIds, email, 'Email');
-    } else {
-      onSubmit(selectedIds, formatPhone(phone), 'Whatsapp');
-    }
+    onSubmit(selectedIds, email, 'Email');
   };
 
   return (
@@ -58,68 +44,22 @@ export const AssinarEvolucaoModal: React.FC<AssinarEvolucaoModalProps> = ({
         </div>
 
         <div className="p-6 flex flex-col gap-5">
-          {/* Method selector */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-gray-700">Método de verificação</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMethod('Email')}
-                className={`flex items-center gap-2 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                  method === 'Email'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                <Mail size={16} /> E-mail
-              </button>
-              <button
-                type="button"
-                onClick={() => setMethod('Whatsapp')}
-                className={`flex items-center gap-2 p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                  method === 'Whatsapp'
-                    ? 'border-green-500 bg-green-50 text-green-700'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                <MessageCircle size={16} /> WhatsApp
-              </button>
-            </div>
-            {method === 'Whatsapp' && (
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                ⚠️ WhatsApp requer plano pago na Assinafy. No Sandbox, a mensagem é simulada (sem envio real).
-              </p>
-            )}
+          {/* Contact field (Email) */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Mail size={16} className="text-blue-600" />
+              E-mail do paciente
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="paciente@email.com"
+              disabled={isLoading}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+            />
+            <p className="text-xs text-gray-400">O paciente receberá o link e o código de verificação para assinatura neste e-mail.</p>
           </div>
-
-          {/* Contact field */}
-          {method === 'Email' ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-gray-700">E-mail do paciente</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="paciente@email.com"
-                disabled={isLoading}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
-              />
-              <p className="text-xs text-gray-400">O paciente receberá um código de verificação neste e-mail.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-gray-700">WhatsApp do paciente</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="(45) 99999-1234"
-                disabled={isLoading}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
-              />
-              <p className="text-xs text-gray-400">O paciente receberá o link de assinatura via WhatsApp.</p>
-            </div>
-          )}
 
           {/* Evolution list */}
           <div>
