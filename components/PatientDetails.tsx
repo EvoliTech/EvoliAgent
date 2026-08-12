@@ -143,7 +143,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   const [shareSigningUrl, setShareSigningUrl] = React.useState<string | null>(null);
   const [isSigning, setIsSigning] = React.useState(false);
 
-  const handleRequestSignature = async (selectedIds: string[], contactValue: string, method: 'Email' | 'Whatsapp') => {
+  const handleRequestSignature = async (selectedIds: string[], contactEmail: string) => {
     try {
       setIsSigning(true);
       const evosToSign = evolutions.filter(e => selectedIds.includes(e.id as string));
@@ -161,17 +161,16 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
 
       if (!documentId) throw new Error('Falha ao criar documento na Assinafy');
 
-      // 3. Create Signer using the confirmed contact
+      // 3. Create Signer using the confirmed email
       const signerId = await assinafyService.createSigner(
         patient.name,
-        method === 'Email' ? contactValue : (patient.email || ''),
-        method === 'Whatsapp' ? contactValue : undefined
+        contactEmail
       );
       
       if (!signerId) throw new Error('Falha ao criar signatário na Assinafy');
 
       // 4. Create Assignment and get signing URL
-      const signingUrl = await assinafyService.createAssignment(documentId, signerId, method);
+      const signingUrl = await assinafyService.createAssignment(documentId, signerId, 'Email');
 
       if (!signingUrl) throw new Error('Falha ao criar solicitação de assinatura');
 
@@ -2194,7 +2193,6 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         <AssinarEvolucaoModal
           evolutions={evolutions}
           patientEmail={patient.email || ''}
-          patientPhone={patient.telefone || ''}
           onClose={() => setIsAssinarModalOpen(false)}
           onSubmit={handleRequestSignature}
           isLoading={isSigning}
