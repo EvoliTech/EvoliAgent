@@ -50,6 +50,41 @@ export const budgetService = {
     });
   },
 
+  async fetchBudgetById(budgetId: string): Promise<any | null> {
+    const { data, error } = await supabase
+      .from('orcamentos')
+      .select(`
+        *,
+        orcamento_itens(*, orcamento_item_pagamentos(*)),
+        paciente:Cliente (
+          id, nome, nome_completo, cpf
+        )
+      `)
+      .eq('id', budgetId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching budget by id:', error);
+      return null;
+    }
+    
+    if (!data) return null;
+    
+    // Fetch empresa separately
+    let empresaData = null;
+    if (data.empresa_id) {
+        const { data: emp } = await supabase
+            .from('Empresa')
+            .select('*')
+            .eq('id', data.empresa_id)
+            .single();
+        empresaData = emp;
+    }
+
+    const budget = this.mapToBudget(data);
+    return { ...data, treatments: budget.treatments, empresa: empresaData };
+  },
+
   async saveBudget(empresaId: number, pacienteId: number, budget: Budget): Promise<Budget | null> {
     const payload = {
       empresa_id: empresaId,

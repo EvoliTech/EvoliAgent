@@ -55,7 +55,18 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
         if (isOpen) {
             if (initialData) {
                 // Edit Mode
-                setTitle(initialData.summary);
+                // Parse description for fields
+                const getField = (text: string | undefined, label: string) => {
+                    if (!text) return '';
+                    const lines = text.split('\n');
+                    const line = lines.find(l => l.startsWith(label));
+                    return line ? line.replace(label, '').trim() : '';
+                };
+
+                const proc = getField(initialData.description, 'Procedimento:');
+                const finalTitle = proc || (initialData.summary.includes(' - Paciente:') ? '' : initialData.summary);
+                setTitle(finalTitle);
+
                 if (initialData.start?.dateTime) {
                     const startObj = new Date(initialData.start.dateTime);
                     setDate(startObj.toISOString().split('T')[0]);
@@ -68,13 +79,6 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
                     }
                 }
 
-                // Parse description for fields
-                const getField = (text: string | undefined, label: string) => {
-                    if (!text) return '';
-                    const lines = text.split('\n');
-                    const line = lines.find(l => l.startsWith(label));
-                    return line ? line.replace(label, '').trim() : '';
-                };
 
                 setPatientName(getField(initialData.description, 'Paciente:'));
                 const phone = getField(initialData.description, 'Telefone:');
@@ -307,9 +311,14 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
             const finalPhone = `55${ddd.replace(/\D/g, '')}${phoneOnly.replace(/\D/g, '')}`;
             const whatsappLink = `https://wa.me/${finalPhone}`;
 
+            const specialist = specialists.find(s => s.calendarId === selectedCalendarId || s.id === selectedCalendarId);
+            const specialistName = specialist ? specialist.name : 'Clínica';
+            const displayTitle = `${specialistName} - Paciente: ${patientName}`;
+
             const eventData = {
-                summary: title,
-                description: `Paciente: ${patientName}
+                summary: displayTitle,
+                description: `Procedimento: ${title}
+Paciente: ${patientName}
 Telefone: ${finalPhone}
 WhatsApp: ${whatsappLink}
 Tipo: ${consultationType || '-'}

@@ -42,6 +42,8 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
     const displayTitle = event.summary.includes(' - Paciente:')
         ? event.summary
         : `${specialistName} - Paciente: ${patientName}`;
+        
+    const procedureName = getField(event.description, 'Procedimento:') || (event.summary.includes(' - Paciente:') ? '' : event.summary);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -85,10 +87,10 @@ export const AppointmentDetailsModal: React.FC<AppointmentDetailsModalProps> = (
                                 <FileText size={18} />
                             </div>
                             <div>
-                                {!(event.summary.includes(' - Paciente:')) && (
+                                {procedureName && (
                                     <>
                                         <p className="text-sm text-gray-900 font-medium">Procedimento:</p>
-                                        <p className="text-sm text-gray-600">{event.summary}</p>
+                                        <p className="text-sm text-gray-600">{procedureName}</p>
                                     </>
                                 )}
                                 {patientPhone && <p className="text-sm text-gray-500 mt-1">Contato: {patientPhone}</p>}

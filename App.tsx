@@ -21,6 +21,7 @@ import { FeesSettings } from './components/FeesSettings';
 import { ProsthesisControl } from './components/ProsthesisControl';
 import { PublicAnamnese } from './components/PublicAnamnese';
 import { PublicProsthesisView } from './components/PublicProsthesisView';
+import { PublicBudgetView } from './components/PublicBudgetView';
 import { GoogleCallback } from './components/GoogleCallback';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
@@ -117,7 +118,7 @@ export default function App() {
   // Sync URL to currentPage
   useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith('/anamnese/') || path.startsWith('/proteses/') || path.startsWith('/protese/')) return; // public routes handled later
+    if (path.startsWith('/anamnese/') || path.startsWith('/proteses/') || path.startsWith('/protese/') || path.startsWith('/orcamento/')) return; // public routes handled later
 
     if (path === '/login') {
       if (session) {
@@ -295,6 +296,7 @@ export default function App() {
   // Public routes (anamnese, prosthesis view, login)
   if (window.location.pathname.startsWith('/anamnese/')) return <PublicAnamnese />;
   if (window.location.pathname.startsWith('/proteses/') || window.location.pathname.startsWith('/protese/')) return <PublicProsthesisView />;
+  if (window.location.pathname.startsWith('/orcamento/')) return <PublicBudgetView />;
   if (location.pathname === '/login') {
     if (session) return <Navigate to="/dashboard" replace />;
     return <Login />;

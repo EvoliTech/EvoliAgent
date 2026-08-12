@@ -42,7 +42,7 @@ import { expenseService } from '../services/expenseService';
 import { AssinarEvolucaoModal } from './AssinarEvolucaoModal';
 import { ShareSignatureLinkModal } from './ShareSignatureLinkModal';
 import { assinafyService } from '../services/assinafyService';
-import { generateEvolutionsPdf } from '../lib/pdfGenerator';
+import { generateEvolutionsPdf, generateBudgetPdf } from '../lib/pdfGenerator';
 import { companyService } from '../services/companyService';
 
 export interface Category {
@@ -53,10 +53,12 @@ export interface Category {
 
 export interface Budget {
   id: string;
+  numero?: number;
   name: string;
   date: string;
+  created_at?: string;
   total: number;
-  status: 'Pendente' | 'Aprovado';
+  status: 'Pendente' | 'Aguardando' | 'Aprovado';
   treatments: any[];
 }
 
@@ -109,6 +111,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
   // Odontograma state removed (now local to NewBudgetModal)
   // Budgets State (DB Sync)
   const [budgets, setBudgets] = React.useState<Budget[]>([]);
+  const [isPrintBudgetModalOpen, setIsPrintBudgetModalOpen] = React.useState(false);
+  const [budgetToPrint, setBudgetToPrint] = React.useState<Budget | null>(null);
 
   // Health Alerts State
   const [healthAlerts, setHealthAlerts] = React.useState<string[]>([]);
@@ -488,7 +492,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         // Load Specialists for appointment history mapping
         let loadedSpecs: any[] = [];
         try {
-          const { data: specs } = await supabase.from('Especialista').select('*').eq('IDEmpresa', empresaId);
+          const { specialistService } = await import('../services/specialistService');
+          const specs = await specialistService.fetchSpecialists(empresaId);
           if (specs) {
             loadedSpecs = specs;
             setSpecialists(specs);
@@ -1033,7 +1038,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                       const startDate = new Date(appt.data_inicio);
                       const dateStr = startDate.toLocaleDateString('pt-BR');
                       const timeStr = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                      const spec = specialists.find(s => s.calendarId === appt.especialista_id || s.id === appt.especialista_id);
+                      const targetId = appt.calendar_id || appt.especialista_id;
+                      const spec = specialists.find(s => 
+                        (s.calendarId && String(s.calendarId) === String(targetId)) || 
+                        (s.id && String(s.id) === String(targetId))
+                      );
                       
                       const getStatusInfo = (rawStatus: string) => {
                         const statusStr = (rawStatus || '').toLowerCase();
@@ -1050,7 +1059,11 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                           <div className="flex items-center gap-4 text-[13.5px] text-gray-700">
                             <span className="font-medium min-w-[80px]">{dateStr}</span>
                             <span className="text-gray-500 w-[45px]">{timeStr}</span>
-                            <span className="font-medium text-gray-800">{spec ? spec.name : appt.titulo}</span>
+                            <span className="font-medium text-gray-800">
+                              {appt.titulo?.includes(' - Paciente:') 
+                                ? appt.titulo 
+                                : `${spec ? spec.name : 'Clínica'} - Paciente: ${patient.name}`}
+                            </span>
                           </div>
                           
                           <div className="flex items-center gap-3 opacity-100 lg:opacity-60 lg:group-hover:opacity-100 transition-opacity">
@@ -1194,7 +1207,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                 >
                                   <Edit2 size={14} className="text-gray-400" /> Editar
                                 </button>
-                                <button className="w-full text-left px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                <button 
+                                  onClick={() => { setBudgetToPrint(budget); setIsPrintBudgetModalOpen(true); setOpenBudgetMenuId(null); }}
+                                  className="w-full text-left px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                   <Printer size={14} className="text-gray-400" /> Imprimir
                                 </button>
                                 <button
@@ -2597,11 +2612,63 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
         onClose={() => setIsApptDetailsOpen(false)}
         event={selectedEvent}
         specialistName={
-          specialists.find(s => s.calendarId === selectedEvent?.calendarId || s.id === selectedEvent?.calendarId)?.name || 'Clínica'
+          specialists.find(s => 
+            (s.calendarId && String(s.calendarId) === String(selectedEvent?.calendarId)) || 
+            (s.id && String(s.id) === String(selectedEvent?.calendarId))
+          )?.name || 'Clínica'
         }
         onEdit={handleEditAppt}
         onDelete={handleDeleteEvent}
       />
+
+      {isPrintBudgetModalOpen && budgetToPrint && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">Opções de Orçamento</h2>
+              <button onClick={() => setIsPrintBudgetModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-gray-600 mb-6">Como deseja compartilhar o orçamento <strong className="text-gray-900">{budgetToPrint.name}</strong>?</p>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={async () => {
+                    const companyData = await companyService.fetchCompany(empresaId!);
+                    const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
+                    const compInfo = { name: companyData?.nome || 'Clínica', phone: companyData?.telefoneWhatsapp };
+                    const pdfBlob = generateBudgetPdf(patientInfo, compInfo, budgetToPrint);
+                    const url = URL.createObjectURL(pdfBlob);
+                    window.open(url, '_blank');
+                    setIsPrintBudgetModalOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-700 hover:bg-blue-100 px-4 py-3 rounded-xl font-semibold transition-colors"
+                >
+                  <Printer size={18} />
+                  Visualizar / Baixar PDF
+                </button>
+
+                <button
+                  onClick={() => {
+                    const link = `${window.location.origin}/orcamento/${budgetToPrint.id}`;
+                    const text = `Olá ${patient.name.split(' ')[0]}, segue o link para acessar o seu orçamento da clínica:\n${link}`;
+                    const waUrl = `https://wa.me/${(patient.telefone || patient.celular || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+                    window.open(waUrl, '_blank');
+                    setIsPrintBudgetModalOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-green-50 text-green-700 hover:bg-green-100 px-4 py-3 rounded-xl font-semibold transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                  Enviar por WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
