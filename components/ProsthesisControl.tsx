@@ -247,9 +247,8 @@ export const ProsthesisControl: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto px-4 md:px-6 pb-4 md:pb-6 hide-scrollbar -mx-4 md:mx-0">
-        <div className="flex justify-start md:justify-center h-full min-w-max md:min-w-0 px-4 md:px-0">
-          <div className="flex gap-4 w-full max-w-7xl">
+      <div className="flex-1 overflow-auto px-4 md:px-6 pb-4 md:pb-6 pr-2">
+        <div className="flex gap-4 h-full min-h-[600px] min-w-max items-start pb-2">
             {COLUMNS.map((coluna) => {
               const columnCards = solicitacoes.filter(s => s.status === coluna);
               const colors = COLUMN_COLORS[coluna];
@@ -257,7 +256,7 @@ export const ProsthesisControl: React.FC = () => {
               return (
                 <div 
                   key={coluna} 
-                  className="flex-1 flex flex-col min-w-[280px] max-w-[320px] max-h-full bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
+                  className="flex flex-col w-72 lg:w-80 max-h-full bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, coluna)}
                 >
@@ -270,7 +269,7 @@ export const ProsthesisControl: React.FC = () => {
                       {columnCards.length}
                     </span>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/30 min-h-[150px]">
+                  <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/30">
                     {columnCards.map((card) => (
                       <div
                         key={card.id}
@@ -337,7 +336,6 @@ export const ProsthesisControl: React.FC = () => {
             })}
           </div>
         </div>
-      </div>
 
       {reenvioPrompt?.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">

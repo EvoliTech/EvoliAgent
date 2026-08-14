@@ -63,7 +63,7 @@ export const patientService = {
             plano: patient.plano,
             IDEmpresa: empresaId,
             botAtivo: patient.status === 'Ativo' ? 'true' : 'false',
-            status_lead_no_crm: patient.status === 'Ativo' ? 'novo' : 'arquivado'
+            status_lead_no_crm: patient.status_lead_no_crm || (patient.status === 'Ativo' ? 'Novo' : 'Descartado')
         };
 
         const { error } = await supabase
@@ -133,7 +133,12 @@ export const patientService = {
         if (patient.plano) updates.plano = patient.plano;
         if (patient.status) {
             updates.botAtivo = patient.status === 'Ativo' ? 'true' : 'false';
-            updates.status_lead_no_crm = patient.status === 'Ativo' ? 'novo' : 'arquivado';
+            if (patient.status === 'Inativo') {
+                updates.status_lead_no_crm = 'Descartado';
+            }
+        }
+        if (patient.status_lead_no_crm !== undefined) {
+            updates.status_lead_no_crm = patient.status_lead_no_crm;
         }
 
         // New registration fields
@@ -233,6 +238,7 @@ function mapCustomerToPatient(customer: SupabaseCustomer): Patient {
         status: isActive ? 'Ativo' : 'Ativo', // Defaulting to Ativo for visibility for now
         lastVisit: customer.created_at ? new Date(customer.created_at).toLocaleDateString('pt-BR') : '-',
         createdAt: customer.created_at ? new Date(customer.created_at) : undefined,
+        status_lead_no_crm: customer.status_lead_no_crm,
         // New registration fields mapping
         cpf: customer.cpf,
         rg: customer.rg,

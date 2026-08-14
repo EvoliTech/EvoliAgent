@@ -1,5 +1,5 @@
 export type ViewType = 'month' | 'week' | 'day';
-export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings' | 'prosthesis-control' | 'security';
+export type PageType = 'dashboard' | 'agenda' | 'appointments' | 'patients' | 'professionals' | 'settings' | 'google-callback' | 'patient-registration-update' | 'inventory' | 'financeiro' | 'gallery' | 'campaigns' | 'message-center' | 'clinic-settings' | 'plans-management' | 'integrations' | 'fees-settings' | 'prosthesis-control' | 'security' | 'crm';
 
 export interface TreatmentItem {
   id: string;
@@ -51,6 +51,7 @@ export interface Patient {
   status: 'Ativo' | 'Inativo';
   lastVisit?: string;
   createdAt?: Date;
+  status_lead_no_crm?: string;
   // New registration fields
   cpf?: string;
   rg?: string;

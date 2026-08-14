@@ -7,6 +7,7 @@ import { Dashboard } from './components/Dashboard';
 import { Agenda } from './components/Agenda';
 import { AppointmentsList } from './components/AppointmentsList';
 import { Patients } from './components/Patients';
+import { CRM } from './components/CRM';
 import { PatientRegistrationUpdate } from './components/PatientRegistrationUpdate';
 import { Inventory } from './components/Inventory';
 import { Financial } from './components/Financial';
@@ -97,6 +98,7 @@ export default function App() {
     dashboard: '/dashboard',
     agenda: '/agenda',
     appointments: '/agendamentos',
+    crm: '/crm',
     patients: '/pacientes',
     'patient-registration-update': '/pacientes-cadastro',
     inventory: '/estoque',
@@ -246,6 +248,9 @@ export default function App() {
           )}
           {currentPage === 'appointments' && (
             !hasAccess('appointments') ? <Navigate to="/dashboard" replace /> : <AppointmentsList />
+          )}
+          {currentPage === 'crm' && (
+            !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : <CRM />
           )}
           {currentPage === 'patients' && (
             !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : (
