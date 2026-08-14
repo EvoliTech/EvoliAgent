@@ -42,15 +42,28 @@ export const PublicBudgetView = () => {
   const handlePrintPdf = async () => {
     if (!budget || !company) return;
     
+    const p = budget.paciente || {};
+    const enderecoParts = [];
+    if (p.endereco_rua || p.enderecoRua) enderecoParts.push(p.endereco_rua || p.enderecoRua);
+    if (p.endereco_numero || p.enderecoNumero) enderecoParts.push(p.endereco_numero || p.enderecoNumero);
+    if (p.endereco_bairro || p.enderecoBairro) enderecoParts.push(p.endereco_bairro || p.enderecoBairro);
+    const cid = p.endereco_cidade || p.enderecoCidade;
+    const est = p.endereco_estado || p.enderecoEstado;
+    if (cid) enderecoParts.push(`${cid}${est ? ` - ${est}` : ''}`);
+    const patientEndereco = enderecoParts.join(', ');
+
     const patientInfo = {
       name: budget.paciente?.nome || budget.paciente?.nome_completo || 'Paciente',
       cpf: budget.paciente?.cpf,
-      phone: budget.paciente?.celular || budget.paciente?.telefone
+      phone: budget.paciente?.celular || budget.paciente?.telefone || budget.paciente?.telefoneWhatsapp,
+      endereco: patientEndereco
     };
 
     const companyInfo = {
+      id: company.id,
       name: company.nome || 'Clínica Odontológica',
-      phone: company.telefone,
+      phone: company.telefoneWhatsapp || company.telefone,
+      endereco: company.endereco_completo || company.endereco,
       email: '',
       configuracoes: company.configuracoes
     };

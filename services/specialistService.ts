@@ -45,17 +45,20 @@ export const specialistService = {
     },
 
     async createSpecialist(empresaId: number, specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
-        // 1. Get owner email and clinic name
-        const [adminEmail, clinicName] = await Promise.all([
+        // 1. Get owner email, clinic name and connected google email
+        const [adminEmail, clinicName, connectedGoogleEmail] = await Promise.all([
             getAdminEmail(empresaId),
-            getClinicName(empresaId)
+            getClinicName(empresaId),
+            userService.getConnectedGoogleEmail(empresaId)
         ]);
 
+        const targetEmail = connectedGoogleEmail || adminEmail || '';
+
         // 2. Create Google Calendar first
-        let googleCalendarId = specialist.email || adminEmail || '';
+        let googleCalendarId = targetEmail;
         try {
-            if (adminEmail) {
-                const newCal = await googleCalendarService.createCalendar(empresaId, adminEmail, specialist.name);
+            if (targetEmail) {
+                const newCal = await googleCalendarService.createCalendar(empresaId, targetEmail, specialist.name);
                 googleCalendarId = newCal.id;
             }
         } catch (e) {
@@ -68,7 +71,7 @@ export const specialistService = {
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
             calendar_id: googleCalendarId, // Store Google Calendar ID
-            email: specialist.email || adminEmail || '', // Use provided email or owner's email
+            email: targetEmail, // Use connected Google account email
             phone: specialist.phone,
             cro: specialist.cro,
             treatments: specialist.treatments || [],
@@ -99,8 +102,12 @@ export const specialistService = {
     async createSpecialistFromGoogle(empresaId: number, specialist: Omit<Specialist, 'id'>): Promise<Specialist> {
         // This version is used when importing from Google Calendar
         // It does NOT create a new Google Calendar (to avoid duplication)
-        // Email is automatically filled with owner's email
-        const adminEmail = await getAdminEmail(empresaId);
+        // Email is automatically filled with owner's/google email
+        const [adminEmail, connectedGoogleEmail] = await Promise.all([
+            getAdminEmail(empresaId),
+            userService.getConnectedGoogleEmail(empresaId)
+        ]);
+        const targetEmail = connectedGoogleEmail || adminEmail || '';
 
         const newSpecialist = {
             name: specialist.name,
@@ -108,7 +115,7 @@ export const specialistService = {
             color: specialist.color,
             avatar_url: specialist.avatarUrl,
             calendar_id: specialist.calendarId, // Google Calendar ID
-            email: adminEmail || '', // Automatically fill with owner's email
+            email: targetEmail, // Automatically fill with connected email
             phone: specialist.phone,
             cro: specialist.cro,
             treatments: specialist.treatments || [],

@@ -2636,10 +2636,19 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 <button
                   onClick={async () => {
                     const companyData = await companyService.fetchCompany(empresaId!);
-                    const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
+                    const enderecoParts = [];
+                    if (patient.enderecoRua) enderecoParts.push(patient.enderecoRua);
+                    if (patient.enderecoNumero) enderecoParts.push(patient.enderecoNumero);
+                    if (patient.enderecoBairro) enderecoParts.push(patient.enderecoBairro);
+                    if (patient.enderecoCidade) enderecoParts.push(`${patient.enderecoCidade}${patient.enderecoEstado ? ` - ${patient.enderecoEstado}` : ''}`);
+                    const patientEndereco = enderecoParts.join(', ');
+                    
+                    const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.phone || (patient as any).telefone, endereco: patientEndereco };
                     const compInfo = { 
+                        id: empresaId,
                         name: companyData?.nome || 'Clínica', 
                         phone: companyData?.telefoneWhatsapp,
+                        endereco: companyData?.endereco_completo || companyData?.endereco,
                         configuracoes: companyData?.configuracoes 
                     };
                     const pdfBlob = await generateBudgetPdf(patientInfo, compInfo, budgetToPrint);

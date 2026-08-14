@@ -234,10 +234,6 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
               {/* Corpo do Card (Contatos) */}
               <div className="px-6 py-4 space-y-3 flex-1">
                 <div className="flex items-center text-sm text-gray-600">
-                  <Mail size={16} className="mr-3 text-gray-400" />
-                  {spec.email || 'Não informado'}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
                   <Phone size={16} className="mr-3 text-gray-400" />
                   {spec.phone || 'Não informado'}
                 </div>
@@ -340,28 +336,6 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {currentSpecialist.calendarId && (
-            <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">ID da Agenda (Google Calendar)</label>
-              <input
-                type="text"
-                disabled
-                className="w-full bg-transparent border-none p-0 text-xs text-gray-500 cursor-not-allowed focus:ring-0"
-                value={currentSpecialist.calendarId || ''}
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">E-mail</label>
-            <input
-              type="email"
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-              value={currentSpecialist.email || ''}
-              onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
-              placeholder="email@exemplo.com"
-            />
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -388,7 +362,7 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
 
 
           {currentSpecialist.id && ( // Only show delete for existing specialists
-            <div className="pt-4 mt-4 border-t border-gray-100 flex justify-between items-center">
+            <div className="pt-4 mt-4 border-t border-gray-100 flex justify-start items-center">
               <button
                 type="button"
                 onClick={() => handleOpenDelete(currentSpecialist as Specialist)}
@@ -397,11 +371,6 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
               >
                 <Trash2 size={16} />
               </button>
-
-              <div className="text-right">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Criado por:</span>
-                <p className="text-xs font-bold text-gray-700">{currentSpecialist.created_by || '-'}</p>
-              </div>
             </div>
           )}
 
