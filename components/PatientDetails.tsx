@@ -2637,8 +2637,12 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                   onClick={async () => {
                     const companyData = await companyService.fetchCompany(empresaId!);
                     const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
-                    const compInfo = { name: companyData?.nome || 'Clínica', phone: companyData?.telefoneWhatsapp };
-                    const pdfBlob = generateBudgetPdf(patientInfo, compInfo, budgetToPrint);
+                    const compInfo = { 
+                        name: companyData?.nome || 'Clínica', 
+                        phone: companyData?.telefoneWhatsapp,
+                        configuracoes: companyData?.configuracoes 
+                    };
+                    const pdfBlob = await generateBudgetPdf(patientInfo, compInfo, budgetToPrint);
                     const url = URL.createObjectURL(pdfBlob);
                     window.open(url, '_blank');
                     setIsPrintBudgetModalOpen(false);

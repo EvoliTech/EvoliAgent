@@ -37,6 +37,7 @@ export interface Specialist {
   calendarId?: string; // Google Calendar ID
   email?: string; // E-mail do especialista (editável)
   phone?: string;
+  cro?: string; // CRO (e.g. CRO-SC 12345)
   treatments?: string[]; // Lista de tratamentos habilitados
   created_by?: string;
   comissoes?: CommissionRule[];

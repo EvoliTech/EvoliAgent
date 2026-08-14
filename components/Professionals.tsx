@@ -91,6 +91,7 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
       name: '',
       email: '',
       phone: '',
+      cro: '',
       specialty: '',
       color: 'bg-blue-100 text-blue-700 border-blue-200',
       treatments: []
@@ -240,6 +241,10 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
                   <Phone size={16} className="mr-3 text-gray-400" />
                   {spec.phone || 'Não informado'}
                 </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <span className="font-semibold text-[10px] text-gray-400 uppercase tracking-widest w-4 mr-[14px]">CRO</span>
+                  {spec.cro || 'Não informado'}
+                </div>
               </div>
 
               {/* Área de Tratamentos (Clicável) */}
@@ -347,17 +352,18 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
             </div>
           )}
 
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">E-mail</label>
+            <input
+              type="email"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+              value={currentSpecialist.email || ''}
+              onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
+              placeholder="email@exemplo.com"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">E-mail</label>
-              <input
-                type="email"
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                value={currentSpecialist.email || ''}
-                onChange={e => setCurrentSpecialist({ ...currentSpecialist, email: e.target.value })}
-                placeholder="email@exemplo.com"
-              />
-            </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Telefone</label>
               <input
@@ -366,6 +372,16 @@ export const Professionals: React.FC<ProfessionalsProps> = ({ onBack }) => {
                 value={currentSpecialist.phone || ''}
                 onChange={e => setCurrentSpecialist({ ...currentSpecialist, phone: e.target.value })}
                 placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Registro CRO</label>
+              <input
+                type="text"
+                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm uppercase"
+                value={currentSpecialist.cro || ''}
+                onChange={e => setCurrentSpecialist({ ...currentSpecialist, cro: e.target.value.toUpperCase() })}
+                placeholder="CRO-UF 00000"
               />
             </div>
           </div>

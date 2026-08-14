@@ -72,7 +72,7 @@ export const CRM: React.FC = () => {
 
     // Optimistic update
     const previousPatients = [...patients];
-    setPatients(patients.map(p => 
+    setPatients(patients.map(p =>
       p.id === draggedPatientId ? { ...p, status_lead_no_crm: newStatus } : p
     ));
 
@@ -87,14 +87,14 @@ export const CRM: React.FC = () => {
   const getPatientsByStatus = (statusId: string) => {
     return patients.filter(p => {
       const pStatus = p.status_lead_no_crm || 'Frio'; // Default to Frio Se vazio
-      
+
       // Mapeamento de status antigos do agente para os novos do Kanban
       if (statusId === 'Frio' && (pStatus === 'Frio' || pStatus === 'Leads Novos' || pStatus === 'novo' || pStatus === 'Novo')) return true;
       if (statusId === 'Morno' && (pStatus === 'Morno' || pStatus === 'Contato em andamento')) return true;
       if (statusId === 'Agendado' && (pStatus === 'Agendado' || pStatus === 'Pacientes agendados')) return true;
       if (statusId === 'Finalizado' && (pStatus === 'Finalizado' || pStatus === 'Pacientes atendidos')) return true;
       if (statusId === 'Descartado' && (pStatus === 'Descartado' || pStatus === 'Leads não qualificados' || pStatus === 'arquivado' || pStatus === 'Inativo')) return true;
-      
+
       return pStatus === statusId;
     });
   };
@@ -111,7 +111,7 @@ export const CRM: React.FC = () => {
   return (
     <div className="p-4 md:p-8 h-full flex flex-col animate-in fade-in duration-500">
       <PageHeader
-        title="CRM & Leads"
+        title="Leads (Kanban)"
         subtitle="Gerencie seus pacientes pelo funil de atendimento."
       />
 
@@ -155,14 +155,14 @@ export const CRM: React.FC = () => {
                           {patient.name.charAt(0)}
                         </div>
                       </div>
-                      
+
                       {patient.phone && (
                         <div className="flex items-center text-xs text-gray-500 mb-1">
                           <Phone size={12} className="mr-1.5" />
                           {patient.phone.replace(/^55(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')}
                         </div>
                       )}
-                      
+
                       {patient.plano && (
                         <div className="flex items-center text-xs text-gray-500 mb-3">
                           <User size={12} className="mr-1.5" />
@@ -188,7 +188,7 @@ export const CRM: React.FC = () => {
                       </div>
                     </div>
                   ))}
-                  
+
                   {columnPatients.length === 0 && (
                     <div className="h-24 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-lg">
                       <p className="text-xs text-gray-400 font-medium">Arraste um card para cá</p>

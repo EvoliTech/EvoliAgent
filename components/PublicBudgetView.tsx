@@ -39,8 +39,8 @@ export const PublicBudgetView = () => {
     fetchBudget();
   }, []);
 
-  const handlePrintPdf = () => {
-    if (!budget) return;
+  const handlePrintPdf = async () => {
+    if (!budget || !company) return;
     
     const patientInfo = {
       name: budget.paciente?.nome || budget.paciente?.nome_completo || 'Paciente',
@@ -49,12 +49,13 @@ export const PublicBudgetView = () => {
     };
 
     const companyInfo = {
-      name: budget.empresa?.nome || 'Clínica Odontológica',
-      phone: budget.empresa?.telefone,
-      email: ''
+      name: company.nome || 'Clínica Odontológica',
+      phone: company.telefone,
+      email: '',
+      configuracoes: company.configuracoes
     };
 
-    const pdfBlob = generateBudgetPdf(patientInfo, companyInfo, budget);
+    const pdfBlob = await generateBudgetPdf(patientInfo, companyInfo, budget);
     const pdfUrl = URL.createObjectURL(pdfBlob);
     window.open(pdfUrl, '_blank');
   };

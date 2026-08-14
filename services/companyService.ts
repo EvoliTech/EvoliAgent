@@ -12,6 +12,7 @@ export interface CompanySettings {
             inicio: string;
             fim: string;
         }[];
+        logo_url?: string;
     };
 }
 

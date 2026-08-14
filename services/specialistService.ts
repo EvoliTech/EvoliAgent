@@ -70,6 +70,7 @@ export const specialistService = {
             calendar_id: googleCalendarId, // Store Google Calendar ID
             email: specialist.email || adminEmail || '', // Use provided email or owner's email
             phone: specialist.phone,
+            cro: specialist.cro,
             treatments: specialist.treatments || [],
             created_by: clinicName, // Set as clinic name
             IDEmpresa: empresaId
@@ -109,6 +110,7 @@ export const specialistService = {
             calendar_id: specialist.calendarId, // Google Calendar ID
             email: adminEmail || '', // Automatically fill with owner's email
             phone: specialist.phone,
+            cro: specialist.cro,
             treatments: specialist.treatments || [],
             created_by: 'Google Calendar', // Set origin
             IDEmpresa: empresaId
@@ -143,6 +145,7 @@ export const specialistService = {
             calendar_id: specialist.calendarId,
             email: specialist.email,
             phone: specialist.phone,
+            cro: specialist.cro,
             treatments: specialist.treatments ?? [],
             comissoes: specialist.comissoes
         };
@@ -240,6 +243,7 @@ function mapSupabaseToSpecialist(data: any): Specialist {
         calendarId: data.calendar_id,
         email: data.email,
         phone: data.phone,
+        cro: data.cro,
         treatments: data.treatments || [],
         created_by: data.created_by,
         comissoes: data.comissoes

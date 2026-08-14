@@ -34,13 +34,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
     { id: 'patients', label: 'Pacientes', icon: User },
-    { id: 'crm', label: 'CRM (Leads)', icon: Kanban },
     { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
   ];
 
   const toolsNavigation = [
     { id: 'inventory', label: 'Estoque', icon: Archive },
     { id: 'campaigns', label: 'Campanhas', icon: MessageSquare },
+    { id: 'crm', label: 'Leads ( Kanban )', icon: Kanban },
     { id: 'gallery', label: 'Galeria', icon: ImageIcon },
     { id: 'prosthesis-control', label: 'Próteses', icon: Stethoscope },
   ];

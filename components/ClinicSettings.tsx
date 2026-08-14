@@ -122,6 +122,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
    const location = useLocation();
    const subUserRole = localStorage.getItem('clinica_sub_user_role') || 'admin';
    const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
    useEffect(() => {
       const path = location.pathname;
@@ -634,11 +635,75 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
        }
     };
 
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !empresaId) return;
+
+        setIsUploadingLogo(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `logo_${empresaId}_${Math.random()}.${fileExt}`;
+            const filePath = `${empresaId}/${fileName}`;
+
+            // Try to upload to a generic 'public' or 'assets' bucket. Using 'company-logos'
+            const { error: uploadError } = await supabase.storage.from('company-logos').upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: true
+            });
+
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('company-logos').getPublicUrl(filePath);
+
+            if (data?.publicUrl) {
+                setCompany({
+                    ...company,
+                    configuracoes: {
+                        ...(company.configuracoes || { dias_funcionamento: [] }),
+                        logo_url: data.publicUrl
+                    }
+                });
+                showAlert('Sucesso', 'Logomarca carregada. Lembre-se de salvar as alterações.', 'success');
+            }
+        } catch (error: any) {
+            showAlert('Erro', 'Erro ao fazer upload da logomarca: ' + error.message, 'error');
+        } finally {
+            setIsUploadingLogo(false);
+        }
+    };
+
    const renderContent = () => {
       switch (activeTab) {
          case 'general':
             return (
                <div className="space-y-8 animate-in fade-in duration-500">
+                  <div className="flex flex-col md:flex-row items-center gap-6 pb-6 border-b border-gray-100">
+                     <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden relative group">
+                        {company.configuracoes?.logo_url ? (
+                           <img src={company.configuracoes.logo_url} alt="Logo da Clínica" className="w-full h-full object-contain p-2" />
+                        ) : (
+                           <Building className="text-gray-400 w-10 h-10" />
+                        )}
+                        <div className="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-all cursor-pointer">
+                           {isUploadingLogo ? (
+                              <Loader2 className="w-6 h-6 text-white animate-spin" />
+                           ) : (
+                              <Upload className="w-6 h-6 text-white" />
+                           )}
+                           <input type="file" accept="image/*" onChange={handleLogoUpload} className="absolute inset-0 opacity-0 cursor-pointer" disabled={isUploadingLogo} />
+                        </div>
+                     </div>
+                     <div>
+                        <h3 className="text-lg font-bold text-gray-900">Logomarca da Clínica</h3>
+                        <p className="text-sm text-gray-500 max-w-md">Envie a logomarca da sua clínica. Ela será utilizada em documentos, orçamentos e relatórios (Formatos recomendados: PNG, JPG).</p>
+                        {company.configuracoes?.logo_url && (
+                           <button onClick={() => setCompany({ ...company, configuracoes: { ...company.configuracoes!, logo_url: undefined } })} className="mt-2 text-xs text-red-500 font-bold hover:underline">
+                              Remover Logomarca
+                           </button>
+                        )}
+                     </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div className="md:col-span-2">
                         <label className="block text-sm font-bold text-gray-700 mb-1">Nome da Clínica</label>
