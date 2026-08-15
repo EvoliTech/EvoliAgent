@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Printer, FileText, Trash2, Edit3, Settings, Calendar } from 'lucide-react';
+import { Plus, X, Printer, FileText, Trash2, Edit3, Settings, Calendar, PenTool } from 'lucide-react';
 import { ContratoModal } from './ContratoModal';
 import { TermoConsentimentoModal } from './TermoConsentimentoModal';
 import { ReceituarioModal } from './ReceituarioModal';
 import { AtestadoModal } from './AtestadoModal';
+import { AssinarDocumentoModal } from './AssinarDocumentoModal';
+import { ShareSignatureLinkModal } from './ShareSignatureLinkModal';
 import { documentoService, DocumentoData } from '../services/documentoService';
+import { assinafyService } from '../services/assinafyService';
+import { companyService } from '../services/companyService';
+import { generateDocumentoPdf } from '../lib/pdfGenerator';
 
 const DocumentIcon = ({ color }: { color: string }) => (
     <div className={`w-[60px] h-[72px] rounded-2xl ${color} p-1.5 flex justify-center pb-0 relative`}>
@@ -40,6 +45,9 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
     const [selectedDocData, setSelectedDocData] = useState<DocumentoData | null>(null);
     const [savedDocs, setSavedDocs] = useState<DocumentoData[]>([]);
     const [loading, setLoading] = useState(true);
+    const [docToSign, setDocToSign] = useState<DocumentoData | null>(null);
+    const [shareSigningUrl, setShareSigningUrl] = useState<string | null>(null);
+    const [isSigning, setIsSigning] = useState(false);
 
     const loadSettingsAndDocs = async () => {
         try {
@@ -91,6 +99,59 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
         await loadSettingsAndDocs();
     };
 
+    const handleRequestSignature = async (contactEmail: string) => {
+        if (!docToSign || !docToSign.id) return;
+        try {
+            setIsSigning(true);
+            const companyData = await companyService.fetchCompany(empresaId!);
+            const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
+            const compInfo = { name: companyData?.nome || 'Clínica', phone: companyData?.telefoneWhatsapp };
+
+            const pdfBlob = generateDocumentoPdf(patientInfo, compInfo, docToSign);
+
+            const docName = `${docToSign.tipo.replace(/\s+/g, '_')}_${patient.name.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+            const documentId = await assinafyService.createDocument(pdfBlob, docName);
+
+            if (!documentId) throw new Error('Falha ao criar documento na Assinafy');
+
+            const signerId = await assinafyService.createSigner(patient.name, contactEmail);
+            if (!signerId) throw new Error('Falha ao criar signatário na Assinafy');
+
+            const signingUrl = await assinafyService.createAssignment(documentId, signerId, 'Email');
+            if (!signingUrl) throw new Error('Falha ao criar solicitação de assinatura');
+
+            await documentoService.updateDocumentoSignature(docToSign.id, documentId, 'pending_signature');
+
+            setSavedDocs(prev => prev.map(d => 
+                d.id === docToSign.id ? { ...d, assinafy_document_id: documentId, assinafy_status: 'pending_signature' } : d
+            ));
+
+            setDocToSign(null);
+            setShareSigningUrl(signingUrl);
+
+        } catch (err: any) {
+            console.error(err);
+            alert(err.message || 'Erro ao processar assinatura');
+        } finally {
+            setIsSigning(false);
+        }
+    };
+
+    const handlePrintDoc = async (doc: DocumentoData) => {
+        try {
+            const companyData = await companyService.fetchCompany(empresaId!);
+            const patientInfo = { name: patient.name, cpf: patient.cpf, phone: patient.telefone };
+            const compInfo = { name: companyData?.nome || 'Clínica', phone: companyData?.telefoneWhatsapp };
+            
+            const pdfBlob = generateDocumentoPdf(patientInfo, compInfo, doc);
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao gerar PDF para impressão.');
+        }
+    };
+
     return (
         <div className="p-8 h-full bg-gray-50/50 rounded-2xl animate-in fade-in flex flex-col gap-8">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -136,18 +197,36 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                             <tbody className="divide-y divide-gray-100">
                                 {savedDocs.map((doc) => (
                                     <tr key={doc.id} className="hover:bg-blue-50/50 transition-colors">
-                                        <td className="px-5 py-4 flex items-center gap-3">
-                                            <div className={`p-2 rounded font-bold uppercase tracking-wider text-[10px] w-10 text-center text-white
-                                               ${doc.tipo === 'Contrato' ? 'bg-[#2e7d32]' : doc.tipo === 'Termo de Consentimento' ? 'bg-[#fbc02d]' : doc.tipo === 'Receituário' ? 'bg-[#2196f3]' : 'bg-[#4caf50]'}
-                                            `}>DOC</div>
-                                            <span className="font-semibold text-gray-700">{doc.tipo}</span>
+                                        <td className="px-5 py-4">
+                                            <div className="flex flex-col items-start gap-1">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded font-bold uppercase tracking-wider text-[10px] w-10 text-center text-white
+                                                       ${doc.tipo === 'Contrato' ? 'bg-[#2e7d32]' : doc.tipo === 'Termo de Consentimento' ? 'bg-[#fbc02d]' : doc.tipo === 'Receituário' ? 'bg-[#2196f3]' : 'bg-[#4caf50]'}
+                                                    `}>DOC</div>
+                                                    <span className="font-semibold text-gray-700">{doc.tipo}</span>
+                                                </div>
+                                                {doc.assinafy_status === 'pending_signature' && (
+                                                    <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded ml-[52px]">Aguardando Assinatura</span>
+                                                )}
+                                                {doc.assinafy_status === 'certificated' && (
+                                                    <span className="text-[10px] font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded ml-[52px]">Assinado</span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-5 py-4 text-gray-500 flex items-center gap-2">
-                                            <Calendar size={14} />
-                                            {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '-'}
+                                        <td className="px-5 py-4 text-gray-500">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar size={14} />
+                                                {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '-'}
+                                            </div>
                                         </td>
                                         <td className="px-5 py-4 text-center">
                                             <div className="flex justify-center gap-2">
+                                                <button onClick={() => setDocToSign(doc)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors" title="Assinar Digitalmente">
+                                                    <PenTool size={18} />
+                                                </button>
+                                                <button onClick={() => handlePrintDoc(doc)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors" title="Imprimir">
+                                                    <Printer size={18} />
+                                                </button>
                                                 <button onClick={() => handleEditDoc(doc)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors" title="Visualizar/Editar">
                                                     <Edit3 size={18} />
                                                 </button>
@@ -163,6 +242,24 @@ export const DocumentosTab = ({ patient, empresaId, budgets }: { patient: any, e
                     </div>
                 )}
             </div>
+
+            {/* Modal de Assinatura */}
+            {docToSign && (
+                <AssinarDocumentoModal
+                    documento={docToSign}
+                    patientEmail={patient.email || ''}
+                    onClose={() => setDocToSign(null)}
+                    onSubmit={handleRequestSignature}
+                    isLoading={isSigning}
+                />
+            )}
+
+            {shareSigningUrl && (
+                <ShareSignatureLinkModal
+                    signingUrl={shareSigningUrl}
+                    onClose={() => setShareSigningUrl(null)}
+                />
+            )}
 
             {/* Contrato Modal Handler */}
             {selectedDocType === 'Contrato' && (

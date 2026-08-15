@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { Evolucao } from '../services/evolutionService';
+import { DocumentoData } from '../services/documentoService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from './supabase';
@@ -386,6 +387,151 @@ export const generateBudgetPdf = async (
 
   doc.setFont('helvetica', 'normal');
   doc.text(adminEmail || 'contato@clinica.com.br', rightMargin, y + 5, { align: 'right' });
+
+  return doc.output('blob');
+};
+
+export const generateDocumentoPdf = (
+  patient: PatientInfo,
+  company: any,
+  docData: DocumentoData
+): Blob => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 20;
+
+  // Header Company
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(company.name || 'Clínica Odontológica', 20, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  y += 6;
+  if (company.phone) {
+    doc.text(company.phone, 20, y);
+    y += 6;
+  }
+  
+  y += 10;
+  
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text(docData.tipo.toUpperCase(), pageWidth / 2, y, { align: 'center' });
+  y += 15;
+
+  // Content rendering based on tipo
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  
+  const addTextLines = (text: string) => {
+      const splitText = doc.splitTextToSize(text || '', pageWidth - 40);
+      splitText.forEach((line: string) => {
+          if (y > 270) {
+              doc.addPage();
+              y = 20;
+          }
+          doc.text(line, 20, y);
+          y += 5;
+      });
+      y += 5;
+  };
+
+  const addField = (label: string, value: string) => {
+      if (!value) return;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${label}:`, 20, y);
+      doc.setFont('helvetica', 'normal');
+      
+      const textOffset = 20 + doc.getTextWidth(`${label}: `);
+      const splitText = doc.splitTextToSize(value, pageWidth - textOffset - 20);
+      
+      splitText.forEach((line: string, i: number) => {
+          if (y > 270) {
+              doc.addPage();
+              y = 20;
+          }
+          doc.text(line, i === 0 ? textOffset : 20, y);
+          y += 5;
+      });
+  };
+
+  if (docData.tipo === 'Termo de Consentimento') {
+      const fd = docData.conteudo;
+      addField('Paciente', fd.nomePaciente || patient.name);
+      addField('CPF', fd.cpf || patient.cpf);
+      addField('Especialista', fd.nomeEspecialista);
+      addField('CRO', fd.croEspecialista);
+      addField('Período de Tratamento', fd.periodoTratamento);
+      
+      y += 5;
+      addTextLines('Pelo presente termo de consentimento livre e esclarecido, o paciente declara que foi informado sobre o tratamento, seus riscos e cuidados necessários.');
+      
+      addField('Condições de Saúde', fd.condicoesSaude);
+      addField('Cuidados', fd.cuidados);
+      addField('Riscos', fd.riscos);
+      
+  } else if (docData.tipo === 'Contrato') {
+      const fd = docData.conteudo;
+      addTextLines('DADOS DO CONTRATANTE:');
+      addField('Nome', fd.contratante?.nome || patient.name);
+      addField('CPF', fd.contratante?.cpf || patient.cpf);
+      addField('Endereço', fd.contratante?.endereco);
+      
+      y += 5;
+      addTextLines('DADOS DA CONTRATADA:');
+      addField('Nome', fd.contratada?.nome || company.name);
+      addField('Endereço', fd.contratada?.endereco);
+      
+      y += 5;
+      addTextLines('CLÁUSULAS E CONDIÇÕES:');
+      if (Array.isArray(fd.clausulas)) {
+          fd.clausulas.forEach((c: string, idx: number) => {
+              addTextLines(`Cláusula ${idx + 1}: ${c.replace(/<[^>]+>/g, '')}`);
+          });
+      }
+      
+      addField('Valor Total', `R$ ${fd.valorTotal}`);
+      addField('Forma de Pagamento', fd.formaPagamento);
+      
+  } else if (docData.tipo === 'Receituário') {
+      const fd = docData.conteudo;
+      if (typeof fd === 'string') {
+          addTextLines(fd);
+      } else {
+          addField('Paciente', fd.nomePaciente || patient.name);
+          addField('Prescrição', fd.prescricao);
+      }
+  } else if (docData.tipo === 'Atestado' || docData.tipo === 'Atestados') {
+      const fd = docData.conteudo;
+      if (typeof fd === 'string') {
+          addTextLines(fd);
+      } else {
+          addTextLines(`Atesto para os devidos fins que o(a) sr(a) ${fd.nomePaciente || patient.name}, portador(a) do CPF ${fd.cpf || patient.cpf}, esteve sob meus cuidados odontológicos.`);
+          addField('Motivo', fd.motivo);
+          addField('Período de repouso', fd.repouso);
+      }
+  } else {
+      // Default
+      if (typeof docData.conteudo === 'string') {
+          addTextLines(docData.conteudo);
+      } else {
+          addTextLines(JSON.stringify(docData.conteudo, null, 2));
+      }
+  }
+  
+  y += 20;
+  if (y > 250) { doc.addPage(); y = 40; }
+  
+  doc.setDrawColor(0,0,0);
+  doc.line(pageWidth / 2 - 40, y, pageWidth / 2 + 40, y);
+  y += 5;
+  doc.text('Assinatura do Paciente', pageWidth / 2, y, { align: 'center' });
 
   return doc.output('blob');
 };

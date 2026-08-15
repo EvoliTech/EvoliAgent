@@ -8,6 +8,8 @@ export interface DocumentoData {
     tipo: string;
     conteudo: any;
     created_at?: string;
+    assinafy_document_id?: string;
+    assinafy_status?: string;
 }
 
 export const documentoService = {
@@ -83,6 +85,25 @@ export const documentoService = {
         } catch (error) {
             console.error('Erro ao excluir documento:', error);
             throw error;
+        }
+    },
+
+    // Atualizar assinatura
+    async updateDocumentoSignature(documentoId: string, assinafyDocumentId: string, status: string): Promise<boolean> {
+        try {
+            const { error } = await supabase
+                .from('documentos')
+                .update({
+                    assinafy_document_id: assinafyDocumentId,
+                    assinafy_status: status
+                })
+                .eq('id', documentoId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Erro ao atualizar assinatura do documento:', error);
+            return false;
         }
     }
 };
