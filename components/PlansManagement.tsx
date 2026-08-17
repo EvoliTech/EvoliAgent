@@ -86,6 +86,19 @@ export const PlansManagement: React.FC<PlansManagementProps> = ({ onBack }) => {
     setSelectedPlanToEdit(newPlan);
   };
 
+  const handleDeletePlan = async (plan: HealthPlan) => {
+    if (!empresaId) return;
+    if (window.confirm(`Tem certeza que deseja excluir o convênio ${plan.name}?`)) {
+      try {
+        await plansService.deletePlan(empresaId, plan.id);
+        await loadPlans();
+      } catch (error) {
+        console.error('Error deleting plan:', error);
+        alert('Erro ao excluir convênio.');
+      }
+    }
+  };
+
   if (selectedPlanToEdit) {
     return (
       <PlanTreatments
@@ -133,12 +146,22 @@ export const PlansManagement: React.FC<PlansManagementProps> = ({ onBack }) => {
                     <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">Padrão</span>
                   )}
                 </div>
-                <button
-                  onClick={() => handleSelectPlan(plan)}
-                  className="px-3 py-1 bg-white border border-gray-300 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Editar
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSelectPlan(plan)}
+                    className="px-3 py-1 bg-white border border-gray-300 rounded text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Editar
+                  </button>
+                  {!plan.isDefault && (
+                    <button
+                      onClick={() => handleDeletePlan(plan)}
+                      className="px-3 py-1 bg-white border border-red-200 rounded text-xs font-semibold text-red-600 hover:bg-red-50 hover:border-red-300 transition-colors"
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

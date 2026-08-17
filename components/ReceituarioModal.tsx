@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Printer, Trash2, FileText } from 'lucide-react';
 import { documentoService, DocumentoData } from '../services/documentoService';
 import { medicamentoService, MedicamentoSugestao } from '../services/medicamentoService';
+import { subUserService, SubUserProfile } from '../services/userService';
 
 export interface ReceituarioModalProps {
     patient: any;
@@ -42,13 +43,27 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
     
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [medicamentosSugeridos, setMedicamentosSugeridos] = useState<MedicamentoSugestao[]>([]);
+    const [profissionaisLista, setProfissionaisLista] = useState<SubUserProfile[]>([]);
+
+    // Mini modal states
+    const [showNewMedModal, setShowNewMedModal] = useState(false);
+    const [newMedNameInput, setNewMedNameInput] = useState('');
+    const [newMedDosageAmount, setNewMedDosageAmount] = useState('');
+    const [newMedDosageUnit, setNewMedDosageUnit] = useState('mg');
+    const [isSavingNewMed, setIsSavingNewMed] = useState(false);
+
+    // Check if current typed medNome is registered
+    const isRegistered = !medNome || medicamentosSugeridos.some(m => m.nome.toLowerCase() === medNome.trim().toLowerCase());
 
     useEffect(() => {
-        const fetchMedicamentos = async () => {
-            const result = await medicamentoService.getMedicamentos(empresaId);
-            setMedicamentosSugeridos(result);
+        const fetchDados = async () => {
+            const resultMedicamentos = await medicamentoService.getMedicamentos(empresaId);
+            setMedicamentosSugeridos(resultMedicamentos);
+            
+            const resultProfissionais = await subUserService.getSubUsers(empresaId);
+            setProfissionaisLista(Object.values(resultProfissionais));
         };
-        fetchMedicamentos();
+        fetchDados();
     }, [empresaId]);
 
     const handleMedNomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,6 +105,35 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
 
     const handleRemoveMedicine = (index: number) => {
         setMedicamentos(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSaveNewMedicamento = async () => {
+        if (!newMedNameInput || !newMedDosageAmount) {
+            alert('Por favor, preencha o nome e a dosagem do medicamento.');
+            return;
+        }
+
+        setIsSavingNewMed(true);
+        try {
+            const concatenatedName = `${newMedNameInput} ${newMedDosageAmount}${newMedDosageUnit}`.trim();
+            const novoMedicamento = await medicamentoService.createMedicamento({
+                IDEmpresa: empresaId,
+                nome: concatenatedName,
+                medida: '',
+                posologia: ''
+            });
+            setMedicamentosSugeridos(prev => [...prev, novoMedicamento].sort((a, b) => a.nome.localeCompare(b.nome)));
+            setMedNome(concatenatedName);
+            setShowNewMedModal(false);
+            setNewMedNameInput('');
+            setNewMedDosageAmount('');
+            setNewMedDosageUnit('mg');
+            alert('Medicamento cadastrado com sucesso!');
+        } catch (error) {
+            alert('Erro ao cadastrar medicamento.');
+        } finally {
+            setIsSavingNewMed(false);
+        }
     };
 
     const handleSave = async () => {
@@ -266,13 +310,21 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[13px] font-semibold text-gray-600">Profissional responsável</label>
-                            <input 
-                                type="text" 
-                                value={profissional}
-                                onChange={e => setProfissional(e.target.value)}
-                                placeholder="Nome do dentista"
-                                className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 transition-colors"
-                            />
+                            <div className="relative">
+                                <select 
+                                    value={profissional}
+                                    onChange={e => setProfissional(e.target.value)}
+                                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 appearance-none bg-white transition-colors cursor-pointer"
+                                >
+                                    <option value="" disabled>Selecione um profissional</option>
+                                    {profissionaisLista.map(prof => (
+                                        <option key={prof.id} value={prof.name}>{prof.name}</option>
+                                    ))}
+                                </select>
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[13px] font-semibold text-gray-600">Paciente</label>
@@ -299,9 +351,9 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                                     className="border border-blue-300 ring-1 ring-blue-100 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 focus:ring-blue-200 transition-all placeholder:text-gray-400"
                                 />
-                                {showSuggestions && filteredSuggestions.length > 0 && (
-                                    <div className="absolute top-[100%] left-0 w-full bg-white border border-gray-200 shadow-lg rounded-md mt-1 z-50 max-h-[150px] overflow-y-auto custom-scrollbar">
-                                        {filteredSuggestions.map((m, idx) => (
+                                {showSuggestions && medNome && (
+                                    <div className="absolute top-[100%] left-0 w-full bg-white border border-gray-200 shadow-lg rounded-md mt-1 z-50 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                        {filteredSuggestions.length > 0 && filteredSuggestions.map((m, idx) => (
                                             <div 
                                                 key={idx}
                                                 className="px-3 py-2 text-[13px] text-gray-700 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
@@ -310,6 +362,21 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                                                 {m.nome}
                                             </div>
                                         ))}
+                                        {!isRegistered && (
+                                            <div className="px-3 py-3 border-t border-gray-100 bg-gray-50 flex flex-col gap-2">
+                                                <span className="text-[12px] text-gray-600 font-medium">Medicamento não encontrado.</span>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowSuggestions(false);
+                                                        setNewMedNameInput(medNome);
+                                                        setShowNewMedModal(true);
+                                                    }}
+                                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-semibold py-1.5 px-3 rounded shadow-sm transition-colors"
+                                                >
+                                                    Cadastrar novo medicamento
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -320,7 +387,8 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                                         type="number" 
                                         value={medQtde}
                                         onChange={e => setMedQtde(e.target.value)}
-                                        className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 transition-colors"
+                                        disabled={!isRegistered || !medNome}
+                                        className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-1.5 w-[140px]">
@@ -329,7 +397,8 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                                         <select 
                                             value={medMedida}
                                             onChange={e => setMedMedida(e.target.value)}
-                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 appearance-none bg-white transition-colors cursor-pointer"
+                                            disabled={!isRegistered || !medNome}
+                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 appearance-none bg-white transition-colors cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                                         >
                                             <option value="" disabled>Selecione</option>
                                             <option value="Ampola(s)">Ampola(s)</option>
@@ -353,14 +422,16 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                             <textarea 
                                 value={medPosologia}
                                 onChange={e => setMedPosologia(e.target.value)}
-                                className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 transition-colors min-h-[80px] resize-none"
+                                disabled={!isRegistered || !medNome}
+                                className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 transition-colors min-h-[80px] resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                             />
                         </div>
 
-                        <div className="flex justify-end mt-1">
+                        <div className="flex justify-end mt-1 gap-2">
                             <button 
                                 onClick={handleAddMedicine}
-                                className="bg-[#1565c0] hover:bg-[#0d47a1] text-white font-semibold py-2 px-5 rounded-md text-[14px] transition-colors shadow-sm"
+                                disabled={!isRegistered || !medNome}
+                                className="bg-[#1565c0] hover:bg-[#0d47a1] text-white font-semibold py-2 px-5 rounded-md text-[14px] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 Adicionar à receita
                             </button>
@@ -426,6 +497,75 @@ export const ReceituarioModal: React.FC<ReceituarioModalProps> = ({ patient, emp
                 </div>
 
             </div>
+
+            {/* Mini Modal para Cadastrar Novo Medicamento */}
+            {showNewMedModal && (
+                <div className="fixed inset-0 z-[200] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-[400px] flex flex-col overflow-hidden animate-in zoom-in-95">
+                        <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
+                            <h3 className="text-[16px] font-semibold text-gray-800">Cadastrar Novo Medicamento</h3>
+                            <button onClick={() => setShowNewMedModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-5 flex flex-col gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[13px] font-semibold text-gray-600">Nome do medicamento</label>
+                                <input 
+                                    type="text"
+                                    value={newMedNameInput}
+                                    onChange={e => setNewMedNameInput(e.target.value)}
+                                    placeholder="Ex: Prednisona"
+                                    className="border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-[13px] font-semibold text-gray-600">Dosagem</label>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="number"
+                                        value={newMedDosageAmount}
+                                        onChange={e => setNewMedDosageAmount(e.target.value)}
+                                        placeholder="Ex: 20"
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500"
+                                    />
+                                    <div className="relative w-[100px] shrink-0">
+                                        <select
+                                            value={newMedDosageUnit}
+                                            onChange={e => setNewMedDosageUnit(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-md px-3 py-2 text-[14px] outline-none focus:border-blue-500 appearance-none bg-white cursor-pointer"
+                                        >
+                                            <option value="mg">mg</option>
+                                            <option value="g">g</option>
+                                            <option value="mcg">mcg</option>
+                                            <option value="mL">mL</option>
+                                            <option value="UI">UI</option>
+                                            <option value="%">%</option>
+                                            <option value="gotas">gotas</option>
+                                            <option value="mEq">mEq</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+                            <button onClick={() => setShowNewMedModal(false)} className="px-4 py-2 text-[13px] font-semibold text-gray-600 hover:bg-gray-200 rounded">
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleSaveNewMedicamento}
+                                disabled={isSavingNewMed || !newMedNameInput}
+                                className="px-4 py-2 text-[13px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm disabled:opacity-50"
+                            >
+                                {isSavingNewMed ? 'Salvando...' : 'Salvar e Usar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
