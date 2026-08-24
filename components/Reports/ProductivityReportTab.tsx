@@ -7,6 +7,7 @@ import { Printer, Calendar, Users, XCircle, CheckCircle2, TrendingDown, Stethosc
 import { Specialist } from '../../types';
 import { googleCalendarService, GoogleEvent } from '../../services/googleCalendarService';
 import { userService } from '../../services/userService';
+import { specialistService } from '../../services/specialistService';
 
 export const ProductivityReportTab: React.FC = () => {
   const { empresaId } = useCompany();
@@ -24,12 +25,12 @@ export const ProductivityReportTab: React.FC = () => {
     const loadContext = async () => {
       if (!empresaId) return;
       try {
-        const [email, specialistData] = await Promise.all([
+        const [email, specs] = await Promise.all([
           userService.getConnectedGoogleEmail(empresaId),
-          supabase.from('specialists').select('*').eq('empresa_id', empresaId).order('name')
+          specialistService.fetchSpecialists(empresaId)
         ]);
         setAdminEmail(email);
-        setSpecialists(specialistData.data || []);
+        setSpecialists(specs);
       } catch (err) {
         console.error('Error loading context:', err);
       }
@@ -155,6 +156,10 @@ export const ProductivityReportTab: React.FC = () => {
             } else if (evStatus.toLowerCase() === 'pendente' || evStatus.toLowerCase() === 'pending' || 
                        sumUpper.includes('[PENDENTE]') || descUpper.includes('[PENDENTE]')) {
                 evStatus = 'pending';
+            } else if (evStatus.toLowerCase() === 'concluído' || evStatus.toLowerCase() === 'concluido' || evStatus.toLowerCase() === 'completed' ||
+                       sumUpper.includes('[CONCLUÍDO]') || descUpper.includes('[CONCLUÍDO]') ||
+                       sumUpper.includes('[CONCLUIDO]') || descUpper.includes('[CONCLUIDO]')) {
+                evStatus = 'completed';
             } else if (evStatus.toLowerCase() === 'confirmado' || evStatus.toLowerCase() === 'confirmed' ||
                        sumUpper.includes('[CONFIRMADO]') || descUpper.includes('[CONFIRMADO]')) {
                 evStatus = 'confirmed';
@@ -183,22 +188,22 @@ export const ProductivityReportTab: React.FC = () => {
 
   // Metrics calculation
   const totalConsultations = events.length;
-  const confirmedCount = events.filter(e => e.status === 'confirmed').length;
+  const completedCount = events.filter(e => e.status === 'completed').length;
   const cancelledCount = events.filter(e => e.status === 'cancelled').length;
   const pendingCount = events.filter(e => e.status === 'pending').length;
 
-  const attendanceRate = totalConsultations > 0 ? Math.round((confirmedCount / totalConsultations) * 100) : 0;
+  const attendanceRate = totalConsultations > 0 ? Math.round((completedCount / totalConsultations) * 100) : 0;
   const cancelRate = totalConsultations > 0 ? Math.round((cancelledCount / totalConsultations) * 100) : 0;
 
   // Breakdown by Specialist
-  const specialistStats: Record<string, { total: number, confirmed: number, cancelled: number }> = {};
+  const specialistStats: Record<string, { total: number, completed: number, cancelled: number }> = {};
   events.forEach(e => {
     const name = e.specialistName;
     if (!specialistStats[name]) {
-      specialistStats[name] = { total: 0, confirmed: 0, cancelled: 0 };
+      specialistStats[name] = { total: 0, completed: 0, cancelled: 0 };
     }
     specialistStats[name].total += 1;
-    if (e.status === 'confirmed') specialistStats[name].confirmed += 1;
+    if (e.status === 'completed') specialistStats[name].completed += 1;
     if (e.status === 'cancelled') specialistStats[name].cancelled += 1;
   });
 
@@ -285,7 +290,7 @@ export const ProductivityReportTab: React.FC = () => {
                   <CheckCircle2 className="w-4 h-4" />
                   <span className="text-xs font-semibold uppercase">Atendimentos Realizados</span>
                 </div>
-                <p className="text-2xl font-bold text-green-900">{confirmedCount}</p>
+                <p className="text-2xl font-bold text-green-900">{completedCount}</p>
                 <div className="mt-2 w-full bg-green-200 rounded-full h-1.5">
                   <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${attendanceRate}%` }}></div>
                 </div>
@@ -340,7 +345,7 @@ export const ProductivityReportTab: React.FC = () => {
                       </tr>
                     ) : (
                       Object.entries(specialistStats).map(([name, stats]) => {
-                        const rate = stats.total > 0 ? Math.round((stats.confirmed / stats.total) * 100) : 0;
+                        const rate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
                         return (
                           <tr key={name} className="hover:bg-gray-50/50 transition-colors">
                             <td className="px-4 py-3 font-medium text-gray-900">
@@ -350,7 +355,7 @@ export const ProductivityReportTab: React.FC = () => {
                               {stats.total}
                             </td>
                             <td className="px-4 py-3 text-center font-medium text-green-600">
-                              {stats.confirmed}
+                              {stats.completed}
                             </td>
                             <td className="px-4 py-3 text-center font-medium text-red-600">
                               {stats.cancelled}

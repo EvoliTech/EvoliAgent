@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCompany } from '../../contexts/CompanyContext';
-import { format, parseISO, startOfMonth, endOfMonth, differenceInDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Printer, Calendar, DollarSign, List, Stethoscope } from 'lucide-react';
-import { Specialist } from '../../types';
-import { googleCalendarService, GoogleEvent } from '../../services/googleCalendarService';
-import { userService } from '../../services/userService';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { Printer, List, Stethoscope, DollarSign } from 'lucide-react';
+import { Specialist, CommissionRule } from '../../types';
+import { budgetService } from '../../services/budgetService';
+import { specialistService } from '../../services/specialistService';
 
 export const CommissionsReportTab: React.FC = () => {
   const { empresaId } = useCompany();
@@ -15,143 +14,178 @@ export const CommissionsReportTab: React.FC = () => {
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [selectedSpecialist, setSelectedSpecialist] = useState<string>('');
   
-  const [adminEmail, setAdminEmail] = useState<string | null>(null);
-  const [events, setEvents] = useState<any[]>([]);
+  const [allBudgets, setAllBudgets] = useState<any[]>([]);
+  const [commissionedSpecialists, setCommissionedSpecialists] = useState<Record<string, CommissionRule[]>>({});
   const [loading, setLoading] = useState(false);
 
-  // Load specialists and adminEmail
+  // Load specialists, budgets, and commission rules
   useEffect(() => {
     const loadContext = async () => {
       if (!empresaId) return;
+      setLoading(true);
       try {
-        const [email, specialistData] = await Promise.all([
-          userService.getConnectedGoogleEmail(empresaId),
-          supabase.from('specialists').select('*').eq('empresa_id', empresaId).order('name')
+        const [specs, budgetsData] = await Promise.all([
+          specialistService.fetchSpecialists(empresaId),
+          budgetService.fetchAllCompanyBudgets(empresaId)
         ]);
-        setAdminEmail(email);
-        const specs = specialistData.data || [];
+
         setSpecialists(specs);
         if (specs.length > 0 && !selectedSpecialist) {
           setSelectedSpecialist(specs[0].id);
         }
+
+        const mapRules: Record<string, CommissionRule[]> = {};
+        specs.forEach((s: any) => {
+          let parsedComissoes = s.comissoes || [];
+          if (typeof parsedComissoes === 'string') {
+            try { parsedComissoes = JSON.parse(parsedComissoes); } catch { parsedComissoes = []; }
+          }
+          if (parsedComissoes.length > 0) {
+            mapRules[s.id] = parsedComissoes;
+          }
+        });
+        setCommissionedSpecialists(mapRules);
+        setAllBudgets(budgetsData);
+
       } catch (err) {
         console.error('Error loading context:', err);
+      } finally {
+        setLoading(false);
       }
     };
     loadContext();
   }, [empresaId]);
 
-  // Load data for period
-  useEffect(() => {
-    const loadData = async () => {
-      if (!empresaId || !startDate || !endDate || !selectedSpecialist) return;
-      
-      const maxDays = differenceInDays(new Date(endDate), new Date(startDate));
-      if (maxDays > 60) {
-        alert("Para o relatório de comissões, por favor selecione um período máximo de 60 dias.");
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const start = new Date(startDate);
-        const timezoneOffset = start.getTimezoneOffset() * 60000;
-        const adjustedStart = new Date(start.getTime() + timezoneOffset);
-        adjustedStart.setHours(0, 0, 0, 0);
-
-        const adjustedEnd = new Date(new Date(endDate).getTime() + timezoneOffset);
-        adjustedEnd.setHours(23, 59, 59, 999);
-
-        const startDateIso = adjustedStart.toISOString();
-        const endDateIso = adjustedEnd.toISOString();
-
-        // Fetch only for selected specialist
-        const spec = specialists.find(s => s.id === selectedSpecialist || s.calendarId === selectedSpecialist);
-        if (!spec) {
-          setEvents([]);
-          setLoading(false);
-          return;
-        }
-
-        // 1. Fetch DB
-        const { data: dbAgendamentos } = await supabase
-          .from('agendamentos')
-          .select('*, Cliente:cliente_id(nome_completo)')
-          .eq('IDEmpresa', empresaId)
-          .gte('data_inicio', startDateIso)
-          .lte('data_fim', endDateIso)
-          .or(`especialista_id.eq.${spec.id},calendar_id.eq.${spec.calendarId || 'NOCAL'}`);
-
-        let dbEvents = dbAgendamentos || [];
-
-        // 2. Fetch Google Calendar
-        let apiEvents: GoogleEvent[] = [];
-        if (adminEmail && spec.calendarId) {
-          try {
-            const results = await googleCalendarService.listEvents(empresaId, adminEmail, adjustedStart, adjustedEnd, spec.calendarId);
-            apiEvents = results.map(e => ({ ...e, calendarId: spec.calendarId }));
-          } catch (e) {
-            console.warn('Google Calendar fetch error', e);
-          }
-        }
-
-        const dbGoogleEvents: GoogleEvent[] = dbEvents.map(a => ({
-            id: a.google_event_id || a.id,
-            summary: a.titulo || '',
-            start: { dateTime: a.data_inicio },
-            end: { dateTime: a.data_fim },
-            calendarId: a.calendar_id || a.especialista_id,
-            status: a.status || 'confirmed',
-            description: a.procedimento || '',
-        }));
-
-        const allEvents = [...apiEvents];
-        const apiEventIds = new Set(apiEvents.map(e => e.id));
-        
-        for (const dbEv of dbGoogleEvents) {
-            if (dbEv.id && !apiEventIds.has(dbEv.id)) {
-                allEvents.push(dbEv);
-            } else if (!dbEv.id) {
-                allEvents.push(dbEv);
-            }
-        }
-
-        // Filter only CONFIRMED events for commissions (usually you only pay for completed procedures)
-        const confirmedEvents = allEvents.filter(e => e.status === 'confirmed');
-
-        const mappedEvents = confirmedEvents.map((a: any) => {
-            // Find patient name from DB if available, else from summary
-            const dbMatch = dbEvents.find(db => db.google_event_id === a.id || db.id === a.id);
-            const patientName = dbMatch?.Cliente?.nome_completo || a.summary || 'Desconhecido';
-            
-            return {
-              id: a.id || Math.random().toString(),
-              date: a.start?.dateTime || a.start?.date || '',
-              patientName: patientName,
-              procedure: a.description || dbMatch?.procedimento || 'Consulta Geral',
-            };
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        setEvents(mappedEvents);
-      } catch (err) {
-        console.error('Error fetching commissions report:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [empresaId, startDate, endDate, selectedSpecialist, adminEmail, specialists]);
-
-  const handlePrint = () => {
-    window.print();
+  const parseDateStr = (dateStr?: string) => {
+    if (!dateStr) return null;
+    let parsedStr = dateStr;
+    if (typeof dateStr === 'string' && dateStr.includes('/') && dateStr.split('/')[0].length === 2) {
+      const parts = dateStr.split(' ')[0].split('/');
+      if (parts.length === 3) parsedStr = `${parts[2]}-${parts[1]}-${parts[0]}T12:00:00`;
+    } else if (typeof dateStr === 'string' && !dateStr.includes('T')) {
+      if (dateStr.length <= 10) parsedStr = dateStr + 'T12:00:00';
+      else parsedStr = dateStr.replace(' ', 'T');
+    }
+    const d = new Date(parsedStr);
+    return isNaN(d.getTime()) ? null : d;
   };
 
+  const isDateInFilter = (dateStr?: string) => {
+    if (!startDate || !endDate) return true;
+    const d = parseDateStr(dateStr);
+    if (!d) return false;
+    const sDate = startOfDay(parseISO(startDate));
+    const eDate = endOfDay(parseISO(endDate));
+    return isWithinInterval(d, { start: sDate, end: eDate });
+  };
+
+  const getCommissionRule = (rules: CommissionRule[] | undefined, trtName: string, convenioName: string) => {
+    if (!rules) return null;
+    const cName = (convenioName || '').toLowerCase().trim();
+    const tName = (trtName || '').toLowerCase().trim();
+    return rules.find(r => {
+      const rc = (r.convenio || '').toLowerCase().trim();
+      const re = (r.especialidade || '').toLowerCase().trim();
+      return (rc === 'todos' || rc === cName || (rc === 'particular' && cName === 'particular')) &&
+        (re === 'todas' || re === tName);
+    });
+  };
+
+  const comissoesList = useMemo(() => {
+    if (!selectedSpecialist) return [];
+    
+    const spec = specialists.find(s => s.id === selectedSpecialist);
+    if (!spec) return [];
+    
+    const profRules = commissionedSpecialists[spec.id];
+    const normalizeName = (name: string) => name.replace(/Dr\(a\)\s*/gi, '').trim().toLowerCase();
+    const specNameNormalized = normalizeName(spec.name);
+
+    const list: any[] = [];
+    allBudgets.forEach(b => {
+      if (b.status !== 'Aprovado') return;
+
+      (b.tratamentos || b.treatments || []).forEach((t: any) => {
+        const trtName = t.treatmentName || t.tratamento || 'Outro';
+        const convenioName = t.convenio || 'Particular';
+        const itemVal = parseFloat(t.valor || 0);
+
+        const profNormalized = normalizeName(t.profissional || '');
+        const isMatched = profNormalized === specNameNormalized ||
+                          (t.profissional || '').toLowerCase().includes(specNameNormalized) ||
+                          spec.name.toLowerCase().includes(profNormalized);
+                          
+        if (!isMatched) return;
+
+        const rule = getCommissionRule(profRules, trtName, convenioName);
+
+        if (t.payments && t.payments.length > 0) {
+          t.payments.forEach((p: any) => {
+            if (!p) return;
+            if (p.method === 'Boleto' && p.status !== 'Pago' && !p.isPaid) return; 
+            
+            const patientPaid = parseFloat(p.amount) || 0;
+            const pDate = ((p.isPaid === true || p.status === 'Pago') && p.paymentDate) ? p.paymentDate : (p.date || p.receiveDate || new Date().toISOString());
+            
+            if (rule && rule.quandoRecebe === 'apos_pagamento' && isDateInFilter(pDate)) {
+              let valComissao = 0;
+              const valRegra = parseFloat(String(rule.valor).replace(',', '.'));
+              if (rule.tipoComissao === 'porcentagem') {
+                valComissao = patientPaid * (valRegra / 100);
+              } else {
+                const prop = itemVal > 0 ? (patientPaid / itemVal) : 1;
+                valComissao = valRegra * prop;
+              }
+              if (valComissao > 0) {
+                list.push({
+                  id: 'com_pg_' + p.id,
+                  treatmentName: trtName,
+                  date: pDate,
+                  amount: valComissao,
+                  paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                  status: p.isComissaoPaga ? 'Pago' : 'Pendente',
+                });
+              }
+            }
+          });
+        }
+
+        if (rule && rule.quandoRecebe === 'apos_procedimento' && t.status === 'Finalizado') {
+          const procDate = b.updated_at || b.created_at || new Date().toISOString();
+          if (isDateInFilter(procDate)) {
+            let valComissao = 0;
+            const valRegra = parseFloat(String(rule.valor).replace(',', '.'));
+            if (rule.tipoComissao === 'porcentagem') {
+              valComissao = itemVal * (valRegra / 100);
+            } else {
+              valComissao = valRegra;
+            }
+            if (valComissao > 0) {
+              list.push({
+                id: 'com_pr_' + t.id,
+                treatmentName: trtName,
+                date: procDate,
+                amount: valComissao,
+                paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
+                status: t.isComissaoPaga ? 'Pago' : 'Pendente',
+              });
+            }
+          }
+        }
+      });
+    });
+
+    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return list;
+  }, [allBudgets, commissionedSpecialists, specialists, selectedSpecialist, startDate, endDate]);
+
+  const handlePrint = () => window.print();
+
   const selectedSpecialistName = specialists.find(s => s.id === selectedSpecialist)?.name || '';
-  const totalProcedures = events.length;
+  const totalAmount = comissoesList.reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
     <div className="space-y-6">
-      {/* Header & Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
@@ -169,45 +203,25 @@ export const CommissionsReportTab: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
             <span className="text-sm text-gray-500 ml-2 font-medium">De:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 cursor-pointer"
-            />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 cursor-pointer" />
           </div>
           <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
             <span className="text-sm text-gray-500 ml-2 font-medium">Até:</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 cursor-pointer"
-            />
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent border-none focus:ring-0 text-sm font-medium text-gray-700 cursor-pointer" />
           </div>
         </div>
 
-        <button
-          onClick={handlePrint}
-          className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-        >
+        <button onClick={handlePrint} className="flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
           <Printer className="w-4 h-4" />
           Imprimir Relatório
         </button>
       </div>
 
-      {/* Printable Area */}
       <div className="print:block" id="printable-report">
-        
-        {/* Print Header */}
         <div className="hidden print:block mb-8 text-center border-b border-gray-200 pb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Relatório de Atendimentos / Comissões</h2>
-          <p className="text-gray-600 mt-1">
-            Especialista: <span className="font-semibold">{selectedSpecialistName}</span>
-          </p>
-          <p className="text-gray-600">
-            Período: {format(parseISO(startDate), "dd/MM/yyyy")} até {format(parseISO(endDate), "dd/MM/yyyy")}
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900">Relatório de Comissões</h2>
+          <p className="text-gray-600 mt-1">Especialista: <span className="font-semibold">{selectedSpecialistName}</span></p>
+          <p className="text-gray-600">Período: {format(parseISO(startDate), "dd/MM/yyyy")} até {format(parseISO(endDate), "dd/MM/yyyy")}</p>
         </div>
 
         {loading ? (
@@ -216,65 +230,73 @@ export const CommissionsReportTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            
-            {/* Alert info */}
             <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm flex gap-3 print:hidden">
               <div className="mt-0.5"><DollarSign className="w-4 h-4" /></div>
               <div>
                 <p className="font-medium">Cálculo de Comissões</p>
-                <p>Este relatório lista todos os atendimentos confirmados do especialista no período. Utilize esta base para calcular o fechamento mensal com base nas regras de comissionamento da clínica (porcentagem ou valor fixo).</p>
+                <p>Este relatório lista os repasses pendentes e pagos do especialista, extraídos diretamente do módulo financeiro baseados nos orçamentos aprovados e regras de comissionamento.</p>
               </div>
             </div>
 
-            {/* Quick Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                 <div className="flex items-center gap-2 text-indigo-700 mb-1">
                   <List className="w-4 h-4" />
-                  <span className="text-xs font-semibold uppercase">Total de Procedimentos Realizados</span>
+                  <span className="text-xs font-semibold uppercase">Total de Procedimentos Comissionados</span>
                 </div>
-                <p className="text-2xl font-bold text-indigo-900">{totalProcedures}</p>
+                <p className="text-2xl font-bold text-indigo-900">{comissoesList.length}</p>
+              </div>
+              <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                <div className="flex items-center gap-2 text-green-700 mb-1">
+                  <DollarSign className="w-4 h-4" />
+                  <span className="text-xs font-semibold uppercase">Total de Comissões no Período</span>
+                </div>
+                <p className="text-2xl font-bold text-green-900">R$ {totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
 
-            {/* Table */}
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 font-medium text-sm text-gray-700 flex items-center gap-2">
                 <List className="w-4 h-4" />
-                Histórico de Atendimentos Confirmados
+                Histórico de Comissões
               </div>
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 border-b border-gray-100 z-10 shadow-sm">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Data / Hora</th>
+                      <th className="px-4 py-3 font-semibold">Data</th>
                       <th className="px-4 py-3 font-semibold">Paciente</th>
-                      <th className="px-4 py-3 font-semibold">Procedimento / Detalhes</th>
+                      <th className="px-4 py-3 font-semibold">Procedimento</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3 font-semibold text-right">Valor Comissão (R$)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {events.length === 0 ? (
+                    {comissoesList.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
-                          Nenhum atendimento confirmado encontrado para este especialista no período.
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                          Nenhuma comissão encontrada para este especialista no período selecionado.
                         </td>
                       </tr>
                     ) : (
-                      events.map((e) => (
+                      comissoesList.map((e) => (
                         <tr key={e.id} className="hover:bg-gray-50/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                            {e.date ? format(parseISO(e.date), "dd/MM/yy 'às' HH:mm") : '-'}
+                            {e.date ? (typeof e.date === 'string' && e.date.includes('T') ? format(parseISO(e.date), "dd/MM/yyyy") : format(new Date(e.date), "dd/MM/yyyy")) : '-'}
                           </td>
                           <td className="px-4 py-3 font-medium text-gray-900">
-                            {e.patientName}
+                            {e.paciente}
                           </td>
-                          <td className="px-4 py-3 text-gray-600 truncate max-w-xs" title={e.procedure}>
-                            {e.procedure}
+                          <td className="px-4 py-3 text-gray-600 truncate max-w-xs" title={e.treatmentName}>
+                            {e.treatmentName}
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            {/* Um espaço para preenchimento manual ou integração futura */}
-                            <div className="inline-block w-24 border-b border-dashed border-gray-300 h-6"></div>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-[11px] font-bold ${e.status === 'Pago' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {e.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-blue-600">
+                            R$ {e.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       ))
@@ -283,11 +305,9 @@ export const CommissionsReportTab: React.FC = () => {
                 </table>
               </div>
             </div>
-
           </div>
         )}
       </div>
-
       <style>{`
         @media print {
           @page { size: portrait; margin: 1cm; }
@@ -303,6 +323,7 @@ export const CommissionsReportTab: React.FC = () => {
           
           /* Colors */
           .bg-indigo-50 { background-color: #eef2ff !important; }
+          .bg-green-50 { background-color: #f0fdf4 !important; }
           .bg-gray-50 { background-color: #f9fafb !important; }
         }
       `}</style>

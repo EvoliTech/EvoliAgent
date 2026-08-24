@@ -51,9 +51,18 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
         sendConfirmation: false
     });
     const [loading, setLoading] = useState(false);
+    const hasInitialized = React.useRef(false);
 
     React.useEffect(() => {
-        if (initialData && isOpen) {
+        if (!isOpen) {
+            hasInitialized.current = false;
+            return;
+        }
+
+        if (hasInitialized.current) return;
+        hasInitialized.current = true;
+
+        if (initialData) {
             const getField = (text: string | undefined, label: string) => {
                 if (!text) return '';
                 const lines = text.split('\n');
@@ -104,7 +113,7 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
                 sendConfirmation: false
             });
             setStep(1);
-        } else if (isOpen && !initialData) {
+        } else {
             setData({
                 useBudget: false,
                 date: defaultDate || new Date(),

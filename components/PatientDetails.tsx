@@ -1043,15 +1043,33 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                         (s.id && String(s.id) === String(targetId))
                       );
                       
-                      const getStatusInfo = (rawStatus: string) => {
+                      const getStatusInfo = (rawStatus: string, title: string = '', desc: string = '') => {
                         const statusStr = (rawStatus || '').toLowerCase();
-                        if (statusStr.includes('confirmed') || statusStr.includes('confirmado')) return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Agendada' };
-                        if (statusStr.includes('concluido')) return { bg: 'bg-green-100', text: 'text-green-700', label: 'Concluída' };
-                        if (statusStr.includes('cancelled') || statusStr.includes('cancelado')) return { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada' };
-                        return { bg: 'bg-gray-100', text: 'text-gray-700', label: rawStatus || 'Agendada' };
+                        const titleUpper = (title || '').toUpperCase();
+                        const descUpper = (desc || '').toUpperCase();
+                        
+                        if (statusStr.includes('cancelled') || statusStr.includes('cancelado') || titleUpper.includes('[CANCELADO]') || descUpper.includes('[CANCELADO]')) 
+                          return { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada' };
+                        
+                        if (statusStr.includes('concluido') || titleUpper.includes('[CONCLUIDO]') || titleUpper.includes('[CONCLUÍDO]') || descUpper.includes('[CONCLUIDO]') || descUpper.includes('[CONCLUÍDO]')) 
+                          return { bg: 'bg-green-100', text: 'text-green-700', label: 'Concluída' };
+                          
+                        if (titleUpper.includes('[CONFIRMADO]') || descUpper.includes('[CONFIRMADO]')) 
+                          return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Confirmada' };
+                          
+                        if (titleUpper.includes('[EM ATENDIMENTO]') || descUpper.includes('[EM ATENDIMENTO]')) 
+                          return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Em Atendimento' };
+                          
+                        if (titleUpper.includes('[CHECKOUT]') || descUpper.includes('[CHECKOUT]')) 
+                          return { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Checkout' };
+                          
+                        if (titleUpper.includes('[MISSED]') || descUpper.includes('[MISSED]')) 
+                          return { bg: 'bg-red-100', text: 'text-red-700', label: 'Faltou' };
+                        
+                        return { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Agendada' };
                       };
 
-                      const statusBadge = getStatusInfo(appt.status);
+                      const statusBadge = getStatusInfo(appt.status, appt.titulo, appt.descricao);
 
                       return (
                         <div key={appt.id || idx} className="py-3 flex items-center justify-between group hover:bg-slate-50 transition-colors -mx-2 px-2 rounded-lg">
