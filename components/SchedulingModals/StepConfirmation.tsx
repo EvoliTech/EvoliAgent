@@ -7,6 +7,7 @@ interface StepConfirmationProps {
     loading: boolean;
     onChangeObservations: (obs: string) => void;
     onChangeSendConfirmation: (v: boolean) => void;
+    onChangeConfirmationMessage: (msg: string) => void;
     onSave: () => void;
 }
 
@@ -15,6 +16,7 @@ export const StepConfirmation: React.FC<StepConfirmationProps> = ({
     loading, 
     onChangeObservations, 
     onChangeSendConfirmation, 
+    onChangeConfirmationMessage,
     onSave 
 }) => {
     return (
@@ -75,6 +77,17 @@ export const StepConfirmation: React.FC<StepConfirmationProps> = ({
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                 </div>
+                
+                {data.sendConfirmation && (
+                    <div className="mt-2 relative animate-in fade-in slide-in-from-top-2 duration-300">
+                        <textarea 
+                            value={data.confirmationMessage || ''}
+                            onChange={(e) => onChangeConfirmationMessage(e.target.value)}
+                            placeholder="Mensagem de confirmação..."
+                            className="w-full bg-white border border-gray-200 rounded-2xl p-4 min-h-[100px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none custom-scrollbar shadow-sm"
+                        ></textarea>
+                    </div>
+                )}
             </div>
 
             <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-4">

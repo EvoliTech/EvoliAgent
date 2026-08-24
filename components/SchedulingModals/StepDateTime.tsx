@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Specialist } from '../../types';
 import { Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { useCompany } from '../../contexts/CompanyContext';
+import { companyService } from '../../services/companyService';
+import { supabase } from '../../lib/supabase';
 
 interface StepDateTimeProps {
     date: Date;
@@ -23,6 +26,101 @@ export const StepDateTime: React.FC<StepDateTimeProps> = ({
     onChangeDuration, 
     onNext 
 }) => {
+    const { empresaId } = useCompany();
+    const [timeOptions, setTimeOptions] = useState<string[]>([]);
+    const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+
+    useEffect(() => {
+        const generateFallback = () => {
+            const options = [];
+            for (let h = 7; h <= 22; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    options.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                }
+            }
+            return options;
+        };
+
+        if (!empresaId) return;
+        companyService.fetchCompany(empresaId).then(data => {
+            const diasFuncionamento = data?.configuracoes?.dias_funcionamento;
+            if (diasFuncionamento) {
+                const dayIndex = date.getDay();
+                const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                const dayName = dayNames[dayIndex];
+                
+                const dayConfig = diasFuncionamento.find((d: any) => d.dia === dayName);
+
+                if (dayConfig && dayConfig.aberto) {
+                    const [startH, startM] = dayConfig.inicio.split(':').map(Number);
+                    const [endH, endM] = dayConfig.fim.split(':').map(Number);
+
+                    const options = [];
+                    for (let h = startH; h <= endH; h++) {
+                        for (let m = 0; m < 60; m += 15) {
+                            if (h === startH && m < startM) continue;
+                            if (h === endH && m > endM) continue;
+                            
+                            const hh = h.toString().padStart(2, '0');
+                            const mm = m.toString().padStart(2, '0');
+                            options.push(`${hh}:${mm}`);
+                        }
+                    }
+                    setTimeOptions(options.length ? options : generateFallback());
+                } else {
+                    // Closed day
+                    setTimeOptions([]);
+                }
+            } else {
+                setTimeOptions(generateFallback());
+            }
+        }).catch(err => {
+            console.error("Failed to load company hours", err);
+            setTimeOptions(generateFallback());
+        });
+    }, [empresaId, date]);
+
+    useEffect(() => {
+        const fetchUnavailable = async () => {
+            if (!empresaId || !professional) {
+                setUnavailableSlots([]);
+                return;
+            }
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0,0,0,0);
+            
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23,59,59,999);
+
+            const { data } = await supabase
+                .from('agendamentos')
+                .select('data_inicio, data_fim, status')
+                .eq('IDEmpresa', empresaId)
+                .eq('calendar_id', professional.calendarId || professional.id)
+                .gte('data_inicio', startOfDay.toISOString())
+                .lte('data_inicio', endOfDay.toISOString());
+            
+            if (data) {
+                const occupied: string[] = [];
+                data.forEach(appt => {
+                    if (appt.status === 'cancelled') return;
+                    const s = new Date(appt.data_inicio);
+                    const e = new Date(appt.data_fim);
+                    let current = new Date(s);
+                    while (current < e) {
+                        const h = current.getHours().toString().padStart(2, '0');
+                        const m = current.getMinutes().toString().padStart(2, '0');
+                        occupied.push(`${h}:${m}`);
+                        current = new Date(current.getTime() + 15 * 60000);
+                    }
+                });
+                setUnavailableSlots(occupied);
+            } else {
+                setUnavailableSlots([]);
+            }
+        };
+        fetchUnavailable();
+    }, [empresaId, professional, date]);
 
     // Simple calendar logic just for the sake of the wizard (mocking full calendar layout from image)
     const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -51,11 +149,11 @@ export const StepDateTime: React.FC<StepDateTimeProps> = ({
                 <button className="pb-3 text-slate-500 font-bold text-sm">Livres</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pb-4">
+            <div className="flex-1 overflow-y-auto space-y-4 pb-2">
                 
                 {/* Calendário */}
-                <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
+                <div className="bg-white rounded-3xl border border-gray-100 p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
                         <span className="font-bold text-blue-900">{monthNames[date.getMonth()]} {date.getFullYear()}</span>
                         <div className="flex gap-2">
                             <button className="p-1 rounded text-slate-400 hover:bg-slate-100" onClick={() => {
@@ -75,17 +173,17 @@ export const StepDateTime: React.FC<StepDateTimeProps> = ({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-y-4 text-center text-xs font-bold text-slate-400 mb-2">
+                    <div className="grid grid-cols-7 gap-y-2 text-center text-xs font-bold text-slate-400 mb-1">
                         {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <span key={i}>{d}</span>)}
                     </div>
 
-                    <div className="grid grid-cols-7 gap-y-2 text-center text-sm font-medium text-slate-700">
+                    <div className="grid grid-cols-7 text-center text-sm font-medium text-slate-700">
                         {daysArray.map((d, i) => (
-                            <div key={i} className="flex items-center justify-center aspect-square">
+                            <div key={i} className="flex items-center justify-center">
                                 {d && (
                                     <button 
                                         onClick={() => handleDayClick(d)}
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                                        className={`w-6 h-6 text-xs rounded-full flex items-center justify-center transition-all ${
                                             date.getDate() === d 
                                                 ? 'bg-blue-600 text-white font-bold shadow-md shadow-blue-200' 
                                                 : 'hover:bg-blue-50 hover:text-blue-600'
@@ -105,12 +203,22 @@ export const StepDateTime: React.FC<StepDateTimeProps> = ({
                         <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Horário</label>
                         <div className="relative">
                             <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input
-                                type="time"
+                            <select
                                 value={time}
                                 onChange={e => onChangeTime(e.target.value)}
-                                className="w-full rounded-xl border-gray-200 border pl-10 pr-3 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white shadow-sm outline-none"
-                            />
+                                className="w-full rounded-xl border-gray-200 border pl-10 pr-3 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all bg-white shadow-sm outline-none appearance-none"
+                            >
+                                {timeOptions.length > 0 ? timeOptions.map(t => {
+                                    const isDisabled = unavailableSlots.includes(t);
+                                    return (
+                                        <option key={t} value={t} disabled={isDisabled} className={isDisabled ? "text-gray-300" : ""}>
+                                            {t} {isDisabled && '(Indisponível)'}
+                                        </option>
+                                    );
+                                }) : (
+                                    <option value="">Fechado</option>
+                                )}
+                            </select>
                         </div>
                     </div>
                     <div>

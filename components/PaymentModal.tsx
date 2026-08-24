@@ -256,36 +256,36 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, tre
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+                <div className="p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
                     {/* Patient / Treatment Info Box */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 relative overflow-hidden shrink-0">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative overflow-hidden shrink-0">
                         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
 
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 overflow-hidden shrink-0">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 overflow-hidden shrink-0">
                                 {patient.photo ? <img src={patient.photo} alt="P" className="w-full h-full object-cover" /> : <UserIcon />}
                             </div>
-                            <span className="font-semibold text-slate-700">{patient.name}</span>
+                            <span className="font-semibold text-slate-700 text-sm">{patient.name}</span>
                         </div>
 
-                        <div className="flex flex-col gap-1 border-t border-slate-200 pt-4">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tratamentos ({treatments.length})</span>
-                            <div className="flex justify-between items-start mt-2">
-                                <span className="font-semibold text-slate-800 flex-1">
+                        <div className="flex flex-col gap-0.5 border-t border-slate-200 pt-2">
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Tratamentos ({treatments.length})</span>
+                            <div className="flex justify-between items-start mt-1">
+                                <span className="font-semibold text-slate-800 text-sm flex-1 leading-snug">
                                     {treatments.length === 1 ? (treatments[0].treatmentName || treatments[0].tratamento) : `${treatments.length} tratamentos selecionados`}
                                 </span>
-                                <span className="font-semibold text-slate-800">R$ {totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-slate-800 text-sm">R$ {totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
-                            {treatments.length === 1 && <span className="text-xs text-slate-500 mt-1">Dr(a) {treatments[0].profissional || 'Profissional'}</span>}
+                            {treatments.length === 1 && <span className="text-[11px] text-slate-500 mt-0.5">Dr(a) {treatments[0].profissional || 'Profissional'}</span>}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center px-1">
+                        <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-center px-1">
                             {paidSoFar > 0 && (
-                                <span className="text-sm font-semibold text-emerald-600">Pago/Boleto: R$ {paidSoFar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-[11px] font-semibold text-emerald-600">Pago/Boleto: R$ {paidSoFar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             )}
                             <div className="flex flex-col items-end flex-1">
-                                <span className="text-sm text-slate-600 font-semibold">Valor em aberto</span>
-                                <span className="text-lg font-bold text-slate-900">R$ {remainingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-[11px] text-slate-600 font-semibold">Valor em aberto</span>
+                                <span className="text-base font-bold text-slate-900">R$ {remainingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             </div>
                         </div>
                     </div>

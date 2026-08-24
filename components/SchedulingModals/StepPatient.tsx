@@ -18,6 +18,11 @@ export const StepPatient: React.FC<StepPatientProps> = ({ selected, useBudget, o
     const [patients, setPatients] = useState<SupabaseCustomer[]>([]);
     const [loading, setLoading] = useState(false);
 
+    const [isCreating, setIsCreating] = useState(false);
+    const [newName, setNewName] = useState('');
+    const [newPhone, setNewPhone] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
     useEffect(() => {
         const fetchPatients = async () => {
             if (!empresaId || search.length < 2) return;
@@ -36,6 +41,88 @@ export const StepPatient: React.FC<StepPatientProps> = ({ selected, useBudget, o
         const debounce = setTimeout(fetchPatients, 300);
         return () => clearTimeout(debounce);
     }, [search, empresaId]);
+
+    const handleCreatePatient = async () => {
+        if (!empresaId || !newName || !newPhone) return;
+        setIsSaving(true);
+        try {
+            const phoneClean = newPhone.replace(/\D/g, '');
+            const newCustomer = {
+                nome: newName,
+                nome_completo: newName,
+                telefoneWhatsapp: phoneClean,
+                IDEmpresa: empresaId,
+                botAtivo: 'true',
+                status_lead_no_crm: 'Novo'
+            };
+
+            const { data, error } = await supabase
+                .from('Cliente')
+                .insert(newCustomer)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                onSelectPatient(data);
+                setIsCreating(false);
+                setNewName('');
+                setNewPhone('');
+            }
+        } catch (error: any) {
+            alert('Erro ao criar paciente: ' + error.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    if (isCreating) {
+        return (
+            <div className="w-full max-w-md mx-auto flex flex-col h-full animate-in fade-in slide-in-from-right-8 duration-500">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-4">Novo Paciente</h3>
+                
+                <div className="flex-1 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Nome Completo</label>
+                        <input 
+                            type="text" 
+                            value={newName}
+                            onChange={e => setNewName(e.target.value)}
+                            placeholder="Ex: João da Silva"
+                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Telefone (WhatsApp)</label>
+                        <input 
+                            type="text" 
+                            value={newPhone}
+                            onChange={e => setNewPhone(e.target.value)}
+                            placeholder="Ex: 11999999999"
+                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-auto pt-6 flex gap-3">
+                    <button 
+                        onClick={() => setIsCreating(false)}
+                        className="flex-1 py-4 border-2 border-slate-200 text-slate-600 font-bold rounded-2xl hover:bg-slate-50 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={handleCreatePatient}
+                        disabled={isSaving || !newName || !newPhone}
+                        className="flex-1 py-4 bg-blue-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    >
+                        {isSaving ? 'Salvando...' : 'Salvar e Usar'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-md mx-auto flex flex-col h-full animate-in fade-in slide-in-from-right-8 duration-500">
@@ -86,22 +173,14 @@ export const StepPatient: React.FC<StepPatientProps> = ({ selected, useBudget, o
 
             {/* Ações e Switch no rodapé do painel */}
             <div className="mt-auto pt-6 border-t border-slate-200/50 flex flex-col gap-4">
-                <button className="w-full py-4 border-2 border-blue-600 text-blue-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors">
+                <button 
+                    onClick={() => setIsCreating(true)}
+                    className="w-full py-4 border-2 border-blue-600 text-blue-600 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
+                >
                     <UserPlus size={18} /> Novo paciente
                 </button>
 
-                <div className="flex items-center justify-between py-2">
-                    <span className="font-bold text-slate-700 text-sm uppercase tracking-wide">VOU USAR UM ORÇAMENTO</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={useBudget}
-                            onChange={(e) => onToggleBudget(e.target.checked)}
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                </div>
+
 
                 <button 
                     onClick={onNext}

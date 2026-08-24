@@ -1009,12 +1009,15 @@ export const Financial: React.FC = () => {
           </button>
           <button
             onClick={() => handleTabChange('comissoes')}
-            className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'comissoes'
+            className={`px-2 py-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'comissoes'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
               }`}
           >
             Comissões
+            {financialStats.comissoesList.some(c => c.status === 'A repassar') && (
+              <div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm" title="Comissões pendentes"></div>
+            )}
           </button>
           <button
             onClick={() => handleTabChange('boletos')}
@@ -1249,9 +1252,16 @@ export const Financial: React.FC = () => {
                               <span className="font-medium text-gray-800 line-clamp-1">{c.treatment}</span>
                               <span className="text-xs text-gray-500">{c.profissional} • {c.paciente}</span>
                             </div>
-                            <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
-                              R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
+                            <div className="flex flex-col items-end">
+                              <span className="font-semibold text-blue-600 whitespace-nowrap ml-2">
+                                R$ {c.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                              {c.status === 'A repassar' ? (
+                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded mt-0.5 font-bold">Pendente</span>
+                              ) : (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded mt-0.5 font-bold">Pago</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1826,9 +1836,15 @@ export const Financial: React.FC = () => {
                           <div className="flex items-center gap-1.5 text-gray-800 font-bold text-[14px]">
                             R$ {totalProf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </div>
-                          <span className="bg-[#f1f5f9] text-[#475569] border border-gray-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
-                            Em dia
-                          </span>
+                          {profComissions.some(c => c.status === 'A repassar') ? (
+                            <span className="bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                              Pendentes
+                            </span>
+                          ) : (
+                            <span className="bg-[#f1f5f9] text-[#475569] border border-gray-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                              Em dia
+                            </span>
+                          )}
                         </div>
                       </div>
 

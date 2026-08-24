@@ -10,7 +10,8 @@ import {
   ImageIcon,
   Stethoscope,
   ChevronRight,
-  Kanban
+  Kanban,
+  BarChart2
 } from 'lucide-react';
 import { PageType } from '../../types';
 
@@ -34,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, subUse
     { id: 'agenda', label: 'Agenda', icon: CalendarDays },
     { id: 'appointments', label: 'Agendamentos', icon: Calendar1Icon },
     { id: 'patients', label: 'Pacientes', icon: User },
+    { id: 'reports', label: 'Relatórios', icon: BarChart2 },
     { id: 'financeiro', label: 'Financeiro', icon: CircleDollarSign },
   ];
 

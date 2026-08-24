@@ -24,6 +24,7 @@ import { PublicAnamnese } from './components/PublicAnamnese';
 import { PublicProsthesisView } from './components/PublicProsthesisView';
 import { PublicBudgetView } from './components/PublicBudgetView';
 import { GoogleCallback } from './components/GoogleCallback';
+import { Reports } from './components/Reports';
 import { Login } from './components/Login';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -101,6 +102,7 @@ export default function App() {
     crm: '/crm',
     patients: '/pacientes',
     'patient-registration-update': '/pacientes-cadastro',
+    reports: '/relatorios',
     inventory: '/estoque',
     financeiro: '/financeiro',
     gallery: '/galeria',
@@ -251,6 +253,9 @@ export default function App() {
           )}
           {currentPage === 'crm' && (
             !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : <CRM />
+          )}
+          {currentPage === 'reports' && (
+            !hasAccess('reports') ? <Navigate to="/dashboard" replace /> : <Reports />
           )}
           {currentPage === 'patients' && (
             !hasAccess('patients') ? <Navigate to="/dashboard" replace /> : (

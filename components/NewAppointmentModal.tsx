@@ -7,6 +7,7 @@ import { specialistService } from '../services/specialistService';
 import { subUserService } from '../services/userService';
 import { Specialist, SupabaseCustomer } from '../types';
 import { useCompany } from '../contexts/CompanyContext';
+import { companyService } from '../services/companyService';
 
 interface NewAppointmentModalProps {
     isOpen: boolean;
@@ -50,6 +51,100 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
     const [retroactivePassword, setRetroactivePassword] = useState('');
     const [verifyingRetroactive, setVerifyingRetroactive] = useState(false);
     const [retroactiveError, setRetroactiveError] = useState('');
+
+    const [timeOptions, setTimeOptions] = useState<string[]>([]);
+    const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+
+    useEffect(() => {
+        const generateFallback = () => {
+            const options = [];
+            for (let h = 7; h <= 22; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    options.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                }
+            }
+            return options;
+        };
+
+        if (!empresaId || !date) return;
+        companyService.fetchCompany(empresaId).then(data => {
+            const diasFuncionamento = data?.configuracoes?.dias_funcionamento;
+            if (diasFuncionamento) {
+                const d = new Date(date + 'T00:00:00');
+                const dayIndex = d.getDay();
+                const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                const dayName = dayNames[dayIndex];
+                
+                const dayConfig = diasFuncionamento.find((c: any) => c.dia === dayName);
+
+                if (dayConfig && dayConfig.aberto) {
+                    const [startH, startM] = dayConfig.inicio.split(':').map(Number);
+                    const [endH, endM] = dayConfig.fim.split(':').map(Number);
+
+                    const options = [];
+                    for (let h = startH; h <= endH; h++) {
+                        for (let m = 0; m < 60; m += 15) {
+                            if (h === startH && m < startM) continue;
+                            if (h === endH && m > endM) continue;
+                            
+                            const hh = h.toString().padStart(2, '0');
+                            const mm = m.toString().padStart(2, '0');
+                            options.push(`${hh}:${mm}`);
+                        }
+                    }
+                    setTimeOptions(options.length ? options : generateFallback());
+                } else {
+                    setTimeOptions([]);
+                }
+            } else {
+                setTimeOptions(generateFallback());
+            }
+        }).catch(err => {
+            console.error("Failed to load company hours", err);
+            setTimeOptions(generateFallback());
+        });
+    }, [empresaId, date]);
+
+    useEffect(() => {
+        const fetchUnavailable = async () => {
+            if (!empresaId || !selectedCalendarId || !date) {
+                setUnavailableSlots([]);
+                return;
+            }
+            const startOfDay = new Date(date + 'T00:00:00');
+            const endOfDay = new Date(date + 'T23:59:59');
+
+            const { data } = await supabase
+                .from('agendamentos')
+                .select('data_inicio, data_fim, status, google_event_id')
+                .eq('IDEmpresa', empresaId)
+                .eq('calendar_id', selectedCalendarId)
+                .gte('data_inicio', startOfDay.toISOString())
+                .lte('data_inicio', endOfDay.toISOString());
+            
+            if (data) {
+                const occupied: string[] = [];
+                data.forEach(appt => {
+                    if (appt.status === 'cancelled') return;
+                    if (initialData?.id && appt.google_event_id === initialData.id) return;
+
+                    const s = new Date(appt.data_inicio);
+                    const e = new Date(appt.data_fim);
+                    let current = new Date(s);
+                    while (current < e) {
+                        const h = current.getHours().toString().padStart(2, '0');
+                        const m = current.getMinutes().toString().padStart(2, '0');
+                        occupied.push(`${h}:${m}`);
+                        current = new Date(current.getTime() + 15 * 60000);
+                    }
+                });
+                setUnavailableSlots(occupied);
+            } else {
+                setUnavailableSlots([]);
+            }
+        };
+        fetchUnavailable();
+    }, [empresaId, selectedCalendarId, date, initialData]);
 
     useEffect(() => {
         if (isOpen) {
@@ -423,12 +518,22 @@ Obs: ${observations || '-'}`,
                             <label className="block text-sm font-medium text-gray-700 mb-0.5">Horário</label>
                             <div className="relative">
                                 <Clock size={16} className="absolute left-3 top-2.5 text-gray-400" />
-                                <input
-                                    type="time"
+                                <select
                                     value={time}
                                     onChange={e => setTime(e.target.value)}
-                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                                />
+                                    className="w-full rounded-lg border-gray-300 border pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none"
+                                >
+                                    {timeOptions.length > 0 ? timeOptions.map(t => {
+                                        const isDisabled = unavailableSlots.includes(t);
+                                        return (
+                                            <option key={t} value={t} disabled={isDisabled} className={isDisabled ? "text-gray-300" : ""}>
+                                                {t} {isDisabled && '(Indisponível)'}
+                                            </option>
+                                        );
+                                    }) : (
+                                        <option value="">Fechado</option>
+                                    )}
+                                </select>
                             </div>
                         </div>
                         <div>

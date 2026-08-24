@@ -1806,7 +1806,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                {(!t.isPaid && t.hasPendingBalance) && (
                                  <button
                                    className="flex items-center gap-2 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 bg-white shadow-sm"
-                                   onClick={() => setPayingTreatments([t])}
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setPayingTreatments([t]);
+                                   }}
                                  >
                                    <CreditCard size={14} /> Pagar
                                  </button>

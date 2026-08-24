@@ -7,6 +7,8 @@ import { StepDateTime } from './StepDateTime';
 import { StepConfirmation } from './StepConfirmation';
 import { Specialist, SupabaseCustomer } from '../../types';
 import { GoogleEvent } from '../../services/googleCalendarService';
+import { supabase } from '../../lib/supabase';
+import { useCompany } from '../../contexts/CompanyContext';
 
 export interface WizardData {
     professional?: Specialist;
@@ -19,6 +21,7 @@ export interface WizardData {
     duration?: number;
     observations?: string;
     sendConfirmation?: boolean;
+    confirmationMessage?: string;
 }
 
 interface FluidAppointmentWizardProps {
@@ -38,6 +41,7 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
     defaultDate,
     initialData
 }) => {
+    const { empresaId } = useCompany();
     const [step, setStep] = useState(1);
     const [data, setData] = useState<WizardData>({
         useBudget: false,
@@ -118,7 +122,12 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
     const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
 
     const updateData = (updates: Partial<WizardData>) => {
-        setData(prev => ({ ...prev, ...updates }));
+        let newUpdates = { ...updates };
+        if (updates.sendConfirmation === true && !data.confirmationMessage) {
+             const appointmentDate = data.date?.toLocaleDateString('pt-BR') || '';
+             newUpdates.confirmationMessage = `Olá, ${data.patient?.nome}! Seu agendamento de ${data.appointmentType || 'Consulta'} com ${data.professional?.name} está confirmado para o dia ${appointmentDate} às ${data.time}.`;
+        }
+        setData(prev => ({ ...prev, ...newUpdates }));
     };
 
     const handleSave = async () => {
@@ -149,6 +158,31 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
             };
 
             await onSave(payload);
+
+            if (data.sendConfirmation && finalPhone) {
+                try {
+                    const { data: empresaData } = await supabase.from('Empresa').select('apikey, instance').eq('id', empresaId).single();
+                    
+                    const payloadWebhook = {
+                        telefone: finalPhone,
+                        id_empresa: empresaId,
+                        apikey: empresaData?.apikey || '',
+                        instancia: empresaData?.instance || '',
+                        mensagem: data.confirmationMessage || `Olá, ${data.patient.nome}! Seu agendamento está confirmado.`,
+                        campaign_id: 'confirma_agendamento_' + Date.now(),
+                        tipo_campanha: 'confirmação_agendamento'
+                    };
+
+                    await fetch('https://primary-production-ec254.up.railway.app/webhook/disparo-campanha', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payloadWebhook)
+                    });
+                } catch (webhookErr) {
+                    console.error("Erro ao enviar confirmação webhook:", webhookErr);
+                }
+            }
+
             onClose();
         } catch (e: any) {
             alert('Erro: ' + e.message);
@@ -252,6 +286,7 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
                                 loading={loading}
                                 onChangeObservations={(o) => updateData({ observations: o })}
                                 onChangeSendConfirmation={(v) => updateData({ sendConfirmation: v })}
+                                onChangeConfirmationMessage={(msg) => updateData({ confirmationMessage: msg })}
                                 onSave={handleSave}
                             />
                         </div>
