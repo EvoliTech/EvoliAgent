@@ -140,6 +140,7 @@ export const CommissionsReportTab: React.FC = () => {
                 list.push({
                   id: 'com_pg_' + p.id,
                   treatmentName: trtName,
+                  specialistName: spec.name,
                   date: pDate,
                   amount: valComissao,
                   paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
@@ -164,6 +165,7 @@ export const CommissionsReportTab: React.FC = () => {
               list.push({
                 id: 'com_pr_' + t.id,
                 treatmentName: trtName,
+                specialistName: spec.name,
                 date: procDate,
                 amount: valComissao,
                 paciente: b.paciente?.nome || b.paciente?.nome_completo || 'Paciente',
@@ -265,8 +267,8 @@ export const CommissionsReportTab: React.FC = () => {
                   <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 border-b border-gray-100 z-10 shadow-sm">
                     <tr>
                       <th className="px-4 py-3 font-semibold">Data</th>
-                      <th className="px-4 py-3 font-semibold">Paciente</th>
-                      <th className="px-4 py-3 font-semibold">Procedimento</th>
+                      <th className="px-4 py-3 font-semibold">Especialista</th>
+                      <th className="px-4 py-3 font-semibold">Procedimento / Paciente</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3 font-semibold text-right">Valor Comissão (R$)</th>
                     </tr>
@@ -285,10 +287,11 @@ export const CommissionsReportTab: React.FC = () => {
                             {e.date ? (typeof e.date === 'string' && e.date.includes('T') ? format(parseISO(e.date), "dd/MM/yyyy") : format(new Date(e.date), "dd/MM/yyyy")) : '-'}
                           </td>
                           <td className="px-4 py-3 font-medium text-gray-900">
-                            {e.paciente}
+                            {e.specialistName}
                           </td>
-                          <td className="px-4 py-3 text-gray-600 truncate max-w-xs" title={e.treatmentName}>
-                            {e.treatmentName}
+                          <td className="px-4 py-3 text-gray-600 truncate max-w-xs" title={`${e.treatmentName} - ${e.paciente}`}>
+                            <div className="font-medium text-gray-800">{e.treatmentName}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{e.paciente}</div>
                           </td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded text-[11px] font-bold ${e.status === 'Pago' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>

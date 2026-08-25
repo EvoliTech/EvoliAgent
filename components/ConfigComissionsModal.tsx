@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Info, ChevronDown, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Specialist, CommissionRule, HealthPlan } from '../types';
 import { DEFAULT_TREATMENTS } from '../constants/treatments';
 import { useCompany } from '../contexts/CompanyContext';
@@ -25,6 +26,7 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
   
   const { empresaId } = useCompany();
   const [plans, setPlans] = useState<HealthPlan[]>([]);
+  const navigate = useNavigate();
   
   React.useEffect(() => {
     if (empresaId) {
@@ -223,7 +225,13 @@ export const ConfigComissionsModal: React.FC<ConfigComissionsModalProps> = ({ sp
                   <div className="mt-8">
                     <h3 className="text-[15px] font-semibold text-[#334155] mb-1">Defina o valor pago por tratamento</h3>
                     <p className="text-[13px] text-[#64748b] mb-4">
-                      Caso deseje alterar o valor dos tratamentos ou custos, acesse a gestão de convênios. <a href="#" className="text-blue-600 hover:text-blue-700 font-medium">Clique aqui</a>
+                      Caso deseje alterar o valor dos tratamentos ou custos, acesse a gestão de convênios.{' '}
+                      <button 
+                        onClick={(e) => { e.preventDefault(); onClose(); navigate('/configuracoes/planos'); }} 
+                        className="text-blue-600 hover:text-blue-700 font-medium bg-transparent border-none p-0 cursor-pointer"
+                      >
+                        Clique aqui
+                      </button>
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-3 mb-4">

@@ -154,7 +154,9 @@ export const ProductivityReportTab: React.FC = () => {
                 evStatus.toLowerCase() === 'cancelado' || evStatus.toLowerCase() === 'cancelada') {
                 evStatus = 'cancelled';
             } else if (evStatus.toLowerCase() === 'pendente' || evStatus.toLowerCase() === 'pending' || 
-                       sumUpper.includes('[PENDENTE]') || descUpper.includes('[PENDENTE]')) {
+                       evStatus.toLowerCase() === 'agendado' || evStatus.toLowerCase() === 'scheduled' ||
+                       sumUpper.includes('[PENDENTE]') || descUpper.includes('[PENDENTE]') ||
+                       sumUpper.includes('[AGENDADO]') || descUpper.includes('[AGENDADO]')) {
                 evStatus = 'pending';
             } else if (evStatus.toLowerCase() === 'concluído' || evStatus.toLowerCase() === 'concluido' || evStatus.toLowerCase() === 'completed' ||
                        sumUpper.includes('[CONCLUÍDO]') || descUpper.includes('[CONCLUÍDO]') ||

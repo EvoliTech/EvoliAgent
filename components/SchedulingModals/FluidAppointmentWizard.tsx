@@ -151,6 +151,14 @@ export const FluidAppointmentWizard: React.FC<FluidAppointmentWizardProps> = ({
 
             const dateTimeString = `${data.date.toISOString().split('T')[0]}T${data.time}:00`;
             const startDate = new Date(dateTimeString);
+            
+            const now = new Date();
+            if (startDate < now) {
+                alert('Não é permitido criar um agendamento no passado. Por favor, selecione uma data e hora futura.');
+                setLoading(false);
+                return;
+            }
+
             const endDate = new Date(startDate.getTime() + (data.duration || 30) * 60000);
 
             let phone = data.patient.telefoneWhatsapp || '';

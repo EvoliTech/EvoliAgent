@@ -297,14 +297,12 @@ export const NewAppointmentModal: React.FC<NewAppointmentModalProps> = ({
         const startDate = new Date(dateTimeString);
 
         // Retroactive date check
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const selectedDateOnly = new Date(startDate);
-        selectedDateOnly.setHours(0, 0, 0, 0);
-
-        if (selectedDateOnly < today && !showRetroactiveModal) {
-            setShowRetroactiveModal(true);
-            return;
+        if (!initialData) {
+            const now = new Date();
+            if (startDate < now) {
+                alert('Não é permitido criar um agendamento no passado. Por favor, selecione uma data e hora futura.');
+                return;
+            }
         }
 
         await executeSubmit(startDate);
