@@ -40,6 +40,12 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
   const [newTreatmentName, setNewTreatmentName] = useState('');
   const [newTreatmentPrice, setNewTreatmentPrice] = useState('');
 
+  // HOF State
+  const [hofSelectedRegions, setHofSelectedRegions] = useState<string[]>([]);
+  const [hofGender, setHofGender] = useState<'female' | 'male'>('female');
+  const [hofRegionUIML, setHofRegionUIML] = useState<Record<string, number>>({});
+  const [isHofModalOpen, setIsHofModalOpen] = useState(false);
+
   // Added treatments array
   const [addedTreatments, setAddedTreatments] = useState<any[]>([]);
 
@@ -106,6 +112,12 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
 
     const resolvedConvenioName = plans.find(p => p.id === convenio)?.name || convenio;
 
+    let finalObservacoes = observacoes;
+    if (isHarmonizacao && hofSelectedRegions.length > 0) {
+       const regInfo = hofSelectedRegions.map(r => `${r}${hofRegionUIML[r] ? ` (${hofRegionUIML[r]} UI/ML)` : ''}`).join(', ');
+       finalObservacoes = finalObservacoes ? `${finalObservacoes} | Regiões: ${regInfo}` : `Regiões: ${regInfo}`;
+    }
+
     if (editingPendingId) {
       setAddedTreatments(prev => prev.map(t => t.id === editingPendingId ? {
         ...t,
@@ -116,7 +128,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         profissional,
         convenio: resolvedConvenioName,
         status: 'Aguardando',
-        observacoes
+        observacoes: finalObservacoes
       } : t));
       setEditingPendingId(null);
     } else {
@@ -130,7 +142,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         profissional,
         convenio: resolvedConvenioName,
         status: 'Aguardando',
-        observacoes
+        observacoes: finalObservacoes
       };
 
       setAddedTreatments([...safeTreatments, t]);
@@ -144,6 +156,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setFaces('');
     setObservacoes('');
     setIsHarmonizacao(false);
+    setHofSelectedRegions([]);
+    setHofRegionUIML({});
   };
 
   const handleCreateNewTreatment = () => {
@@ -267,6 +281,46 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         </div>
       )}
 
+      {/* HOF UI/ML Modal */}
+      {isHofModalOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-5 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-lg">Plano de aplicação</h3>
+            </div>
+            <div className="p-5 flex flex-col gap-4 overflow-y-auto max-h-[60vh]">
+              <div className="relative border border-gray-200 rounded-lg p-3 pt-5">
+                <span className="absolute -top-2.5 left-3 bg-white px-1 text-[11px] font-semibold text-gray-400">Tratamento</span>
+                <input type="text" value={selectedTratamento || 'Não selecionado'} disabled className="w-full text-sm text-gray-500 bg-transparent outline-none" />
+              </div>
+              
+              {hofSelectedRegions.map(reg => (
+                <div key={reg} className="flex gap-4">
+                  <div className="relative border border-gray-200 rounded-lg p-3 pt-5 w-2/3">
+                    <span className="absolute -top-2.5 left-3 bg-white px-1 text-[11px] font-semibold text-gray-400">Região</span>
+                    <input type="text" value={reg} disabled className="w-full text-sm text-gray-500 bg-transparent outline-none" />
+                  </div>
+                  <div className="relative border border-blue-400 rounded-lg p-3 pt-5 w-1/3">
+                    <span className="absolute -top-2.5 left-3 bg-white px-1 text-[11px] font-semibold text-blue-500">UI/ML</span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={hofRegionUIML[reg] || ''} 
+                      onChange={e => setHofRegionUIML(prev => ({...prev, [reg]: Number(e.target.value)}))}
+                      className="w-full text-sm text-gray-800 bg-transparent outline-none" 
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-5 border-t border-gray-100 flex justify-end gap-3">
+              <button onClick={() => setIsHofModalOpen(false)} className="px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">FECHAR</button>
+              <button onClick={() => setIsHofModalOpen(false)} className="px-6 py-2 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-lg shadow-sm transition-colors">SALVAR</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="relative w-full max-w-[1400px] h-full max-h-[96vh] rounded-2xl bg-[#f8fafc] shadow-2xl border border-white flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden">
 
         <div className="flex items-center justify-between border-b border-gray-200 p-6 flex-shrink-0 bg-white">
@@ -314,6 +368,18 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                   // Smooth scroll to the form
                   document.getElementById('treatment-form-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
+                hofRegionsSelected={hofSelectedRegions}
+                onHofRegionToggle={(region) => {
+                  setHofSelectedRegions(prev => {
+                    if (prev.includes(region)) return prev.filter(r => r !== region);
+                    return [...prev, region];
+                  });
+                  setIsHarmonizacao(true);
+                  // Smooth scroll to form if selecting region
+                  document.getElementById('treatment-form-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                hofGender={hofGender}
+                onGenderChange={setHofGender}
               />
             </div>
           </div>
@@ -412,12 +478,45 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                       if (e.target.checked) {
                           setDenteId('');
                           setFaces('');
+                      } else {
+                          setHofSelectedRegions([]);
                       }
                   }} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" />
                   Este tratamento é Harmonização Facial ou Geral (não requer seleção de dente)
                 </label>
 
-                {!isHarmonizacao && (
+                {isHarmonizacao ? (
+                  <div className="flex gap-4 items-end mt-2 mb-2">
+                    <div className="w-full relative border border-blue-200 rounded-lg p-3 min-h-[60px] flex gap-2 flex-wrap items-center bg-blue-50/30">
+                       <span className="absolute -top-2.5 left-3 bg-white px-1 text-[11px] font-semibold text-blue-500">Selecionar região</span>
+                       {hofSelectedRegions.map(reg => (
+                          <div key={reg} className="bg-gray-200 border border-gray-300 px-2 py-1 rounded text-[13px] flex items-center gap-1 shadow-sm text-gray-800">
+                             {reg} {hofRegionUIML[reg] ? <span className="font-bold">({hofRegionUIML[reg]})</span> : ''}
+                             <button onClick={() => setHofSelectedRegions(prev => prev.filter(r => r !== reg))} className="text-gray-500 hover:text-red-500 ml-1"><X size={14} /></button>
+                          </div>
+                       ))}
+                       <input 
+                          type="text" 
+                          placeholder="Inserir região..." 
+                          className="outline-none flex-1 min-w-[100px] text-sm bg-transparent"
+                          onKeyDown={(e) => {
+                             if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                const val = e.currentTarget.value.trim();
+                                if (!hofSelectedRegions.includes(val)) {
+                                   setHofSelectedRegions(prev => [...prev, val]);
+                                }
+                                e.currentTarget.value = '';
+                             }
+                          }}
+                       />
+                       {hofSelectedRegions.length > 0 && (
+                          <button onClick={() => setIsHofModalOpen(true)} className="ml-auto text-blue-600 font-semibold text-sm hover:underline">
+                             Selecionar UI/ML
+                          </button>
+                       )}
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex gap-4">
                     <div className="w-1/2">
                       <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">Dente(s)</label>

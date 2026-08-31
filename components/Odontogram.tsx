@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, Trash2 } from 'lucide-react';
 import { DEFAULT_TREATMENTS } from '../constants/treatments';
+import { HOFMap } from './HOFMap';
 
 const upperPermanent = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const lowerPermanent = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -26,9 +27,13 @@ interface OdontogramProps {
   onToggleExtraction?: (tooth: number, extracted: boolean) => Promise<void>;
   selectorMode?: boolean;
   onToothSelect?: (tooth: number) => void;
+  hofRegionsSelected?: string[];
+  onHofRegionToggle?: (region: string) => void;
+  hofGender?: 'female' | 'male';
+  onGenderChange?: (gender: 'female' | 'male') => void;
 }
 
-export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction, selectorMode, onToothSelect }: OdontogramProps) {
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction, selectorMode, onToothSelect, hofRegionsSelected = [], onHofRegionToggle, hofGender = 'female', onGenderChange }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
@@ -68,7 +73,7 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
     return DEFAULT_TREATMENTS.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 50);
   }, [searchTerm]);
 
-  const [archMode, setArchMode] = useState<'permanentes' | 'deciduos'>('permanentes');
+  const [archMode, setArchMode] = useState<'permanentes' | 'deciduos' | 'hof'>('permanentes');
 
   const handleSaveBudget = () => {
     if (selectedTreatments.length === 0) return;
@@ -172,6 +177,12 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
         >
            Decíduos
         </button>
+        <button 
+           className={`px-4 md:px-8 py-1.5 md:py-2 rounded-md text-[13px] md:text-[14px] font-semibold transition-all ${archMode === 'hof' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500 hover:text-gray-700'}`}
+           onClick={() => setArchMode('hof')}
+        >
+           HOF
+        </button>
       </div>
 
       {archMode === 'permanentes' && (
@@ -199,6 +210,32 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
           <div className="flex gap-2 md:gap-3 justify-start md:justify-center w-full overflow-x-auto hide-scrollbar px-2 pb-2 -mx-4 md:mx-0">
             {lowerDeciduous.map(n => renderTooth(n, false))}
           </div>
+        </div>
+      )}
+
+      {archMode === 'hof' && (
+        <div className="flex flex-col w-full items-center gap-6 mt-4 animate-in fade-in zoom-in-95 duration-200">
+           <div className="flex justify-end w-full max-w-[500px] mb-2 gap-2">
+              <button 
+                onClick={() => onGenderChange?.('female')} 
+                className={`p-2 rounded-lg border ${hofGender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                title="Mulher"
+              >
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M8 22h8"/><path d="M8 12h8"/><circle cx="12" cy="7" r="5"/></svg>
+              </button>
+              <button 
+                onClick={() => onGenderChange?.('male')} 
+                className={`p-2 rounded-lg border ${hofGender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                title="Homem"
+              >
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="m22 2-6.5 6.5"/><path d="M16 2h6v6"/></svg>
+              </button>
+           </div>
+           <HOFMap 
+              gender={hofGender} 
+              selectedRegions={hofRegionsSelected} 
+              onRegionToggle={(region) => onHofRegionToggle?.(region)} 
+           />
         </div>
       )}
 
