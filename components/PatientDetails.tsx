@@ -1357,6 +1357,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
             .flatMap(b => (b.treatments || []).map((t: any) => ({ ...t, budget: b })))
             .filter((t: any) => t && (t.status === 'Em andamento' || t.status === 'Concluído' || t.status === 'Finalizado'));
 
+          const addedHofRegions = Array.from(new Set(approvedTreatments.flatMap(t => t.hofRegions || [])));
+          const addedHofDrawings = approvedTreatments.flatMap(t => t.hofDrawings || []);
+          const hofGender = approvedTreatments.find(t => t.hofGender)?.hofGender || (patient.genero?.toLowerCase().includes('masculino') ? 'male' : 'female');
+
           return (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-8 animate-in fade-in">
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center justify-between">
@@ -1376,6 +1380,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 procedures={odontogramProcedures}
                 setProcedures={() => {}} 
                 viewMode={true}
+                addedHofRegions={addedHofRegions as string[]}
+                addedHofDrawings={addedHofDrawings}
+                hofGender={hofGender as "female" | "male"}
                 onUpdateTreatment={async (budget, treatmentId, updates) => {
                    if (!empresaId || !patient?.id) return;
                    const upd = { 
@@ -2234,6 +2241,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           onClose={() => { setIsNewBudgetModalOpen(false); setBudgetToEdit(null); }}
           patientName={patient.name}
           initialData={budgetToEdit}
+          patientGender={patient.genero}
           onSave={async (budget) => {
             if (empresaId && patient?.id) {
               const saved = await budgetService.saveBudget(empresaId, Number(patient.id), budget);

@@ -240,7 +240,10 @@ export const budgetService = {
           observacoes: item.observacoes,
           payments: (jsonTreatment.payments && jsonTreatment.payments.length > 0 ? jsonTreatment.payments : null) || item.orcamento_item_pagamentos || item.payments || [],
           paymentStatus: jsonTreatment.paymentStatus || item.payment_status || item.paymentStatus || null,
-          paymentCancellationReason: jsonTreatment.paymentCancellationReason || item.payment_cancellation_reason || item.paymentCancellationReason || null
+          paymentCancellationReason: jsonTreatment.paymentCancellationReason || item.payment_cancellation_reason || item.paymentCancellationReason || null,
+          hofRegions: jsonTreatment.hofRegions || item.hofRegions || [],
+          hofDrawings: jsonTreatment.hofDrawings || item.hofDrawings || [],
+          hofGender: jsonTreatment.hofGender || item.hofGender || null
         };
       });
     } else if (dbBudget.tratamentos && Array.isArray(dbBudget.tratamentos)) {

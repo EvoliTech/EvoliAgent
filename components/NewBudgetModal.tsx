@@ -15,9 +15,10 @@ interface NewBudgetModalProps {
   setProceduresSync?: React.Dispatch<React.SetStateAction<Record<number, OdontogramProcedure[]>>>;
   onSave: (budget: any) => void;
   initialData?: any | null;
+  patientGender?: string;
 }
 
-export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose, patientName, proceduresSync, setProceduresSync, onSave, initialData }) => {
+export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose, patientName, proceduresSync, setProceduresSync, onSave, initialData, patientGender }) => {
   const [budgetName, setBudgetName] = useState(`Plano de tratamento de ${patientName}`);
   const [date, setDate] = useState('');
 
@@ -57,12 +58,27 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         setBudgetName(initialData.name || `Plano de tratamento de ${patientName}`);
         setDate(initialData.date ? (initialData.date.includes('/') ? initialData.date.split('/').reverse().join('-') : initialData.date) : new Date().toISOString().split('T')[0]);
         setAddedTreatments(initialData.treatments || []);
+        
+        // Load hofGender from the first treatment that has it, otherwise use patientGender, else female
+        const savedGender = (initialData.treatments || []).find((t: any) => t.hofGender)?.hofGender;
+        if (savedGender) {
+           setHofGender(savedGender);
+        } else if (patientGender) {
+           setHofGender(patientGender.toLowerCase().includes('masculino') ? 'male' : 'female');
+        } else {
+           setHofGender('female');
+        }
       } else {
         setBudgetName(`Plano de tratamento de ${patientName}`);
         setDate(new Date().toISOString().split('T')[0]);
         setAddedTreatments([]);
         setHofDrawings([]);
         setHofSelectedRegions([]);
+        if (patientGender) {
+           setHofGender(patientGender.toLowerCase().includes('masculino') ? 'male' : 'female');
+        } else {
+           setHofGender('female');
+        }
       }
 
       // Load Plans and Specialists
@@ -154,7 +170,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         status: 'Aguardando',
         observacoes: finalObservacoes,
         hofRegions: [...hofSelectedRegions],
-        hofDrawings: [...hofDrawings]
+        hofDrawings: [...hofDrawings],
+        hofGender: hofGender
       } : t));
       setEditingPendingId(null);
     } else {
@@ -170,7 +187,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         status: 'Aguardando',
         observacoes: finalObservacoes,
         hofRegions: [...hofSelectedRegions],
-        hofDrawings: [...hofDrawings]
+        hofDrawings: [...hofDrawings],
+        hofGender: hofGender
       };
 
       setAddedTreatments([...safeTreatments, t]);
