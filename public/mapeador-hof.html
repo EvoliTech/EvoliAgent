@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Gerador de Polígonos SVG para HOF</title>
+<style>
+  body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f0f0f0; }
+  .container { position: relative; border: 2px solid #ccc; background: white; margin-bottom: 20px; display: inline-block; cursor: crosshair; }
+  img { display: block; width: 300px; height: 450px; pointer-events: none; }
+  svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  #controls { display: flex; gap: 10px; margin-bottom: 20px; }
+  button { padding: 8px 16px; cursor: pointer; }
+  #output { width: 80%; height: 150px; font-family: monospace; }
+</style>
+</head>
+<body>
+  <h2>Mapeador de Regiões HOF</h2>
+  <p>1. Clique nos pontos ao redor de uma região da face para desenhar o polígono.<br>
+     2. Clique em "Fechar Polígono (Salvar)" para finalizar a região.<br>
+     3. Copie o código gerado no final e envie para mim!</p>
+
+  <div id="controls">
+    <button onclick="closePolygon()">Fechar Polígono (Salvar)</button>
+    <button onclick="clearCurrent()">Limpar Atual</button>
+    <button onclick="clearAll()">Limpar Tudo</button>
+  </div>
+
+  <div class="container" id="canvas-container">
+    <img src="hof-face-mulher.png" alt="Rosto">
+    <svg id="svg-canvas" viewBox="0 0 300 450"></svg>
+  </div>
+
+  <textarea id="output" readonly></textarea>
+
+<script>
+  const svg = document.getElementById('svg-canvas');
+  const container = document.getElementById('canvas-container');
+  const output = document.getElementById('output');
+  
+  let points = [];
+  let allPaths = [];
+  let currentPolyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  currentPolyline.setAttribute("fill", "none");
+  currentPolyline.setAttribute("stroke", "red");
+  currentPolyline.setAttribute("stroke-width", "2");
+  svg.appendChild(currentPolyline);
+
+  container.addEventListener('click', (e) => {
+    const rect = container.getBoundingClientRect();
+    const x = Math.round(e.clientX - rect.left);
+    const y = Math.round(e.clientY - rect.top);
+    points.push({x, y});
+    
+    // Create visual point
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", x);
+    circle.setAttribute("cy", y);
+    circle.setAttribute("r", "3");
+    circle.setAttribute("fill", "blue");
+    circle.setAttribute("class", "temp-point");
+    svg.appendChild(circle);
+
+    // Update polyline
+    currentPolyline.setAttribute("points", points.map(p => `${p.x},${p.y}`).join(" "));
+  });
+
+  function closePolygon() {
+    if (points.length < 3) return alert("Marque pelo menos 3 pontos para formar uma região.");
+    const pathString = `M ${points.map(p => `${p.x} ${p.y}`).join(' L ')} Z`;
+    allPaths.push(pathString);
+    
+    // Draw finalized polygon
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathString);
+    path.setAttribute("fill", "rgba(0, 150, 255, 0.3)");
+    path.setAttribute("stroke", "blue");
+    path.setAttribute("stroke-width", "1");
+    svg.appendChild(path);
+
+    updateOutput();
+    clearCurrent();
+  }
+
+  function clearCurrent() {
+    points = [];
+    currentPolyline.setAttribute("points", "");
+    const tempPoints = document.querySelectorAll('.temp-point');
+    tempPoints.forEach(p => p.remove());
+  }
+
+  function clearAll() {
+    clearCurrent();
+    allPaths = [];
+    svg.innerHTML = '';
+    svg.appendChild(currentPolyline);
+    updateOutput();
+  }
+
+  function updateOutput() {
+    output.value = allPaths.map((p, i) => `{ id: 'Regiao ${i+1}', name: 'Regiao ${i+1}', path: '${p}' },`).join('\n');
+  }
+</script>
+</body>
+</html>

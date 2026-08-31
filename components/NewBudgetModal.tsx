@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Search } from 'lucide-react';
 import { Odontogram, OdontogramProcedure } from './Odontogram';
+import { DrawingElement } from './HOFMap';
 import { plansService } from '../services/plansService';
 import { useCompany } from '../contexts/CompanyContext';
 import { HealthPlan, Specialist } from '../types';
@@ -42,6 +43,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
 
   // HOF State
   const [hofSelectedRegions, setHofSelectedRegions] = useState<string[]>([]);
+  const [hofDrawings, setHofDrawings] = useState<DrawingElement[]>([]);
   const [hofGender, setHofGender] = useState<'female' | 'male'>('female');
   const [hofRegionUIML, setHofRegionUIML] = useState<Record<string, number>>({});
   const [isHofModalOpen, setIsHofModalOpen] = useState(false);
@@ -59,6 +61,8 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         setBudgetName(`Plano de tratamento de ${patientName}`);
         setDate(new Date().toISOString().split('T')[0]);
         setAddedTreatments([]);
+        setHofDrawings([]);
+        setHofSelectedRegions([]);
       }
 
       // Load Plans and Specialists
@@ -102,6 +106,26 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     return proc;
   }, [safeTreatments]);
 
+  const addedHofRegions = React.useMemo(() => {
+    const regions = new Set<string>();
+    safeTreatments.forEach(t => {
+      if (t.hofRegions && Array.isArray(t.hofRegions)) {
+        t.hofRegions.forEach((r: string) => regions.add(r));
+      }
+    });
+    return Array.from(regions);
+  }, [safeTreatments]);
+
+  const addedHofDrawings = React.useMemo(() => {
+    const dr: DrawingElement[] = [];
+    safeTreatments.forEach(t => {
+      if (t.hofDrawings && Array.isArray(t.hofDrawings)) {
+        dr.push(...t.hofDrawings);
+      }
+    });
+    return dr;
+  }, [safeTreatments]);
+
   if (!isOpen) return null;
 
   const handleAddTreatment = () => {
@@ -128,7 +152,9 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         profissional,
         convenio: resolvedConvenioName,
         status: 'Aguardando',
-        observacoes: finalObservacoes
+        observacoes: finalObservacoes,
+        hofRegions: [...hofSelectedRegions],
+        hofDrawings: [...hofDrawings]
       } : t));
       setEditingPendingId(null);
     } else {
@@ -142,7 +168,9 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
         profissional,
         convenio: resolvedConvenioName,
         status: 'Aguardando',
-        observacoes: finalObservacoes
+        observacoes: finalObservacoes,
+        hofRegions: [...hofSelectedRegions],
+        hofDrawings: [...hofDrawings]
       };
 
       setAddedTreatments([...safeTreatments, t]);
@@ -157,6 +185,7 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
     setObservacoes('');
     setIsHarmonizacao(false);
     setHofSelectedRegions([]);
+    setHofDrawings([]);
     setHofRegionUIML({});
   };
 
@@ -369,6 +398,10 @@ export const NewBudgetModal: React.FC<NewBudgetModalProps> = ({ isOpen, onClose,
                   document.getElementById('treatment-form-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
                 hofRegionsSelected={hofSelectedRegions}
+                addedHofRegions={addedHofRegions}
+                hofDrawings={hofDrawings}
+                addedHofDrawings={addedHofDrawings}
+                onHofDrawingsChange={setHofDrawings}
                 onHofRegionToggle={(region) => {
                   setHofSelectedRegions(prev => {
                     if (prev.includes(region)) return prev.filter(r => r !== region);

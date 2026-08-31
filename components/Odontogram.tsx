@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, Trash2 } from 'lucide-react';
 import { DEFAULT_TREATMENTS } from '../constants/treatments';
-import { HOFMap } from './HOFMap';
+import { HOFMap, DrawingElement } from './HOFMap';
 
 const upperPermanent = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 const lowerPermanent = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -31,13 +31,18 @@ interface OdontogramProps {
   onHofRegionToggle?: (region: string) => void;
   hofGender?: 'female' | 'male';
   onGenderChange?: (gender: 'female' | 'male') => void;
+  addedHofRegions?: string[];
+  hofDrawings?: DrawingElement[];
+  addedHofDrawings?: DrawingElement[];
+  onHofDrawingsChange?: (drawings: DrawingElement[]) => void;
 }
 
-export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction, selectorMode, onToothSelect, hofRegionsSelected = [], onHofRegionToggle, hofGender = 'female', onGenderChange }: OdontogramProps) {
+export function Odontogram({ patientName, procedures, setProcedures, onAppendToBudget, viewMode, onUpdateTreatment, onToggleExtraction, selectorMode, onToothSelect, hofRegionsSelected = [], onHofRegionToggle, hofGender = 'female', onGenderChange, addedHofRegions = [], hofDrawings = [], addedHofDrawings = [], onHofDrawingsChange }: OdontogramProps) {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
+  const [isHofExpanded, setIsHofExpanded] = useState(false);
   
   // View mode local state for toggles and inputs
   const [viewNotes, setViewNotes] = useState<Record<string, string>>({});
@@ -214,29 +219,82 @@ export function Odontogram({ patientName, procedures, setProcedures, onAppendToB
       )}
 
       {archMode === 'hof' && (
-        <div className="flex flex-col w-full items-center gap-6 mt-4 animate-in fade-in zoom-in-95 duration-200">
-           <div className="flex justify-end w-full max-w-[500px] mb-2 gap-2">
-              <button 
-                onClick={() => onGenderChange?.('female')} 
-                className={`p-2 rounded-lg border ${hofGender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                title="Mulher"
-              >
-                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M8 22h8"/><path d="M8 12h8"/><circle cx="12" cy="7" r="5"/></svg>
-              </button>
-              <button 
-                onClick={() => onGenderChange?.('male')} 
-                className={`p-2 rounded-lg border ${hofGender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                title="Homem"
-              >
-                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="m22 2-6.5 6.5"/><path d="M16 2h6v6"/></svg>
-              </button>
-           </div>
-           <HOFMap 
-              gender={hofGender} 
-              selectedRegions={hofRegionsSelected} 
-              onRegionToggle={(region) => onHofRegionToggle?.(region)} 
-           />
-        </div>
+        <>
+          <div className="flex flex-col w-full items-center gap-6 mt-4 animate-in fade-in zoom-in-95 duration-200">
+             <div className="flex justify-end w-full max-w-[500px] mb-2 gap-2">
+                <button 
+                  onClick={() => onGenderChange?.('female')} 
+                  className={`p-2 rounded-lg border ${hofGender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  title="Mulher"
+                >
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M8 22h8"/><path d="M8 12h8"/><circle cx="12" cy="7" r="5"/></svg>
+                </button>
+                <button 
+                  onClick={() => onGenderChange?.('male')} 
+                  className={`p-2 rounded-lg border ${hofGender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                  title="Homem"
+                >
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="m22 2-6.5 6.5"/><path d="M16 2h6v6"/></svg>
+                </button>
+                <button 
+                  onClick={() => setIsHofExpanded(true)} 
+                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 ml-1"
+                  title="Expandir"
+                >
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                </button>
+             </div>
+             {!isHofExpanded && (
+               <HOFMap 
+                  gender={hofGender} 
+                  selectedRegions={hofRegionsSelected} 
+                  addedHofRegions={addedHofRegions}
+                  onRegionToggle={(region) => onHofRegionToggle?.(region)} 
+                  drawings={hofDrawings}
+                  addedDrawings={addedHofDrawings}
+                  onDrawingsChange={(drawings) => onHofDrawingsChange?.(drawings)}
+               />
+             )}
+          </div>
+
+          {isHofExpanded && (
+            <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-200">
+              <div className="bg-white w-full max-w-5xl h-full max-h-[85vh] rounded-2xl shadow-2xl flex flex-col relative overflow-hidden animate-in zoom-in-95">
+                 <div className="flex justify-end p-4 gap-2 border-b border-gray-100 bg-gray-50">
+                    <button 
+                      onClick={() => onGenderChange?.('female')} 
+                      className={`p-2 rounded-lg border ${hofGender === 'female' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-white bg-white'}`}
+                      title="Mulher"
+                    >
+                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M8 22h8"/><path d="M8 12h8"/><circle cx="12" cy="7" r="5"/></svg>
+                    </button>
+                    <button 
+                      onClick={() => onGenderChange?.('male')} 
+                      className={`p-2 rounded-lg border ${hofGender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-white bg-white'}`}
+                      title="Homem"
+                    >
+                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 14a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/><path d="m22 2-6.5 6.5"/><path d="M16 2h6v6"/></svg>
+                    </button>
+                    <button onClick={() => setIsHofExpanded(false)} className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-100 bg-white ml-2">
+                       <X size={20} />
+                    </button>
+                 </div>
+                 <div className="flex-1 flex items-center justify-center p-8 overflow-auto bg-[#f8fafc]">
+                    <HOFMap 
+                      gender={hofGender} 
+                      selectedRegions={hofRegionsSelected} 
+                      addedHofRegions={addedHofRegions}
+                      onRegionToggle={(region) => onHofRegionToggle?.(region)} 
+                      drawings={hofDrawings}
+                      addedDrawings={addedHofDrawings}
+                      onDrawingsChange={(drawings) => onHofDrawingsChange?.(drawings)}
+                      scale={1.5}
+                    />
+                 </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Action Modal */}
