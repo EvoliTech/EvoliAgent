@@ -322,8 +322,8 @@ export const HOFMap: React.FC<HOFMapProps> = ({ gender, selectedRegions, addedHo
                       left: part.left,
                       top: part.top,
                       fill: 'transparent',
-                      stroke: isSelected ? 'rgb(59, 130, 246)' : isAdded ? 'rgb(249, 115, 22)' : 'rgba(255, 255, 255, 0.9)',
-                      strokeWidth: isSelected || isAdded ? 1.5 : 1.3,
+                      stroke: isSelected || isAdded ? '#000000' : 'rgba(255, 255, 255, 0.9)',
+                      strokeWidth: isSelected || isAdded ? 2.5 : 1.3,
                       strokeDasharray: isSelected || isAdded ? 'none' : '3 3',
                     }}
                     onClick={(e) => {
