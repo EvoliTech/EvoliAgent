@@ -73,7 +73,7 @@ serve(async (req) => {
                 'https://www.googleapis.com/auth/calendar.events'
             ].join(' ');
 
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.client_id?.trim()}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent`;
+            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.client_id?.trim()}&redirect_uri=${redirectUri}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent%20select_account`;
 
             return new Response(JSON.stringify({ url: authUrl }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }

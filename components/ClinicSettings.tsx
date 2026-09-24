@@ -39,76 +39,76 @@ import { logService } from '../services/logService';
 type TabType = 'general' | 'rules' | 'integrations' | 'security';
 
 const iconConfig: Record<string, { icon: React.ComponentType<any>; bgColor: string; borderColor: string; textColor: string; colorClass: string; iconColor: string }> = {
-  crown: {
-    icon: Crown,
-    bgColor: 'bg-blue-50/20',
-    borderColor: 'border-blue-100',
-    textColor: 'text-blue-700',
-    colorClass: 'bg-blue-600/10 text-blue-400 border-blue-500/30 group-hover:border-blue-400 group-hover:bg-blue-600/20 group-hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]',
-    iconColor: 'text-blue-500 group-hover:scale-110 transition-transform'
-  },
-  briefcase: {
-    icon: Briefcase,
-    bgColor: 'bg-emerald-50/20',
-    borderColor: 'border-emerald-100',
-    textColor: 'text-emerald-700',
-    colorClass: 'bg-emerald-600/10 text-emerald-400 border-emerald-500/30 group-hover:border-emerald-400 group-hover:bg-emerald-600/20 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]',
-    iconColor: 'text-emerald-500 group-hover:scale-110 transition-transform'
-  },
-  headphones: {
-    icon: Headphones,
-    bgColor: 'bg-amber-50/20',
-    borderColor: 'border-amber-100',
-    textColor: 'text-amber-700',
-    colorClass: 'bg-amber-600/10 text-amber-400 border-amber-500/30 group-hover:border-amber-400 group-hover:bg-amber-600/20 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]',
-    iconColor: 'text-amber-500 group-hover:scale-110 transition-transform'
-  },
-  stethoscope: {
-     icon: Stethoscope,
-     bgColor: 'bg-rose-50/20',
-     borderColor: 'border-rose-100',
-     textColor: 'text-rose-700',
-     colorClass: 'bg-rose-600/10 text-rose-400 border-rose-500/30 group-hover:border-rose-400 group-hover:bg-rose-600/20 group-hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]',
-     iconColor: 'text-rose-500 group-hover:scale-110 transition-transform'
-  },
-  user: {
-     icon: User,
-     bgColor: 'bg-purple-50/20',
-     borderColor: 'border-purple-100',
-     textColor: 'text-purple-700',
-     colorClass: 'bg-purple-600/10 text-purple-400 border-purple-500/30 group-hover:border-purple-400 group-hover:bg-purple-600/20 group-hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]',
-     iconColor: 'text-purple-500 group-hover:scale-110 transition-transform'
-  },
-  shield: {
-     icon: Shield,
-     bgColor: 'bg-cyan-50/20',
-     borderColor: 'border-cyan-100',
-     textColor: 'text-cyan-700',
-     colorClass: 'bg-cyan-600/10 text-cyan-400 border-cyan-500/30 group-hover:border-cyan-400 group-hover:bg-cyan-600/20 group-hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]',
-     iconColor: 'text-cyan-500 group-hover:scale-110 transition-transform'
-  }
+   crown: {
+      icon: Crown,
+      bgColor: 'bg-blue-50/20',
+      borderColor: 'border-blue-100',
+      textColor: 'text-blue-700',
+      colorClass: 'bg-blue-600/10 text-blue-400 border-blue-500/30 group-hover:border-blue-400 group-hover:bg-blue-600/20 group-hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]',
+      iconColor: 'text-blue-500 group-hover:scale-110 transition-transform'
+   },
+   briefcase: {
+      icon: Briefcase,
+      bgColor: 'bg-emerald-50/20',
+      borderColor: 'border-emerald-100',
+      textColor: 'text-emerald-700',
+      colorClass: 'bg-emerald-600/10 text-emerald-400 border-emerald-500/30 group-hover:border-emerald-400 group-hover:bg-emerald-600/20 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]',
+      iconColor: 'text-emerald-500 group-hover:scale-110 transition-transform'
+   },
+   headphones: {
+      icon: Headphones,
+      bgColor: 'bg-amber-50/20',
+      borderColor: 'border-amber-100',
+      textColor: 'text-amber-700',
+      colorClass: 'bg-amber-600/10 text-amber-400 border-amber-500/30 group-hover:border-amber-400 group-hover:bg-amber-600/20 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]',
+      iconColor: 'text-amber-500 group-hover:scale-110 transition-transform'
+   },
+   stethoscope: {
+      icon: Stethoscope,
+      bgColor: 'bg-rose-50/20',
+      borderColor: 'border-rose-100',
+      textColor: 'text-rose-700',
+      colorClass: 'bg-rose-600/10 text-rose-400 border-rose-500/30 group-hover:border-rose-400 group-hover:bg-rose-600/20 group-hover:shadow-[0_0_20px_rgba(244,63,94,0.4)]',
+      iconColor: 'text-rose-500 group-hover:scale-110 transition-transform'
+   },
+   user: {
+      icon: User,
+      bgColor: 'bg-purple-50/20',
+      borderColor: 'border-purple-100',
+      textColor: 'text-purple-700',
+      colorClass: 'bg-purple-600/10 text-purple-400 border-purple-500/30 group-hover:border-purple-400 group-hover:bg-purple-600/20 group-hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]',
+      iconColor: 'text-purple-500 group-hover:scale-110 transition-transform'
+   },
+   shield: {
+      icon: Shield,
+      bgColor: 'bg-cyan-50/20',
+      borderColor: 'border-cyan-100',
+      textColor: 'text-cyan-700',
+      colorClass: 'bg-cyan-600/10 text-cyan-400 border-cyan-500/30 group-hover:border-cyan-400 group-hover:bg-cyan-600/20 group-hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]',
+      iconColor: 'text-cyan-500 group-hover:scale-110 transition-transform'
+   }
 };
 
 const permissionOptions = [
-  { key: 'agenda', label: 'Agenda' },
-  { key: 'appointments', label: 'Agendamentos' },
-  { key: 'patients', label: 'Pacientes' },
-  { key: 'financeiro', label: 'Financeiro' },
-  { key: 'campaigns', label: 'Campanhas' },
-  { key: 'inventory', label: 'Estoque' },
-  { key: 'gallery', label: 'Galeria' },
-  { key: 'prosthesis-control', label: 'Controle de Prótese' },
-  { key: 'integrations', label: 'Integrações' },
-  { key: 'security', label: 'Segurança & Acessos' }
+   { key: 'agenda', label: 'Agenda' },
+   { key: 'appointments', label: 'Agendamentos' },
+   { key: 'patients', label: 'Pacientes' },
+   { key: 'financeiro', label: 'Financeiro' },
+   { key: 'campaigns', label: 'Campanhas' },
+   { key: 'inventory', label: 'Estoque' },
+   { key: 'gallery', label: 'Galeria' },
+   { key: 'prosthesis-control', label: 'Controle de Prótese' },
+   { key: 'integrations', label: 'Integrações' },
+   { key: 'security', label: 'Segurança & Acessos' }
 ];
 
 const iconChoices: { key: 'crown' | 'briefcase' | 'headphones' | 'stethoscope' | 'user' | 'shield'; icon: React.ComponentType<any>; label: string }[] = [
-  { key: 'crown', icon: Crown, label: 'Coroa' },
-  { key: 'briefcase', icon: Briefcase, label: 'Maleta' },
-  { key: 'headphones', icon: Headphones, label: 'Fone' },
-  { key: 'stethoscope', icon: Stethoscope, label: 'Estetoscópio' },
-  { key: 'user', icon: User, label: 'Usuário' },
-  { key: 'shield', icon: Shield, label: 'Escudo' }
+   { key: 'crown', icon: Crown, label: 'Coroa' },
+   { key: 'briefcase', icon: Briefcase, label: 'Maleta' },
+   { key: 'headphones', icon: Headphones, label: 'Fone' },
+   { key: 'stethoscope', icon: Stethoscope, label: 'Estetoscópio' },
+   { key: 'user', icon: User, label: 'Usuário' },
+   { key: 'shield', icon: Shield, label: 'Escudo' }
 ];
 
 interface ClinicSettingsProps {
@@ -261,21 +261,21 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          }
          setIsConfigLoaded(true);
       } else if (error && error.code === '42703') {
-          // caso a coluna is_active ainda não tenha sido criada, faz um fallback pra manter o app rodando sem erro na tela
-          const { data: fbData } = await supabase.from('integrations_config').select('service, client_id, client_secret').eq('IDEmpresa', empresaId);
-          if (fbData) {
-              const google = fbData.find(d => d.service === 'google_calendar');
-              if (google && google.client_id) {
-                  setClientId(google.client_id || '');
-                  setIsGoogleConfigSaved(true);
-              }
-              const openaiConfig = fbData.find(d => d.service === 'openai' || d.service === 'OpenAi');
-              if (openaiConfig && (openaiConfig.client_secret || openaiConfig.client_id)) {
-                  setOpenaiApiKey(openaiConfig.client_secret || openaiConfig.client_id || '');
-                  setIsOpenAiConfigSaved(true);
-              }
-              setIsConfigLoaded(true);
-          }
+         // caso a coluna is_active ainda não tenha sido criada, faz um fallback pra manter o app rodando sem erro na tela
+         const { data: fbData } = await supabase.from('integrations_config').select('service, client_id, client_secret').eq('IDEmpresa', empresaId);
+         if (fbData) {
+            const google = fbData.find(d => d.service === 'google_calendar');
+            if (google && google.client_id) {
+               setClientId(google.client_id || '');
+               setIsGoogleConfigSaved(true);
+            }
+            const openaiConfig = fbData.find(d => d.service === 'openai' || d.service === 'OpenAi');
+            if (openaiConfig && (openaiConfig.client_secret || openaiConfig.client_id)) {
+               setOpenaiApiKey(openaiConfig.client_secret || openaiConfig.client_id || '');
+               setIsOpenAiConfigSaved(true);
+            }
+            setIsConfigLoaded(true);
+         }
       }
    };
 
@@ -413,37 +413,37 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       }
 
       try {
-          const { data, error: selError } = await supabase
-              .from('integrations_config')
-              .select('service')
-              .eq('IDEmpresa', empresaId)
-              .eq('service', 'google_calendar')
-              .maybeSingle();
+         const { data, error: selError } = await supabase
+            .from('integrations_config')
+            .select('service')
+            .eq('IDEmpresa', empresaId)
+            .eq('service', 'google_calendar')
+            .maybeSingle();
 
-          if (selError) throw selError;
+         if (selError) throw selError;
 
-          const payload = {
-              IDEmpresa: empresaId,
-              service: 'google_calendar',
-              client_id: clientId,
-              client_secret: clientSecret,
-              is_active: true,
-              updated_at: new Date().toISOString()
-          };
+         const payload = {
+            IDEmpresa: empresaId,
+            service: 'google_calendar',
+            client_id: clientId,
+            client_secret: clientSecret,
+            is_active: true,
+            updated_at: new Date().toISOString()
+         };
 
-          if (data) {
-              const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
-              if (upError) throw upError;
-          } else {
-              const { error: inError } = await supabase.from('integrations_config').insert([payload]);
-              if (inError) throw inError;
-          }
+         if (data) {
+            const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
+            if (upError) throw upError;
+         } else {
+            const { error: inError } = await supabase.from('integrations_config').insert([payload]);
+            if (inError) throw inError;
+         }
 
-          setClientSecret('');
-          setIsGoogleConfigSaved(true);
-          showAlert('Sucesso', 'Credenciais do Google salvas com sucesso!', 'success');
+         setClientSecret('');
+         setIsGoogleConfigSaved(true);
+         showAlert('Sucesso', 'Credenciais do Google salvas com sucesso!', 'success');
       } catch (err: any) {
-          showAlert('Erro', `Erro ao salvar credenciais do Google: ${err.message}`, 'error');
+         showAlert('Erro', `Erro ao salvar credenciais do Google: ${err.message}`, 'error');
       }
    };
 
@@ -455,62 +455,62 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       }
 
       try {
-          const { data, error: selError } = await supabase
-              .from('integrations_config')
-              .select('service')
-              .eq('IDEmpresa', empresaId)
-              .eq('service', 'OpenAi')
-              .maybeSingle();
+         const { data, error: selError } = await supabase
+            .from('integrations_config')
+            .select('service')
+            .eq('IDEmpresa', empresaId)
+            .eq('service', 'OpenAi')
+            .maybeSingle();
 
-          if (selError) throw selError;
+         if (selError) throw selError;
 
-          const payload = {
-              IDEmpresa: empresaId,
-              service: 'OpenAi',
-              client_id: openaiApiKey,
-              client_secret: openaiApiKey,
-              is_active: true,
-              updated_at: new Date().toISOString()
-          };
+         const payload = {
+            IDEmpresa: empresaId,
+            service: 'OpenAi',
+            client_id: openaiApiKey,
+            client_secret: openaiApiKey,
+            is_active: true,
+            updated_at: new Date().toISOString()
+         };
 
-          if (data) {
-              const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'OpenAi');
-              if (upError) throw upError;
-          } else {
-              const { error: inError } = await supabase.from('integrations_config').insert([payload]);
-              if (inError) throw inError;
-          }
+         if (data) {
+            const { error: upError } = await supabase.from('integrations_config').update(payload).eq('IDEmpresa', empresaId).eq('service', 'OpenAi');
+            if (upError) throw upError;
+         } else {
+            const { error: inError } = await supabase.from('integrations_config').insert([payload]);
+            if (inError) throw inError;
+         }
 
-          setIsOpenAiConfigSaved(true);
-          showAlert('Sucesso', 'Credencial da IA salva com sucesso!', 'success');
+         setIsOpenAiConfigSaved(true);
+         showAlert('Sucesso', 'Credencial da IA salva com sucesso!', 'success');
       } catch (err: any) {
-          showAlert('Erro', `Erro ao salvar credenciais da IA: ${err.message}`, 'error');
+         showAlert('Erro', `Erro ao salvar credenciais da IA: ${err.message}`, 'error');
       }
    };
 
    const disconnectGoogleConfig = async () => {
       if (!empresaId) return;
       try {
-          const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
-          if (error) throw error;
-          
-          setIsGoogleConfigSaved(false);
-          showAlert('Sucesso', 'Credencial do Google foi desconectada!', 'success');
+         const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).eq('service', 'google_calendar');
+         if (error) throw error;
+
+         setIsGoogleConfigSaved(false);
+         showAlert('Sucesso', 'Credencial do Google foi desconectada!', 'success');
       } catch (err: any) {
-          showAlert('Erro', `Erro ao desconectar credencial Google: ${err.message}`, 'error');
+         showAlert('Erro', `Erro ao desconectar credencial Google: ${err.message}`, 'error');
       }
    };
 
    const disconnectOpenAIConfig = async () => {
       if (!empresaId) return;
       try {
-          const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).in('service', ['openai', 'OpenAi']);
-          if (error) throw error;
-          
-          setIsOpenAiConfigSaved(false);
-          showAlert('Sucesso', 'Credencial da IA foi desconectada!', 'success');
+         const { error } = await supabase.from('integrations_config').update({ is_active: false }).eq('IDEmpresa', empresaId).in('service', ['openai', 'OpenAi']);
+         if (error) throw error;
+
+         setIsOpenAiConfigSaved(false);
+         showAlert('Sucesso', 'Credencial da IA foi desconectada!', 'success');
       } catch (err: any) {
-          showAlert('Erro', `Erro ao desconectar credencial OpenAI: ${err.message}`, 'error');
+         showAlert('Erro', `Erro ao desconectar credencial OpenAI: ${err.message}`, 'error');
       }
    };
 
@@ -621,56 +621,56 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
       }
    };
 
-    const saveConfigs = async () => {
-       if (!empresaId) return;
-       setIsSaving(true);
-       try {
-          await companyService.updateCompany(empresaId, company);
-          await subUserService.saveSubUsers(empresaId, profiles);
-          showAlert('Sucesso', 'Configurações e perfis salvos com sucesso!', 'success');
-       } catch (error: any) {
-          showAlert('Erro', 'Erro ao salvar as configurações: ' + error.message, 'error');
-       } finally {
-          setIsSaving(false);
-       }
-    };
+   const saveConfigs = async () => {
+      if (!empresaId) return;
+      setIsSaving(true);
+      try {
+         await companyService.updateCompany(empresaId, company);
+         await subUserService.saveSubUsers(empresaId, profiles);
+         showAlert('Sucesso', 'Configurações e perfis salvos com sucesso!', 'success');
+      } catch (error: any) {
+         showAlert('Erro', 'Erro ao salvar as configurações: ' + error.message, 'error');
+      } finally {
+         setIsSaving(false);
+      }
+   };
 
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !empresaId) return;
+   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !empresaId) return;
 
-        setIsUploadingLogo(true);
-        try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `logo_${empresaId}_${Math.random()}.${fileExt}`;
-            const filePath = `${empresaId}/${fileName}`;
+      setIsUploadingLogo(true);
+      try {
+         const fileExt = file.name.split('.').pop();
+         const fileName = `logo_${empresaId}_${Math.random()}.${fileExt}`;
+         const filePath = `${empresaId}/${fileName}`;
 
-            // Try to upload to a generic 'public' or 'assets' bucket. Using 'company-logos'
-            const { error: uploadError } = await supabase.storage.from('company-logos').upload(filePath, file, {
-                cacheControl: '3600',
-                upsert: true
+         // Try to upload to a generic 'public' or 'assets' bucket. Using 'company-logos'
+         const { error: uploadError } = await supabase.storage.from('company-logos').upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true
+         });
+
+         if (uploadError) throw uploadError;
+
+         const { data } = supabase.storage.from('company-logos').getPublicUrl(filePath);
+
+         if (data?.publicUrl) {
+            setCompany({
+               ...company,
+               configuracoes: {
+                  ...(company.configuracoes || { dias_funcionamento: [] }),
+                  logo_url: data.publicUrl
+               }
             });
-
-            if (uploadError) throw uploadError;
-
-            const { data } = supabase.storage.from('company-logos').getPublicUrl(filePath);
-
-            if (data?.publicUrl) {
-                setCompany({
-                    ...company,
-                    configuracoes: {
-                        ...(company.configuracoes || { dias_funcionamento: [] }),
-                        logo_url: data.publicUrl
-                    }
-                });
-                showAlert('Sucesso', 'Logomarca carregada. Lembre-se de salvar as alterações.', 'success');
-            }
-        } catch (error: any) {
-            showAlert('Erro', 'Erro ao fazer upload da logomarca: ' + error.message, 'error');
-        } finally {
-            setIsUploadingLogo(false);
-        }
-    };
+            showAlert('Sucesso', 'Logomarca carregada. Lembre-se de salvar as alterações.', 'success');
+         }
+      } catch (error: any) {
+         showAlert('Erro', 'Erro ao fazer upload da logomarca: ' + error.message, 'error');
+      } finally {
+         setIsUploadingLogo(false);
+      }
+   };
 
    const renderContent = () => {
       switch (activeTab) {
@@ -851,7 +851,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                         </div>
                      )}
                   </div>
-                   <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
+                  <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <h3 className="font-bold flex items-center gap-2">
                            <img className="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" />
@@ -877,7 +877,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            {isGoogleConfigSaved ? (
                               <button onClick={disconnectGoogleConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
                            ) : clientId ? (
-                               <p className="text-gray-400 text-xs text-right pr-2">Preserva chaves (Desconectado)</p>
+                              <p className="text-gray-400 text-xs text-right pr-2">Preserva chaves (Desconectado)</p>
                            ) : null}
                         </div>
                      </div>
@@ -906,7 +906,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            {isOpenAiConfigSaved ? (
                               <button onClick={disconnectOpenAIConfig} className="text-red-500 font-medium hover:text-red-600 text-sm">Desconectar</button>
                            ) : openaiApiKey ? (
-                               <p className="text-gray-400 text-xs text-right pr-2">Preserva chave (Desconectado)</p>
+                              <p className="text-gray-400 text-xs text-right pr-2">Preserva chave (Desconectado)</p>
                            ) : null}
                         </div>
                      </div>
@@ -925,7 +925,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                         <Plus size={16} /> Novo Perfil
                      </button>
                   </div>
-                  
+
                   {/* Static Clinic Owner Row Table */}
                   <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                      <table className="min-w-full divide-y divide-gray-200">
@@ -969,16 +969,16 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            <h3 className="text-lg font-bold text-gray-900">Senhas de Acesso dos Perfis</h3>
                            <p className="text-sm text-gray-500">Configure as senhas e as permissões de acesso para os perfis na tela de seleção.</p>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                            {Object.values(profiles).map(profile => {
                               const config = iconConfig[profile.icon] || iconConfig.user;
                               const Icon = config.icon;
                               const showPasswordText = !!showSubPass[profile.id];
-                              
+
                               return (
-                                 <div 
-                                    key={profile.id} 
+                                 <div
+                                    key={profile.id}
                                     className={`p-5 rounded-2xl border ${config.borderColor} ${config.bgColor} space-y-4 flex flex-col justify-between hover:shadow-md transition-all duration-350 group`}
                                  >
                                     <div className="space-y-3">
@@ -994,7 +994,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                                                 className="text-blue-500 hover:text-blue-600 hover:bg-white/80 p-1.5 rounded-lg transition-all"
                                                 title="Editar Perfil"
                                              >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
                                              </button>
                                              {profile.id !== 'admin' && (
                                                 <button
@@ -1078,7 +1078,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-4">
                <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
                </button>
                <div>
                   <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Configurações Gerais</h1>
@@ -1099,8 +1099,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                {tabs.map(tab => {
                   const isTabDisabledForConcierge = subUserRole === 'concierge' && (tab.id === 'integrations' || tab.id === 'security');
                   return (
-                     <button 
-                        key={tab.id} 
+                     <button
+                        key={tab.id}
                         disabled={isTabDisabledForConcierge}
                         onClick={() => {
                            if (tab.id === 'integrations') {
@@ -1110,14 +1110,13 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            } else {
                               navigate('/configuracoes/clinica');
                            }
-                        }} 
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                           activeTab === tab.id 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === tab.id
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                               : isTabDisabledForConcierge
-                                 ? 'text-gray-300 bg-gray-50/50 cursor-not-allowed opacity-50 font-medium' 
+                                 ? 'text-gray-300 bg-gray-50/50 cursor-not-allowed opacity-50 font-medium'
                                  : 'text-gray-600 hover:bg-white hover:shadow-sm'
-                        }`}
+                           }`}
                      >
                         <tab.icon size={20} />
                         {tab.label}
@@ -1134,11 +1133,11 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
             <div className="space-y-6">
                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Nome do Perfil <span className="text-red-500">*</span></label>
-                  <input 
-                     type="text" 
-                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold" 
-                     value={profileName} 
-                     onChange={e => setProfileName(e.target.value)} 
+                  <input
+                     type="text"
+                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold"
+                     value={profileName}
+                     onChange={e => setProfileName(e.target.value)}
                      disabled={editingProfile?.id === 'admin'}
                      placeholder="Ex: Recepcionista, Dr. João, etc."
                   />
@@ -1150,12 +1149,12 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">Senha de Acesso <span className="text-red-500">*</span></label>
                   <div className="relative">
-                     <input 
+                     <input
                         type="text"
-                        style={{ WebkitTextSecurity: showModalPassword ? 'none' : 'disc' } as React.CSSProperties} 
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold pr-10" 
-                        value={profilePassword} 
-                        onChange={e => setProfilePassword(e.target.value)} 
+                        style={{ WebkitTextSecurity: showModalPassword ? 'none' : 'disc' } as React.CSSProperties}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-semibold pr-10"
+                        value={profilePassword}
+                        onChange={e => setProfilePassword(e.target.value)}
                         placeholder="Digite a senha de acesso"
                      />
                      <button
@@ -1183,8 +1182,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                               onClick={() => setProfileIcon(choice.key)}
                               title={choice.label}
                               className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all
-                                 ${isSelected 
-                                    ? 'bg-blue-600/10 border-blue-500 text-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.2)]' 
+                                 ${isSelected
+                                    ? 'bg-blue-600/10 border-blue-500 text-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.2)]'
                                     : isChoiceDisabled
                                        ? 'opacity-30 cursor-not-allowed border-gray-105 text-gray-300'
                                        : 'border-gray-200 text-gray-500 hover:border-blue-200 hover:bg-gray-50 hover:text-blue-500'
@@ -1204,7 +1203,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                   <h4 className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest text-gray-700">
                      <Shield size={16} className="text-blue-600" /> Permissões de Acesso
                   </h4>
-                  
+
                   {editingProfile?.id === 'admin' ? (
                      <div className="p-3 bg-blue-50/50 border border-blue-100 text-blue-700 rounded-xl text-xs font-semibold leading-relaxed">
                         Este é o perfil administrador orquestrador e sempre possui acesso total e irrestrito a todas as funcionalidades e telas do aplicativo.
@@ -1216,9 +1215,9 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                            return (
                               <label key={p.key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 hover:border-blue-100 cursor-pointer select-none transition-all">
                                  <span className="text-xs font-bold text-gray-700">{p.label}</span>
-                                 <input 
-                                    type="checkbox" 
-                                    checked={isChecked} 
+                                 <input
+                                    type="checkbox"
+                                    checked={isChecked}
                                     onChange={e => {
                                        if (e.target.checked) {
                                           setProfilePermissions([...profilePermissions, p.key]);
@@ -1226,7 +1225,7 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                                           setProfilePermissions(profilePermissions.filter(k => k !== p.key));
                                        }
                                     }}
-                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition-all" 
+                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition-all"
                                  />
                               </label>
                            );
