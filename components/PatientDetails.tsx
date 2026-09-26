@@ -2368,7 +2368,7 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 // Call n8n ONCE per boleto payment, unifying the treatments
                 if (createdReceitaIds.length > 0 && p.method === 'Boleto') {
                    try {
-                       const createUrl = import.meta.env.VITE_N8N_CREATE_BOLETO_URL;
+                       const createUrl = true;
                        if (createUrl) {
                           const treatmentIds = payingTreatments.map(t => t.id).join(',');
                           
@@ -2377,89 +2377,66 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                           const drs = Array.from(new Set(payingTreatments.map(t => t.profissional).filter(Boolean))).join(', ');
                           const descriptionText = `Tratamento(s): ${treatmentNames}${parcelInfo}${drs ? ` - Dr(a): ${drs}` : ''}`.substring(0, 255);
                           
-                          const n8nPayload = {
-                              empresa_id: empresaId,
-                              paciente_id: patient.id,
-                              tratamento_id: treatmentIds,
-                              valor: p.amount, // Total amount for this payment
-                              vencimento: p.date || p.receiveDate || new Date().toISOString().split('T')[0],
-                              externalReference: createdReceitaIds[0], // Reference the first revenue
-                              name: patient.name,
-                              cpf: patient.cpf,
-                              phone: patient.phone,
-                              cep: patient.cep,
-                              endereco_rua: patient.enderecoRua,
-                              endereco_numero: patient.enderecoNumero,
-                              endereco_bairro: patient.enderecoBairro,
-                              description: descriptionText
-                          };
+                          const stripePayload = {
+                               empresa_id: empresaId,
+                               paciente_id: patient.id,
+                               tratamento_id: treatmentIds,
+                               valor: p.amount,
+                               vencimento: p.date || p.receiveDate || new Date().toISOString().split('T')[0],
+                               externalReference: createdReceitaIds[0],
+                               name: patient.name,
+                               cpf: patient.cpf,
+                               email: patient.email || '',
+                               phone: patient.phone,
+                               description: descriptionText
+                           };
                           const controller = new AbortController();
-                          // Aumentando o timeout para 25 segundos para dar tempo ao n8n/Asaas gerar o boleto
-                          const timeoutId = setTimeout(() => controller.abort(), 25000); 
-                          
-                          let n8nData: any = null;
-                          try {
-                              const n8nRes = await fetch(createUrl, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify(n8nPayload),
-                                  signal: controller.signal
-                              });
-                              if (n8nRes.ok) {
-                                  let parsed = await n8nRes.json();
-                                  if (Array.isArray(parsed)) parsed = parsed[0];
-                                  if (parsed && (parsed.asaas_payment_id || parsed.link_boleto)) {
-                                      n8nData = parsed;
-                                  }
-                              }
-                          } catch (fetchErr: any) {
-                              console.warn("Webhook demorou a responder ou falhou, verificando banco de dados...", fetchErr.message);
-                          } finally {
-                              clearTimeout(timeoutId);
-                          }
-                          
-                          // Fallback: Se o fetch não pegou o boleto, checar no banco de dados
-                          if (!n8nData) {
-                              let foundInDb = false;
-                              for (let attempt = 0; attempt < 15; attempt++) {
-                                  const { data: checkData } = await supabase.from('receitas').select('asaas_payment_id, link_boleto, linha_digitavel').eq('id', createdReceitaIds[0]).single();
-                                  if (checkData && (checkData.asaas_payment_id || checkData.link_boleto)) {
-                                      n8nData = checkData;
-                                      foundInDb = true;
-                                      break;
-                                  }
-                                  await new Promise(r => setTimeout(r, 1000));
-                              }
-                              
-                              if (!foundInDb) {
-                                  alert("O n8n iniciou a geração do boleto, mas demorou para devolver o link. Por favor, feche e abra o paciente novamente ou verifique as faturas geradas na aba de orçamentos.");
-                              }
-                          }
-                          
-                          if (n8nData) {
-                              // Update ALL related receitas in DB with the SAME boleto link
-                              for (const rid of createdReceitaIds) {
-                                  await supabase.from('receitas').update({
-                                      asaas_payment_id: n8nData.asaas_payment_id,
-                                      status_asaas: 'PENDING',
-                                      link_boleto: n8nData.link_boleto,
-                                      linha_digitavel: n8nData.linha_digitavel
-                                  }).eq('id', rid);
-                              }
-                              
-                              // Modify the payment object in memory so it gets saved to budget JSON
-                              paymentsArray[i] = {
-                                  ...paymentsArray[i],
-                                  asaas_payment_id: n8nData.asaas_payment_id,
-                                  status_asaas: 'PENDING',
-                                  link_boleto: n8nData.link_boleto,
-                                  linha_digitavel: n8nData.linha_digitavel
-                              };
+                           const timeoutId = setTimeout(() => controller.abort(), 10000); 
+                           
+                           let stripeData: any = null;
+                           try {
+                               const { data, error } = await supabase.functions.invoke('stripe-create-boleto', {
+                                   body: stripePayload,
+                                   signal: controller.signal
+                               });
+                               
+                               if (error) throw error;
+                               if (data?.success) {
+                                   stripeData = data;
+                               }
+                           } catch (fetchErr: any) {
+                               console.error("Erro ao chamar Edge Function do Stripe:", fetchErr.message);
+                           } finally {
+                               clearTimeout(timeoutId);
+                           }
+                           
+                           if (!stripeData) {
+                               alert("Ocorreu um erro ao gerar o boleto com a Stripe. Tente novamente ou verifique as faturas geradas na aba de orçamentos.");
+                           } else {
+                               for (const rid of createdReceitaIds) {
+                                   await supabase.from('receitas').update({
+                                       stripe_payment_intent_id: stripeData.stripe_payment_intent_id,
+                                       stripe_customer_id: stripeData.customer_id,
+                                       stripe_status: 'PENDING',
+                                       status_asaas: 'PENDING',
+                                       link_boleto: stripeData.link_boleto,
+                                       linha_digitavel: stripeData.linha_digitavel
+                                   }).eq('id', rid);
+                               }
+                               
+                               paymentsArray[i] = {
+                                   ...paymentsArray[i],
+                                   stripe_payment_intent_id: stripeData.stripe_payment_intent_id,
+                                   stripe_status: 'PENDING',
+                                   status_asaas: 'PENDING',
+                                   link_boleto: stripeData.link_boleto,
+                                   linha_digitavel: stripeData.linha_digitavel
+                               };
 
-                              if (n8nData.link_boleto) {
-                                  boletosLinks.push(n8nData.link_boleto);
-                              }
-                          }
+                               if (stripeData.link_boleto) {
+                                   boletosLinks.push(stripeData.link_boleto);
+                               }
+                           }
                        } else {
                            alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
                        }

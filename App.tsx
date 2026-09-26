@@ -115,6 +115,7 @@ export default function App() {
     security: '/configuracoes/seguranca',
     'plans-management': '/configuracoes/planos',
     'fees-settings': '/configuracoes/taxas',
+    'payments-settings': '/configuracoes/pagamentos',
     'prosthesis-control': '/proteses',
     'google-callback': '/settings/callback',
   };
@@ -285,9 +286,9 @@ export default function App() {
           {currentPage === 'message-center' && <MessageCenter />}
           {currentPage === 'professionals' && <Professionals onBack={() => navigateTo('settings')} />}
           {currentPage === 'settings' && <Settings onNavigate={navigateTo} />}
-          {(currentPage === 'clinic-settings' || currentPage === 'integrations' || currentPage === 'security') && (
+          {(currentPage === 'clinic-settings' || currentPage === 'integrations' || currentPage === 'security' || currentPage === 'payments-settings') && (
             <ClinicSettings 
-              initialTab={currentPage === 'integrations' ? 'integrations' : currentPage === 'security' ? 'security' : 'general'} 
+              initialTab={currentPage === 'integrations' ? 'integrations' : currentPage === 'security' ? 'security' : currentPage === 'payments-settings' ? 'payments' : 'general'} 
               onBack={() => navigateTo('settings')} 
             />
           )}

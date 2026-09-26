@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
    Building,
@@ -23,7 +23,8 @@ import {
    EyeOff,
    Loader2,
    Stethoscope,
-   User
+   User,
+   CreditCard
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { googleCalendarService } from '../services/googleCalendarService';
@@ -34,9 +35,10 @@ import { useCompany } from '../contexts/CompanyContext';
 import { companyService, CompanySettings } from '../services/companyService';
 import { formatWhatsApp } from '../utils';
 import { AlertModal } from './ui/AlertModal';
+import { PaymentSettings } from './PaymentSettings';
 import { logService } from '../services/logService';
 
-type TabType = 'general' | 'rules' | 'integrations' | 'security';
+type TabType = 'general' | 'rules' | 'integrations' | 'security' | 'payments';
 
 const iconConfig: Record<string, { icon: React.ComponentType<any>; bgColor: string; borderColor: string; textColor: string; colorClass: string; iconColor: string }> = {
    crown: {
@@ -131,6 +133,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
          targetTab = 'security';
       } else if (path === '/configuracoes/integracoes') {
          targetTab = 'integrations';
+      } else if (path === '/configuracoes/pagamentos') {
+         targetTab = 'payments';
       }
 
       if (subUserRole === 'concierge' && (targetTab === 'integrations' || targetTab === 'security')) {
@@ -1068,6 +1072,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                   </div>
                </div>
             );
+         case 'payments':
+            return <PaymentSettings empresaId={empresaId ? String(empresaId) : ''} />;
          default:
             return null;
       }
@@ -1107,6 +1113,8 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
                               navigate('/configuracoes/integracoes');
                            } else if (tab.id === 'security') {
                               navigate('/configuracoes/seguranca');
+                           } else if (tab.id === 'payments') {
+                              navigate('/configuracoes/pagamentos');
                            } else {
                               navigate('/configuracoes/clinica');
                            }
@@ -1260,5 +1268,6 @@ export const ClinicSettings: React.FC<ClinicSettingsProps> = ({ initialTab = 'ge
 const tabs = [
    { id: 'general', label: 'Dados da Clínica', icon: Building },
    { id: 'integrations', label: 'Integrações', icon: LinkIcon },
+   { id: 'payments', label: 'Pagamentos', icon: CreditCard },
    { id: 'security', label: 'Segurança & Acesso', icon: Shield },
 ];
