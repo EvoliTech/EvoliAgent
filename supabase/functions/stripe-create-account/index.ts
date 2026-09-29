@@ -40,6 +40,29 @@ serve(async (req) => {
     const forwardedFor = req.headers.get('x-forwarded-for')
     const ipAddress = forwardedFor ? forwardedFor.split(',')[0].trim() : '127.0.0.1'
 
+    // 0. Verifica se a empresa já possui uma conta Stripe
+    const { data: empresaAtual } = await supabase
+      .from('Empresa')
+      .select('stripe_account_id')
+      .eq('id', empresa_id)
+      .single()
+
+    if (empresaAtual?.stripe_account_id) {
+      // Se a conta já existe, podemos gerar um link de update para ele terminar o cadastro caso falte algo
+      const origin = req.headers.get('origin') || 'http://localhost:3000'
+      const accountLink = await stripe.accountLinks.create({
+        account: empresaAtual.stripe_account_id,
+        refresh_url: `${origin}/dashboard/financial`,
+        return_url: `${origin}/dashboard/financial`,
+        type: 'account_onboarding',
+      });
+
+      return new Response(JSON.stringify({ success: true, stripe_account_id: empresaAtual.stripe_account_id, account_link_url: accountLink.url }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // 1. Cria a subconta na Stripe (Custom Account)
     const account = await stripe.accounts.create({
       type: 'custom',
@@ -71,10 +94,21 @@ serve(async (req) => {
       .eq('id', empresa_id)
 
     if (error) {
+      // Se der erro ao salvar no banco, deletamos a conta recém criada na Stripe para não ficar orfã (duplicada)
+      await stripe.accounts.del(account.id).catch(console.error)
       throw error;
     }
 
-    return new Response(JSON.stringify({ success: true, stripe_account_id: account.id }), {
+    // 3. Gera o link de onboarding da Stripe
+    const origin = req.headers.get('origin') || 'http://localhost:3000'
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: `${origin}/dashboard/financial`,
+      return_url: `${origin}/dashboard/financial`,
+      type: 'account_onboarding',
+    });
+
+    return new Response(JSON.stringify({ success: true, stripe_account_id: account.id, account_link_url: accountLink.url }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

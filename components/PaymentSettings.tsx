@@ -60,7 +60,7 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
     };
 
     const handleActivate = async () => {
-        if (!cnpj || !razaoSocial || !email || !nomeRepresentante || !cpfRepresentante) {
+        if (!stripeAccountId && (!cnpj || !razaoSocial || !email || !nomeRepresentante || !cpfRepresentante)) {
             alert("Por favor, preencha os dados obrigatórios para ativar o gateway.");
             return;
         }
@@ -82,11 +82,35 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
 
             if (data && data.success) {
                 setStripeAccountId(data.stripe_account_id);
-                alert("Gateway de Pagamentos ativado com sucesso!");
+                if (data.account_link_url) {
+                    window.location.href = data.account_link_url;
+                } else {
+                    alert("Gateway de Pagamentos ativado com sucesso!");
+                }
             }
         } catch (error: any) {
             console.error("Erro ao ativar gateway", error);
             alert("Ocorreu um erro ao tentar ativar o gateway: " + error.message);
+        } finally {
+            setIsActivating(false);
+        }
+    };
+
+    const handleDeactivate = async () => {
+        if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? Você não poderá emitir novos boletos até ativar novamente.")) return;
+        try {
+            setIsActivating(true);
+            const { error } = await supabase
+                .from('Empresa')
+                .update({ stripe_account_id: null })
+                .eq('id', empresaId);
+            
+            if (error) throw error;
+            setStripeAccountId(null);
+            alert("Gateway desativado com sucesso.");
+        } catch (error: any) {
+            console.error("Erro ao desativar gateway", error);
+            alert("Ocorreu um erro ao desativar: " + error.message);
         } finally {
             setIsActivating(false);
         }
@@ -109,6 +133,24 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
                     Sua conta na Stripe (ID: <span className="font-mono text-sm bg-green-100 px-2 py-1 rounded">{stripeAccountId}</span>) está configurada.
                     Todos os boletos gerados agora serão processados pela Stripe e os valores serão creditados no saldo da sua conta.
                 </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                    <button 
+                        onClick={handleActivate} 
+                        disabled={isActivating}
+                        className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                        {isActivating ? <Loader2 size={18} className="animate-spin" /> : null}
+                        Completar Cadastro na Stripe
+                    </button>
+                    <button 
+                        onClick={handleDeactivate} 
+                        disabled={isActivating}
+                        className="px-4 py-2 bg-red-100 text-red-700 font-medium rounded-lg hover:bg-red-200 transition-colors flex items-center gap-2"
+                    >
+                        {isActivating ? <Loader2 size={18} className="animate-spin" /> : null}
+                        Desativar Gateway
+                    </button>
+                </div>
             </div>
         );
     }

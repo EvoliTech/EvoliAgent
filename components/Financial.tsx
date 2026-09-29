@@ -185,6 +185,40 @@ export const Financial: React.FC = () => {
     }
   };
 
+  const handleDeactivateGateway = async () => {
+    if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? Você não poderá emitir novos boletos até ativar novamente.")) return;
+    try {
+      const { error } = await supabase
+        .from('Empresa')
+        .update({ stripe_account_id: null })
+        .eq('id', empresaId);
+      if (error) throw error;
+      setCompanySettings((prev: any) => prev ? { ...prev, stripe_account_id: null } : prev);
+      alert("Gateway desativado com sucesso.");
+    } catch (error: any) {
+      console.error("Erro ao desativar gateway", error);
+      alert("Ocorreu um erro ao desativar: " + error.message);
+    }
+  };
+
+  const handleOnboardingGateway = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-create-account', {
+        body: { empresa_id: empresaId }
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.account_link_url) {
+        window.location.href = data.account_link_url;
+      } else {
+        alert("Nenhum link de cadastro retornado pela Stripe.");
+      }
+    } catch (error: any) {
+      console.error("Erro ao gerar link da Stripe", error);
+      alert("Ocorreu um erro ao tentar acessar a Stripe: " + error.message);
+    }
+  };
+
   const handleDeleteGroup = async (grupoId: string, isReceita: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (window.confirm(`Deseja cancelar TODAS as cobranças desta ${isReceita ? 'receita' : 'despesa'} recorrente?`)) {
@@ -2196,6 +2230,34 @@ export const Financial: React.FC = () => {
               <div>
                 <h2 className="text-[1.1rem] font-medium text-gray-800">Gestão de Boletos</h2>
                 <p className="text-sm text-gray-500">Acompanhe boletos pendentes, vencidos e pagos.</p>
+                
+                {companySettings?.stripe_account_id ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                      Gateway Ativo
+                    </span>
+                    <button 
+                      onClick={handleOnboardingGateway}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                    >
+                      Completar Cadastro na Stripe
+                    </button>
+                    <button 
+                      onClick={handleDeactivateGateway}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium underline"
+                    >
+                      Desativar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                      Gateway Desativado
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
