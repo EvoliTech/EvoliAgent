@@ -11,6 +11,7 @@ import { expenseService } from '../services/expenseService';
 import { revenueService } from '../services/revenueService';
 import { supabase } from '../lib/supabase';
 import { AsaasWithdrawModal } from './AsaasWithdrawModal';
+import { PayoutsModal } from './PayoutsModal';
 
 
 interface ErrorBoundaryState { error: any; }
@@ -72,6 +73,7 @@ export const Financial: React.FC = () => {
   const [pendingBalance, setPendingBalance] = useState<number | null>(null);
   const [isFetchingBalance, setIsFetchingBalance] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isPayoutsModalOpen, setIsPayoutsModalOpen] = useState(false);
 
   const [stripePayouts, setStripePayouts] = useState<any[]>([]);
 
@@ -403,7 +405,8 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto') {
-                const boletoFee = Number(companySettings?.configuracoes?.taxaBoleto) || 0;
+                const isStripe = !!companySettings?.stripe_account_id;
+                const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
               const taxes = amount - netReceived;
@@ -614,7 +617,8 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto' && (p.isPaid === true || p.status === 'Pago')) {
-                const boletoFee = Number(companySettings?.configuracoes?.taxaBoleto) || 0;
+                const isStripe = !!companySettings?.stripe_account_id;
+                const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
               const diff = patientPaid - netReceived;
@@ -2287,8 +2291,16 @@ export const Financial: React.FC = () => {
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
                 <div>
-                  <div className="flex items-center gap-2 text-slate-500 mb-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider">Repasses Pagos</span>
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Repasses Pagos</span>
+                    {stripePayouts.length > 0 && (
+                      <button 
+                        onClick={() => setIsPayoutsModalOpen(true)}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+                      >
+                        Transações
+                      </button>
+                    )}
                   </div>
                   {isFetchingBalance ? (
                     <div className="h-7 w-24 bg-slate-200 animate-pulse rounded"></div>
@@ -2435,6 +2447,12 @@ export const Financial: React.FC = () => {
             onSave={handleSaveTransaction}
           />
         )}
+
+        <PayoutsModal
+          isOpen={isPayoutsModalOpen}
+          onClose={() => setIsPayoutsModalOpen(false)}
+          payouts={stripePayouts}
+        />
 
         <AsaasWithdrawModal
           isOpen={isWithdrawModalOpen}

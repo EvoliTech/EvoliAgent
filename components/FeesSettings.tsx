@@ -221,29 +221,37 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-lg font-bold text-slate-800">Taxa Fixa de Boleto</h2>
-                        <p className="text-sm text-slate-500">Esta taxa só será deduzida quando o pagamento do boleto for confirmado.</p>
+                        <p className="text-sm text-slate-500">
+                            {company?.stripe_account_id 
+                                ? 'A taxa do gateway Stripe (R$ 3,45) é fixa por boleto compensado.'
+                                : 'Esta taxa só será deduzida quando o pagamento do boleto for confirmado.'}
+                        </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="relative">
+                        <div className="relative opacity-90">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">R$</span>
                             <input
                                 type="text"
-                                className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg w-32 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800"
-                                value={boletoFeeStr}
+                                disabled={!!company?.stripe_account_id}
+                                className={`pl-9 pr-4 py-2 border border-slate-200 rounded-lg w-32 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800 ${company?.stripe_account_id ? 'bg-slate-100 cursor-not-allowed' : ''}`}
+                                value={company?.stripe_account_id ? '3,45' : boletoFeeStr}
                                 onChange={(e) => {
+                                    if (company?.stripe_account_id) return;
                                     const digits = e.target.value.replace(/\D/g, '');
                                     const num = parseInt(digits || '0', 10) / 100;
                                     setBoletoFeeStr(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                                 }}
                             />
                         </div>
-                        <button
-                            onClick={handleSaveBoletoFee}
-                            disabled={isSavingBoleto}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors"
-                        >
-                            {isSavingBoleto ? 'Salvando...' : 'Salvar'}
-                        </button>
+                        {!company?.stripe_account_id && (
+                            <button
+                                onClick={handleSaveBoletoFee}
+                                disabled={isSavingBoleto}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+                            >
+                                {isSavingBoleto ? 'Salvando...' : 'Salvar'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

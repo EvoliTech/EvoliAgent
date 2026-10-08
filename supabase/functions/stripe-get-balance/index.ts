@@ -62,6 +62,7 @@ serve(async (req) => {
     // Busca os repasses (payouts) recentes para mostrar na UI
     const payouts = await stripe.payouts.list({
       limit: 100, // Ajuste conforme necessário
+      expand: ['data.destination']
     }, { stripeAccount: stripeAccountId });
 
     const formattedPayouts = payouts.data.map(p => ({
@@ -70,6 +71,9 @@ serve(async (req) => {
       status: p.status, // 'paid', 'pending', 'in_transit', 'canceled', 'failed'
       arrival_date: new Date(p.arrival_date * 1000).toISOString(),
       created: new Date(p.created * 1000).toISOString(),
+      bank: p.destination && (p.destination as Stripe.BankAccount).bank_name 
+        ? `${(p.destination as Stripe.BankAccount).bank_name} **** ${(p.destination as Stripe.BankAccount).last4}`
+        : null
     }));
 
     return new Response(JSON.stringify({ 
