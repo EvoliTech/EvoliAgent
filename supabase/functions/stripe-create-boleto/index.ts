@@ -39,7 +39,7 @@ serve(async (req) => {
 
     // Busca o stripe_account_id da empresa
     const { data: empresa, error: empErr } = await supabase
-      .from('empresas')
+      .from('Empresa')
       .select('stripe_account_id')
       .eq('id', empresa_id)
       .single()
@@ -70,11 +70,32 @@ serve(async (req) => {
       }
     }
 
+    const taxId = cpf ? cpf.replace(/\D/g, '') : '00000000000';
+    const emailToUse = email && email.trim() !== '' ? email : 'cliente@clinica.com';
+
     // Cria o PaymentIntent (Boleto)
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(valor * 100), // Converte para centavos
       currency: 'brl',
       payment_method_types: ['boleto'],
+      payment_method_data: {
+        type: 'boleto',
+        boleto: {
+          tax_id: taxId.length === 11 || taxId.length === 14 ? taxId : '00000000000',
+        },
+        billing_details: {
+          name: name || 'Cliente',
+          email: emailToUse,
+          address: {
+            line1: 'Rua Principal, 100', // Boleto requires address
+            city: 'São Paulo',
+            state: 'SP',
+            postal_code: '01000-000',
+            country: 'BR',
+          },
+        },
+      },
+      confirm: true,
       customer: customerId,
       metadata: {
         receita_id: externalReference, // Importante para o webhook associar
@@ -87,7 +108,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true, 
       stripe_payment_intent_id: paymentIntent.id,
-      link_boleto: boletoData?.hosted_voucher_url || null,
+      link_boleto: (boletoData?.hosted_voucher_url ? `${boletoData.hosted_voucher_url}/pdf` : null) || boletoData?.pdf_url || null,
       linha_digitavel: boletoData?.number || null,
       customer_id: customerId
     }), {

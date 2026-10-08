@@ -27,8 +27,19 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Update receita
-    const { data: receita, error: updateErr } = await supabase
+    // Busca a receita inicial para pegar o payment_id
+    const { data: triggerReceita, error: triggerErr } = await supabase
+       .from('receitas')
+       .select('*')
+       .eq('id', receitaId)
+       .single();
+
+    if (triggerErr || !triggerReceita) {
+       throw new Error(`Receita original não encontrada: ${triggerErr?.message}`);
+    }
+
+    // 1. Update TODAS as receitas
+    const { data: receitasUpdated, error: updateErr } = await supabase
        .from('receitas')
        .update({
           status_asaas: isCancel ? 'DELETED' : 'RECEIVED',
@@ -36,20 +47,19 @@ serve(async (req) => {
           is_paga: !isCancel,
           data_pagamento: isCancel ? null : (body.paymentDate || new Date().toISOString().split('T')[0])
        })
-       .eq('id', receitaId)
-       .select()
-       .single();
+       .eq('payment_id', triggerReceita.payment_id)
+       .select();
 
-    if (updateErr || !receita) {
-       throw new Error(`Error updating receita: ${updateErr?.message}`);
+    if (updateErr) {
+       throw new Error(`Error updating receitas: ${updateErr?.message}`);
     }
 
     // 2. Update orcamento
-    if (receita.orcamento_id) {
+    if (triggerReceita.orcamento_id) {
        const { data: orcamento, error: orcErr } = await supabase
           .from('orcamentos')
           .select('*')
-          .eq('id', receita.orcamento_id)
+          .eq('id', triggerReceita.orcamento_id)
           .single();
           
        if (!orcErr && orcamento) {
@@ -57,9 +67,9 @@ serve(async (req) => {
           let modified = false;
           
           for (let t of treatments) {
-             if (t.id === receita.tratamento_id && t.payments) {
+             if (t.payments) {
                 for (let p of t.payments) {
-                   if (p.id === receita.payment_id) {
+                   if (p.id === triggerReceita.payment_id) {
                        p.status_asaas = isCancel ? 'DELETED' : 'RECEIVED';
                        p.isPaid = !isCancel;
                        p.status = isCancel ? 'Cancelado' : 'Pago';
@@ -70,7 +80,7 @@ serve(async (req) => {
           }
           
           if (modified) {
-             await supabase.from('orcamentos').update({ tratamentos: treatments, treatments: treatments }).eq('id', orcamento.id);
+             await supabase.from('orcamentos').update({ tratamentos: treatments }).eq('id', orcamento.id);
           }
        }
     }

@@ -39,7 +39,7 @@ serve(async (req) => {
 
     // Busca o stripe_account_id da empresa
     const { data: empresa, error: empErr } = await supabase
-      .from('empresas')
+      .from('Empresa')
       .select('stripe_account_id')
       .eq('id', empresa_id)
       .single()

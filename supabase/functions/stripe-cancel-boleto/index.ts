@@ -38,7 +38,7 @@ serve(async (req) => {
     }
 
     const { data: empresa, error: empErr } = await supabase
-      .from('empresas')
+      .from('Empresa')
       .select('stripe_account_id')
       .eq('id', empresa_id)
       .single()
@@ -49,22 +49,47 @@ serve(async (req) => {
 
     const stripeAccountId = empresa.stripe_account_id;
 
-    // Cancela o PaymentIntent
-    const canceledIntent = await stripe.paymentIntents.cancel(
-      stripe_payment_intent_id,
-      { cancellation_reason: 'requested_by_customer' },
-      { stripeAccount: stripeAccountId }
-    );
+    const intent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id, { stripeAccount: stripeAccountId });
 
-    return new Response(JSON.stringify({ success: true, status: canceledIntent.status }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    if (intent.status === 'canceled') {
+      return new Response(JSON.stringify({ success: true, status: 'canceled' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (intent.status === 'succeeded') {
+      throw new Error('Este boleto já foi pago e não pode ser cancelado.');
+    }
+
+    // Cancela o PaymentIntent
+    try {
+      const canceledIntent = await stripe.paymentIntents.cancel(
+        stripe_payment_intent_id,
+        { cancellation_reason: 'requested_by_customer' },
+        { stripeAccount: stripeAccountId }
+      );
+      
+      return new Response(JSON.stringify({ success: true, status: canceledIntent.status }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (cancelErr: any) {
+      if (cancelErr.message && cancelErr.message.includes('requires_action')) {
+        // Stripe Boletos não podem ser cancelados via API enquanto aguardam pagamento (eles expiram sozinhos).
+        // Vamos retornar sucesso para que o banco de dados do app possa dar baixa.
+        return new Response(JSON.stringify({ success: true, status: 'canceled_locally' }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw cancelErr;
+    }
 
   } catch (err: any) {
     console.error('Error canceling boleto:', err.message)
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

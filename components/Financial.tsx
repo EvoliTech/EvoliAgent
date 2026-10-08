@@ -67,14 +67,33 @@ export const Financial: React.FC = () => {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
-  // Asaas States
+  // Asaas/Stripe States
   const [asaasBalance, setAsaasBalance] = useState<number | null>(null);
+  const [pendingBalance, setPendingBalance] = useState<number | null>(null);
   const [isFetchingBalance, setIsFetchingBalance] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
-  const fetchAsaasBalance = async () => {
+  const [stripePayouts, setStripePayouts] = useState<any[]>([]);
+
+  const fetchBalance = async () => {
     try {
       setIsFetchingBalance(true);
+      
+      // Se Stripe estiver ativo, busca da Stripe
+      if (companySettings?.stripe_account_id) {
+        const { data, error } = await supabase.functions.invoke('stripe-get-balance', {
+          body: { empresa_id: empresaId }
+        });
+        if (error) throw error;
+        if (data && data.success) {
+          setAsaasBalance(data.balance); 
+          setPendingBalance(data.pending || null);
+          setStripePayouts(data.payouts || []);
+          return;
+        }
+      }
+
+      // Senão, tenta buscar do Asaas
       const url = import.meta.env.VITE_N8N_ASAAS_BALANCE_URL;
       if (!url || !empresaId) return;
       const res = await fetch(`${url}?empresa_id=${empresaId}`, { method: 'GET' });
@@ -93,9 +112,9 @@ export const Financial: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 'boletos') {
-      fetchAsaasBalance();
+      fetchBalance();
     }
-  }, [activeTab]);
+  }, [activeTab, companySettings?.stripe_account_id]);
 
   useEffect(() => {
     if (empresaId) {
@@ -839,7 +858,7 @@ export const Financial: React.FC = () => {
                 valor: parseFloat(p.amount) || 0,
                 dataVencimento: pDate,
                 dataStr: dateStr,
-                status: p.status_asaas === 'RECEIVED' ? 'Pago' : 'Pendente',
+                status: (p.status_asaas === 'RECEIVED' || p.isPaid === true || p.status === 'Pago') ? 'Pago' : 'Pendente',
                 observacao: p.observations || '',
                 asaas_payment_id: p.asaas_payment_id,
                 link_boleto: p.link_boleto,
@@ -881,7 +900,13 @@ export const Financial: React.FC = () => {
     if (window.confirm(`Confirma o cancelamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) {
       try {
         const cancelUrl = import.meta.env.VITE_N8N_CANCEL_BOLETO_URL;
-        if (cancelUrl && boleto.asaas_payment_id) {
+        if (boleto.paymentRaw.stripe_payment_intent_id) {
+          const { data, error } = await supabase.functions.invoke('stripe-cancel-boleto', {
+            body: { empresa_id: empresaId, stripe_payment_intent_id: boleto.paymentRaw.stripe_payment_intent_id }
+          });
+          if (error) throw new Error("Falha ao comunicar com a Stripe para cancelar o boleto: " + error.message);
+          if (data && data.success === false) throw new Error(data.error || "Falha desconhecida na Stripe");
+        } else if (cancelUrl && boleto.asaas_payment_id) {
           const n8nRes = await fetch(cancelUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2263,23 +2288,44 @@ export const Financial: React.FC = () => {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
                 <div>
                   <div className="flex items-center gap-2 text-slate-500 mb-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider">Saldo</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider">Repasses Pagos</span>
                   </div>
                   {isFetchingBalance ? (
                     <div className="h-7 w-24 bg-slate-200 animate-pulse rounded"></div>
                   ) : (
-                    <div className="text-2xl font-bold text-slate-800">
-                      {asaasBalance !== null ? `R$ ${asaasBalance.toFixed(2).replace('.', ',')}` : 'R$ 0,00'}
-                    </div>
+                    <>
+                      <div className="text-2xl font-bold text-green-600 flex items-center gap-2 group relative">
+                        {stripePayouts.length > 0 ? `R$ ${stripePayouts.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0).toFixed(2).replace('.', ',')}` : 'R$ 0,00'}
+                        <div className="cursor-help text-slate-400 hover:text-slate-600">
+                          <HelpCircle size={16} />
+                        </div>
+                        <div className="absolute left-0 bottom-full mb-2 hidden w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl group-hover:block z-10 font-normal leading-relaxed">
+                          <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
+                          <strong>Repasses Pagos:</strong> Soma total dos repasses que já foram transferidos com sucesso para a conta bancária da sua clínica.
+                        </div>
+                      </div>
+                      {pendingBalance !== null && pendingBalance > 0 && (
+                        <div className="text-xs text-slate-500 mt-1 font-medium group relative inline-flex items-center gap-1.5 cursor-help">
+                          + R$ {pendingBalance.toFixed(2).replace('.', ',')} repasses futuros
+                          <HelpCircle size={14} className="text-slate-400" />
+                          <div className="absolute left-0 bottom-full mb-2 hidden w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl group-hover:block z-10 font-normal leading-relaxed">
+                            <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
+                            <strong>Repasses Futuros:</strong> Pagamentos já recebidos que estão aguardando o prazo de compensação do gateway. Eles serão repassados automaticamente para sua conta bancária na data de liberação.
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
-                <button
-                  onClick={() => setIsWithdrawModalOpen(true)}
-                  disabled={asaasBalance === null || asaasBalance <= 0 || isFetchingBalance}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
-                >
-                  Sacar (Pix)
-                </button>
+                {asaasBalance !== null && asaasBalance > 0 && (
+                  <button
+                    onClick={() => setIsWithdrawModalOpen(true)}
+                    disabled={asaasBalance === null || asaasBalance <= 0 || isFetchingBalance}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                  >
+                    Sacar (R$ {asaasBalance.toFixed(2).replace('.', ',')})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -2393,9 +2439,10 @@ export const Financial: React.FC = () => {
         <AsaasWithdrawModal
           isOpen={isWithdrawModalOpen}
           onClose={() => setIsWithdrawModalOpen(false)}
-          onSuccess={() => fetchAsaasBalance()}
+          onSuccess={() => fetchBalance()}
           maxAmount={asaasBalance || 0}
           empresaId={empresaId}
+          isStripe={!!companySettings?.stripe_account_id}
         />
 
       </div>

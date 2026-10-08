@@ -39,7 +39,7 @@ serve(async (req) => {
 
     // Busca o stripe_account_id da empresa
     const { data: empresa, error: empErr } = await supabase
-      .from('empresas')
+      .from('Empresa')
       .select('stripe_account_id')
       .eq('id', empresa_id)
       .single()
@@ -59,10 +59,24 @@ serve(async (req) => {
     const availableBrl = balance.available.find(b => b.currency === 'brl')?.amount || 0;
     const pendingBrl = balance.pending.find(b => b.currency === 'brl')?.amount || 0;
 
+    // Busca os repasses (payouts) recentes para mostrar na UI
+    const payouts = await stripe.payouts.list({
+      limit: 100, // Ajuste conforme necessário
+    }, { stripeAccount: stripeAccountId });
+
+    const formattedPayouts = payouts.data.map(p => ({
+      id: p.id,
+      amount: p.amount / 100,
+      status: p.status, // 'paid', 'pending', 'in_transit', 'canceled', 'failed'
+      arrival_date: new Date(p.arrival_date * 1000).toISOString(),
+      created: new Date(p.created * 1000).toISOString(),
+    }));
+
     return new Response(JSON.stringify({ 
       success: true, 
       balance: availableBrl / 100,
-      pending: pendingBrl / 100
+      pending: pendingBrl / 100,
+      payouts: formattedPayouts
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

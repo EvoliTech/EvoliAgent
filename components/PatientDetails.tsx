@@ -2368,8 +2368,9 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 // Call n8n ONCE per boleto payment, unifying the treatments
                 if (createdReceitaIds.length > 0 && p.method === 'Boleto') {
                    try {
-                       const createUrl = true;
-                       if (createUrl) {
+                       const { data: empData } = await supabase.from('Empresa').select('stripe_account_id').eq('id', empresaId).single();
+                       const isStripeActive = !!empData?.stripe_account_id;
+                       if (isStripeActive) {
                           const treatmentIds = payingTreatments.map(t => t.id).join(',');
                           
                           const parcelInfo = paymentsArray.length > 1 ? ` (Parcela ${i + 1}/${paymentsArray.length})` : '';

@@ -7,6 +7,7 @@ interface AsaasWithdrawModalProps {
   onSuccess: () => void;
   maxAmount: number;
   empresaId: string | null;
+  isStripe?: boolean;
 }
 
 export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
@@ -14,7 +15,8 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
   onClose,
   onSuccess,
   maxAmount,
-  empresaId
+  empresaId,
+  isStripe
 }) => {
   const [value, setValue] = useState('');
   const [pixAddressKeyType, setPixAddressKeyType] = useState('CPF');
@@ -40,32 +42,44 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
       return;
     }
 
-    if (!pixAddressKey.trim()) {
+    if (!isStripe && !pixAddressKey.trim()) {
       setError('Por favor, insira a chave Pix.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const webhookUrl = import.meta.env.VITE_N8N_ASAAS_TRANSFER_URL;
-      if (!webhookUrl) {
-         throw new Error("URL do webhook de transferência não configurada (VITE_N8N_ASAAS_TRANSFER_URL).");
-      }
+      if (isStripe) {
+        const { supabase } = await import('../lib/supabase');
+        const { data, error: fnErr } = await supabase.functions.invoke('stripe-payout', {
+          body: {
+            empresa_id: empresaId,
+            value: numValue
+          }
+        });
+        if (fnErr) throw fnErr;
+        if (data && data.error) throw new Error(data.error);
+      } else {
+        const webhookUrl = import.meta.env.VITE_N8N_ASAAS_TRANSFER_URL;
+        if (!webhookUrl) {
+           throw new Error("URL do webhook de transferência não configurada (VITE_N8N_ASAAS_TRANSFER_URL).");
+        }
 
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          empresa_id: empresaId,
-          value: numValue,
-          pixAddressKey,
-          pixAddressKeyType,
-          operationType: 'PIX'
-        })
-      });
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            empresa_id: empresaId,
+            value: numValue,
+            pixAddressKey,
+            pixAddressKeyType,
+            operationType: 'PIX'
+          })
+        });
 
-      if (!response.ok) {
-        throw new Error('Falha ao processar a transferência no Asaas.');
+        if (!response.ok) {
+          throw new Error('Falha ao processar a transferência no Asaas.');
+        }
       }
 
       setSuccess(true);
@@ -87,7 +101,7 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
         <div className="flex justify-between items-center p-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800">Saque Asaas (Pix)</h2>
+          <h2 className="text-lg font-bold text-gray-800">{isStripe ? 'Saque Stripe' : 'Saque Asaas (Pix)'}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-md transition-colors" disabled={isSubmitting}>
             <X size={20} className="text-gray-500" />
           </button>
@@ -124,7 +138,7 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
                 <p className="text-xs text-gray-500 mt-1">Saldo disponível: R$ {maxAmount.toFixed(2).replace('.', ',')}</p>
               </div>
 
-              <div>
+              <div className={isStripe ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Chave Pix</label>
                 <select
                   value={pixAddressKeyType}
@@ -139,7 +153,7 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
                 </select>
               </div>
 
-              <div>
+              <div className={isStripe ? 'hidden' : ''}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Chave Pix</label>
                 <input
                   type="text"
@@ -147,9 +161,15 @@ export const AsaasWithdrawModal: React.FC<AsaasWithdrawModalProps> = ({
                   onChange={(e) => setPixAddressKey(e.target.value)}
                   placeholder="Digite a chave Pix de destino"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
+                  required={!isStripe}
                 />
               </div>
+
+              {isStripe && (
+                <div className="p-3 bg-blue-50 text-blue-700 rounded-lg text-sm border border-blue-100">
+                  <p>O saque será transferido para a conta bancária cadastrada na sua conta Stripe.</p>
+                </div>
+              )}
 
               <div className="pt-4 flex justify-end gap-2 border-t mt-6 border-gray-100">
                 <button
