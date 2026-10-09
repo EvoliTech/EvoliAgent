@@ -153,6 +153,36 @@ serve(async (req) => {
           }
         }
       }
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const empresaIdStr = session.metadata?.empresa_id;
+      if (empresaIdStr) {
+        await supabase
+          .from('empresas')
+          .update({ 
+            status_assinatura: 'active',
+            stripe_subscription_id: session.subscription
+          })
+          .eq('id', parseInt(empresaIdStr));
+        console.log(`Empresa ${empresaIdStr} signature updated to active`);
+      }
+    }
+
+    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      const status = subscription.status; // 'active', 'past_due', 'canceled', etc
+      const customerId = subscription.customer;
+
+      const newStatus = (status === 'active' || status === 'trialing') ? 'active' : 'inactive';
+
+      const { data, error } = await supabase
+        .from('empresas')
+        .update({ status_assinatura: newStatus })
+        .eq('stripe_customer_id', customerId)
+        .select('id');
+      
+      if (error) console.error(`Erro atualizando status da empresa: ${error.message}`);
+      if (data) console.log(`Empresa status updated for customer ${customerId} to ${newStatus}`);
     }
 
     return new Response(JSON.stringify({ received: true }), { status: 200, headers: { "Content-Type": "application/json" } });
