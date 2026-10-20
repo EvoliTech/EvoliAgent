@@ -28,7 +28,7 @@ serve(async (req) => {
     })
 
     const body = await req.json()
-    const { empresa_id, email, name, cnpj } = body
+    const { empresa_id } = body
 
     if (!empresa_id) {
       return new Response(JSON.stringify({ error: 'empresa_id is required' }), {
@@ -37,60 +37,47 @@ serve(async (req) => {
       })
     }
 
-    const forwardedFor = req.headers.get('x-forwarded-for')
-    const ipAddress = forwardedFor ? forwardedFor.split(',')[0].trim() : '127.0.0.1'
-
-    // 0. Verifica se a empresa já possui uma conta Stripe
+    // 0. Verifica se a empresa já possui uma conta Stripe conectada
     const { data: empresaAtual } = await supabase
       .from('Empresa')
-      .select('stripe_account_id')
+      .select('stripe_subaccount_id')
       .eq('id', empresa_id)
       .single()
 
-    if (empresaAtual?.stripe_account_id) {
+    if (empresaAtual?.stripe_subaccount_id) {
+      // Reativa o gateway caso estivesse desativado
+      await supabase
+        .from('Empresa')
+        .update({ stripe_gateway_active: true })
+        .eq('id', empresa_id)
+
       // Se a conta já existe, podemos gerar um link de update para ele terminar o cadastro caso falte algo
       const origin = req.headers.get('origin') || 'http://localhost:3000'
       const accountLink = await stripe.accountLinks.create({
-        account: empresaAtual.stripe_account_id,
-        refresh_url: `${origin}/dashboard/financial`,
-        return_url: `${origin}/dashboard/financial`,
+        account: empresaAtual.stripe_subaccount_id,
+        refresh_url: `${origin}/configuracoes/pagamentos`,
+        return_url: `${origin}/configuracoes/pagamentos`,
         type: 'account_onboarding',
       });
 
-      return new Response(JSON.stringify({ success: true, stripe_account_id: empresaAtual.stripe_account_id, account_link_url: accountLink.url }), {
+      return new Response(JSON.stringify({ success: true, stripe_subaccount_id: empresaAtual.stripe_subaccount_id, account_link_url: accountLink.url }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // 1. Cria a subconta na Stripe (Custom Account)
+    // 1. Cria a subconta na Stripe (Standard Account)
     const account = await stripe.accounts.create({
-      type: 'custom',
-      country: 'BR',
-      email: email,
-      business_type: 'company',
-      company: {
-        name: name,
-        tax_id: cnpj,
-      },
-      capabilities: {
-        boleto_payments: { requested: true },
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
+      type: 'standard',
       metadata: {
         empresa_id: empresa_id
-      },
-      tos_acceptance: {
-        date: Math.floor(Date.now() / 1000),
-        ip: ipAddress,
       }
     });
 
     // 2. Salva no banco de dados da empresa
     const { error } = await supabase
       .from('Empresa')
-      .update({ stripe_account_id: account.id })
+      .update({ stripe_subaccount_id: account.id, stripe_gateway_active: true })
       .eq('id', empresa_id)
 
     if (error) {
@@ -103,12 +90,12 @@ serve(async (req) => {
     const origin = req.headers.get('origin') || 'http://localhost:3000'
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${origin}/dashboard/financial`,
-      return_url: `${origin}/dashboard/financial`,
+      refresh_url: `${origin}/configuracoes/pagamentos`,
+      return_url: `${origin}/configuracoes/pagamentos`,
       type: 'account_onboarding',
     });
 
-    return new Response(JSON.stringify({ success: true, stripe_account_id: account.id, account_link_url: accountLink.url }), {
+    return new Response(JSON.stringify({ success: true, stripe_subaccount_id: account.id, account_link_url: accountLink.url }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
@@ -121,3 +108,4 @@ serve(async (req) => {
     })
   }
 })
+

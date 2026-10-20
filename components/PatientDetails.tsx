@@ -2368,8 +2368,8 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                 // Call n8n ONCE per boleto payment, unifying the treatments
                 if (createdReceitaIds.length > 0 && p.method === 'Boleto') {
                    try {
-                       const { data: empData } = await supabase.from('Empresa').select('stripe_account_id').eq('id', empresaId).single();
-                       const isStripeActive = !!empData?.stripe_account_id;
+                       const { data: empData } = await supabase.from('Empresa').select('stripe_subaccount_id, stripe_account_id, stripe_gateway_active').eq('id', empresaId).single();
+                       const isStripeActive = !!(empData?.stripe_gateway_active && (empData?.stripe_subaccount_id || empData?.stripe_account_id));
                        if (isStripeActive) {
                           const treatmentIds = payingTreatments.map(t => t.id).join(',');
                           
@@ -2438,12 +2438,10 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
                                    boletosLinks.push(stripeData.link_boleto);
                                }
                            }
-                       } else {
-                           alert("A URL do webhook do Asaas (VITE_N8N_CREATE_BOLETO_URL) não está configurada!");
                        }
+                       // Gateway desligado: funciona em modo de controle interno manual (sem APIs externas nem alertas)
                    } catch (e: any) {
-                       console.error("Erro ao integrar com n8n (Asaas):", e);
-                       alert(`Erro na integração com Asaas: ${e.message}`);
+                       console.error("Erro ao integrar com gateway de pagamentos:", e);
                    }
                 }
             }
@@ -2575,6 +2573,16 @@ export const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onBack,
           const saved = await budgetService.saveBudget(empresaId, Number(patient.id), updBudget);
           if (saved) {
             setBudgets(prev => prev.map(b => b.id === saved.id ? saved : b));
+            for (const t of updBudget.treatments || []) {
+              for (const p of t.payments || []) {
+                if (p.method === 'Boleto' && (p.isPaid === true || p.status === 'Pago')) {
+                  await revenueService.markBoletoAsPaidInRevenue(p.id, empresaId);
+                }
+              }
+            }
+            if (patient?.id) {
+              revenueService.fetchRevenues(empresaId).then(setPatientReceitas).catch(console.error);
+            }
           }
           setEditingPaymentBudget(null);
         }}

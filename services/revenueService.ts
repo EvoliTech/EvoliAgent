@@ -321,10 +321,10 @@ export const revenueService = {
         installments = p.installments || 1;
         isPaga = p.status === 'Pago' || p.isPaid === true;
         if (isPaga) {
-             const { data: comp } = await supabase.from('Empresa').select('configuracoes').eq('id', empresaId).single();
-             if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {
-                 netReceived -= Number(comp.configuracoes.taxaBoleto);
-             }
+             const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id, stripe_account_id').eq('id', empresaId).single();
+             const isStripe = !!(comp?.stripe_gateway_active && (comp?.stripe_subaccount_id || comp?.stripe_account_id));
+             const fee = isStripe ? 3.45 : (Number(comp?.configuracoes?.taxaBoleto) || 0);
+             netReceived -= fee;
         }
     }
 
@@ -362,34 +362,40 @@ export const revenueService = {
   },
 
   async markBoletoAsPaidInRevenue(paymentId: string, empresaId: number): Promise<{success: boolean, error?: string}> {
-    // 1. Fetch the existing revenue by payment_id
-    const { data: receita } = await supabase.from('receitas').select('*').eq('payment_id', paymentId).single();
+    // 1. Fetch the existing revenues by payment_id
+    const { data: receitas, error: fetchErr } = await supabase.from('receitas').select('*').eq('payment_id', paymentId);
     
-    if (!receita) {
+    if (fetchErr || !receitas || receitas.length === 0) {
       return { success: false, error: "Receita vinculada não encontrada para este pagamento." };
     }
 
-    // 2. Fetch the company's boleto fee
+    // 2. Fetch the company's boleto fee depending on gateway state
     let deduction = 0;
-    const { data: comp } = await supabase.from('Empresa').select('configuracoes').eq('id', empresaId).single();
-    if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {
+    const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id, stripe_account_id').eq('id', empresaId).single();
+    const isStripe = !!(comp?.stripe_gateway_active && (comp?.stripe_subaccount_id || comp?.stripe_account_id));
+    if (isStripe) {
+        deduction = 3.45;
+    } else if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {
         deduction = Number(comp.configuracoes.taxaBoleto);
     }
 
-    // 3. Deduct fee from the original amount
-    const oldValor = Number(receita.valor) || 0;
-    const newValor = Math.max(0, oldValor - deduction);
+    // 3. Deduct fee from the original amount and update linked revenues
+    const deductionPerRevenue = deduction / receitas.length;
+    for (const receita of receitas) {
+      if (receita.is_paga) continue; // Already paid, don't deduct again
+      const oldValor = Number(receita.valor) || 0;
+      const newValor = Math.max(0, oldValor - deductionPerRevenue);
 
-    // 4. Update the revenue to paid
-    const { error } = await supabase.from('receitas').update({
-        is_paga: true,
-        data_pagamento: new Date().toISOString().split('T')[0],
-        valor: newValor
-    }).eq('id', receita.id);
+      const { error } = await supabase.from('receitas').update({
+          is_paga: true,
+          data_pagamento: new Date().toISOString().split('T')[0],
+          valor: newValor
+      }).eq('id', receita.id);
 
-    if (error) {
-      console.error("Error updating boleto revenue", error);
-      return { success: false, error: error.message || JSON.stringify(error) };
+      if (error) {
+        console.error("Error updating boleto revenue", error);
+        return { success: false, error: error.message || JSON.stringify(error) };
+      }
     }
     return { success: true };
   }

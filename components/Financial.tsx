@@ -82,7 +82,7 @@ export const Financial: React.FC = () => {
       setIsFetchingBalance(true);
       
       // Se Stripe estiver ativo, busca da Stripe
-      if (companySettings?.stripe_account_id) {
+      if (companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id)) {
         const { data, error } = await supabase.functions.invoke('stripe-get-balance', {
           body: { empresa_id: empresaId }
         });
@@ -116,7 +116,7 @@ export const Financial: React.FC = () => {
     if (activeTab === 'boletos') {
       fetchBalance();
     }
-  }, [activeTab, companySettings?.stripe_account_id]);
+  }, [activeTab, companySettings?.stripe_gateway_active, companySettings?.stripe_subaccount_id]);
 
   useEffect(() => {
     if (empresaId) {
@@ -207,18 +207,33 @@ export const Financial: React.FC = () => {
   };
 
   const handleDeactivateGateway = async () => {
-    if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? Você não poderá emitir novos boletos até ativar novamente.")) return;
+    if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? O sistema passará a operar no modo de controle interno manual para boletos.")) return;
     try {
       const { error } = await supabase
         .from('Empresa')
-        .update({ stripe_account_id: null })
+        .update({ stripe_gateway_active: false })
         .eq('id', empresaId);
       if (error) throw error;
-      setCompanySettings((prev: any) => prev ? { ...prev, stripe_account_id: null } : prev);
-      alert("Gateway desativado com sucesso.");
+      setCompanySettings((prev: any) => prev ? { ...prev, stripe_gateway_active: false } : prev);
+      alert("Gateway desativado. Modo de controle interno ativado.");
     } catch (error: any) {
       console.error("Erro ao desativar gateway", error);
       alert("Ocorreu um erro ao desativar: " + error.message);
+    }
+  };
+
+  const handleActivateGateway = async () => {
+    try {
+      const { error } = await supabase
+        .from('Empresa')
+        .update({ stripe_gateway_active: true })
+        .eq('id', empresaId);
+      if (error) throw error;
+      setCompanySettings((prev: any) => prev ? { ...prev, stripe_gateway_active: true } : prev);
+      alert("Gateway de pagamentos ativado com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao ativar gateway", error);
+      alert("Ocorreu um erro ao ativar: " + error.message);
     }
   };
 
@@ -405,7 +420,7 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto') {
-                const isStripe = !!companySettings?.stripe_account_id;
+                const isStripe = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
                 const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
@@ -617,7 +632,7 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto' && (p.isPaid === true || p.status === 'Pago')) {
-                const isStripe = !!companySettings?.stripe_account_id;
+                const isStripe = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
                 const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
@@ -899,18 +914,85 @@ export const Financial: React.FC = () => {
     return { vencidos, aVencer, pagos };
   }, [allBudgets, filterMonth, filterYear]);
 
+  const handlePayBoleto = async (boleto: any) => {
+    if (!empresaId) return;
+    const isGatewayActive = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
+    
+    const confirmMsg = isGatewayActive 
+      ? `Confirma a baixa manual deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`
+      : `Confirma o pagamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}? A taxa de boleto cadastrada será deduzida da receita.`;
+
+    if (window.confirm(confirmMsg)) {
+      try {
+        boleto.paymentRaw.isPaid = true;
+        boleto.paymentRaw.status = 'Pago';
+        boleto.paymentRaw.paymentDate = new Date().toISOString();
+
+        const treatmentsCopy = JSON.parse(JSON.stringify(boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []));
+
+        // Encontra e atualiza todos os tratamentos que contenham este pagamento
+        treatmentsCopy.forEach((t: any) => {
+          const pIdx = t.payments?.findIndex((p: any) => p.id === boleto.paymentRaw.id);
+          if (pIdx !== -1 && pIdx !== undefined) {
+            t.payments[pIdx].isPaid = true;
+            t.payments[pIdx].status = 'Pago';
+            t.payments[pIdx].paymentDate = new Date().toISOString();
+
+            const allPaid = t.payments.every((p: any) => p.isPaid || p.status === 'Pago' || p.status === 'Cancelado');
+            if (allPaid) {
+              t.paymentStatus = 'Pago';
+            } else {
+              t.paymentStatus = 'Pago parcialmente';
+            }
+          }
+        });
+
+        const budgetPayload = {
+          id: boleto.budgetRaw.id,
+          name: boleto.budgetRaw.nome || boleto.budgetRaw.name || '',
+          date: boleto.budgetRaw.data_orcamento || boleto.budgetRaw.date || '',
+          total: boleto.budgetRaw.total,
+          status: boleto.budgetRaw.status,
+          treatments: treatmentsCopy
+        };
+
+        await budgetService.saveBudget(empresaId, boleto.pacienteId, budgetPayload as any);
+
+        // Atualiza a receita deduzindo a taxa devida
+        const res = await revenueService.markBoletoAsPaidInRevenue(
+          boleto.paymentRaw.id,
+          empresaId
+        );
+
+        if (!res.success) {
+          console.warn("Aviso ao atualizar receita:", res.error);
+        }
+
+        alert('Boleto marcado como pago e receita confirmada com sucesso!');
+
+        budgetService.fetchAllCompanyBudgets(empresaId).then(setAllBudgets).catch(console.error);
+        revenueService.fetchRevenues(empresaId).then(setAllReceitas).catch(console.error);
+      } catch (err: any) {
+        console.error(err);
+        alert(`Erro ao dar baixa no boleto: ${err?.message || err}`);
+      }
+    }
+  };
+
   const handleCancelBoleto = async (boleto: any) => {
     if (!empresaId) return;
     if (window.confirm(`Confirma o cancelamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) {
       try {
+        const isGatewayActive = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
         const cancelUrl = import.meta.env.VITE_N8N_CANCEL_BOLETO_URL;
-        if (boleto.paymentRaw.stripe_payment_intent_id) {
+
+        if (isGatewayActive && boleto.paymentRaw.stripe_payment_intent_id) {
           const { data, error } = await supabase.functions.invoke('stripe-cancel-boleto', {
             body: { empresa_id: empresaId, stripe_payment_intent_id: boleto.paymentRaw.stripe_payment_intent_id }
           });
           if (error) throw new Error("Falha ao comunicar com a Stripe para cancelar o boleto: " + error.message);
           if (data && data.success === false) throw new Error(data.error || "Falha desconhecida na Stripe");
-        } else if (cancelUrl && boleto.asaas_payment_id) {
+        } else if (isGatewayActive && cancelUrl && boleto.asaas_payment_id) {
           const n8nRes = await fetch(cancelUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -927,15 +1009,13 @@ export const Financial: React.FC = () => {
 
         const treatmentsCopy = JSON.parse(JSON.stringify(boleto.budgetRaw.tratamentos || boleto.budgetRaw.treatments || []));
 
-        // Encontra e atualiza o tratamento e o pagamento específico
-        const tIdx = treatmentsCopy.findIndex((t: any) => t.id === boleto.tratamentoId);
-        if (tIdx !== -1) {
-          const pIdx = treatmentsCopy[tIdx].payments?.findIndex((p: any) => p.id === boleto.paymentRaw.id);
-          if (pIdx !== -1) {
-            treatmentsCopy[tIdx].payments[pIdx].status_asaas = 'DELETED';
-            treatmentsCopy[tIdx].payments[pIdx].status = 'Cancelado';
+        treatmentsCopy.forEach((t: any) => {
+          const pIdx = t.payments?.findIndex((p: any) => p.id === boleto.paymentRaw.id);
+          if (pIdx !== -1 && pIdx !== undefined) {
+            t.payments[pIdx].status_asaas = 'DELETED';
+            t.payments[pIdx].status = 'Cancelado';
           }
-        }
+        });
 
         const budgetPayload = {
           id: boleto.budgetRaw.id,
@@ -948,10 +1028,7 @@ export const Financial: React.FC = () => {
 
         await budgetService.saveBudget(empresaId, boleto.pacienteId, budgetPayload as any);
 
-        const { data: receita } = await supabase.from('receitas').select('*').eq('payment_id', boleto.paymentRaw.id).single();
-        if (receita) {
-          await supabase.from('receitas').update({ status_asaas: 'DELETED' }).eq('id', receita.id);
-        }
+        await supabase.from('receitas').update({ status_asaas: 'DELETED', status: 'Cancelado' }).eq('payment_id', boleto.paymentRaw.id);
 
         alert('Boleto cancelado com sucesso!');
 
@@ -2260,7 +2337,7 @@ export const Financial: React.FC = () => {
                 <h2 className="text-[1.1rem] font-medium text-gray-800">Gestão de Boletos</h2>
                 <p className="text-sm text-gray-500">Acompanhe boletos pendentes, vencidos e pagos.</p>
                 
-                {companySettings?.stripe_account_id ? (
+                {(companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && companySettings?.stripe_gateway_active ? (
                   <div className="mt-3 flex items-center gap-3">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700 border border-green-200">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
@@ -2280,65 +2357,75 @@ export const Financial: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-3">
+                  <div className="mt-3 flex items-center gap-3">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
                       <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-                      Gateway Desativado
+                      Gateway Desativado (Modo Controle Interno)
                     </span>
+                    {(companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && (
+                      <button 
+                        onClick={handleActivateGateway}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                      >
+                        Ativar Gateway
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
-                <div>
-                  <div className="flex items-center justify-between w-full mb-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Repasses Pagos</span>
-                    {stripePayouts.length > 0 && (
-                      <button 
-                        onClick={() => setIsPayoutsModalOpen(true)}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
-                      >
-                        Transações
-                      </button>
-                    )}
-                  </div>
-                  {isFetchingBalance ? (
-                    <div className="h-7 w-24 bg-slate-200 animate-pulse rounded"></div>
-                  ) : (
-                    <>
-                      <div className="text-2xl font-bold text-green-600 flex items-center gap-2 group relative">
-                        {stripePayouts.length > 0 ? `R$ ${stripePayouts.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0).toFixed(2).replace('.', ',')}` : 'R$ 0,00'}
-                        <div className="cursor-help text-slate-400 hover:text-slate-600">
-                          <HelpCircle size={16} />
-                        </div>
-                        <div className="absolute left-0 bottom-full mb-2 hidden w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl group-hover:block z-10 font-normal leading-relaxed">
-                          <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
-                          <strong>Repasses Pagos:</strong> Soma total dos repasses que já foram transferidos com sucesso para a conta bancária da sua clínica.
-                        </div>
-                      </div>
-                      {pendingBalance !== null && pendingBalance > 0 && (
-                        <div className="text-xs text-slate-500 mt-1 font-medium group relative inline-flex items-center gap-1.5 cursor-help">
-                          + R$ {pendingBalance.toFixed(2).replace('.', ',')} repasses futuros
-                          <HelpCircle size={14} className="text-slate-400" />
+              {Boolean((companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && companySettings?.stripe_gateway_active) && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
+                  <div>
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Repasses Pagos</span>
+                      {stripePayouts.length > 0 && (
+                        <button 
+                          onClick={() => setIsPayoutsModalOpen(true)}
+                          className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2 transition-colors"
+                        >
+                          Transações
+                        </button>
+                      )}
+                    </div>
+                    {isFetchingBalance ? (
+                      <div className="h-7 w-24 bg-slate-200 animate-pulse rounded"></div>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-green-600 flex items-center gap-2 group relative">
+                          {stripePayouts.length > 0 ? `R$ ${stripePayouts.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0).toFixed(2).replace('.', ',')}` : 'R$ 0,00'}
+                          <div className="cursor-help text-slate-400 hover:text-slate-600">
+                            <HelpCircle size={16} />
+                          </div>
                           <div className="absolute left-0 bottom-full mb-2 hidden w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl group-hover:block z-10 font-normal leading-relaxed">
                             <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
-                            <strong>Repasses Futuros:</strong> Pagamentos já recebidos que estão aguardando o prazo de compensação do gateway. Eles serão repassados automaticamente para sua conta bancária na data de liberação.
+                            <strong>Repasses Pagos:</strong> Soma total dos repasses que já foram transferidos com sucesso para a conta bancária da sua clínica.
                           </div>
                         </div>
-                      )}
-                    </>
+                        {pendingBalance !== null && pendingBalance > 0 && (
+                          <div className="text-xs text-slate-500 mt-1 font-medium group relative inline-flex items-center gap-1.5 cursor-help">
+                            + R$ {pendingBalance.toFixed(2).replace('.', ',')} repasses futuros
+                            <HelpCircle size={14} className="text-slate-400" />
+                            <div className="absolute left-0 bottom-full mb-2 hidden w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl group-hover:block z-10 font-normal leading-relaxed">
+                              <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 rotate-45"></div>
+                              <strong>Repasses Futuros:</strong> Pagamentos já recebidos que estão aguardando o prazo de compensação do gateway. Eles serão repassados automaticamente para sua conta bancária na data de liberação.
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {asaasBalance !== null && asaasBalance > 0 && (
+                    <button
+                      onClick={() => setIsWithdrawModalOpen(true)}
+                      disabled={asaasBalance === null || asaasBalance <= 0 || isFetchingBalance}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
+                    >
+                      Sacar (R$ {asaasBalance.toFixed(2).replace('.', ',')})
+                    </button>
                   )}
                 </div>
-                {asaasBalance !== null && asaasBalance > 0 && (
-                  <button
-                    onClick={() => setIsWithdrawModalOpen(true)}
-                    disabled={asaasBalance === null || asaasBalance <= 0 || isFetchingBalance}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors shadow-sm whitespace-nowrap"
-                  >
-                    Sacar (R$ {asaasBalance.toFixed(2).replace('.', ',')})
-                  </button>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Boletos Lists Will Go Here */}
@@ -2358,6 +2445,7 @@ export const Financial: React.FC = () => {
                           <span className="text-xs font-semibold text-red-600">Venceu em: {b.dataVencimento.toLocaleDateString()}</span>
                           <div className="flex gap-2">
                             {b.link_boleto && <a href={b.link_boleto} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Visualizar</a>}
+                            <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded shadow-sm transition-colors">Dar Baixa</button>
                             <button onClick={() => handleCancelBoleto(b)} className="px-3 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded">Cancelar</button>
                           </div>
                         </div>
@@ -2381,6 +2469,7 @@ export const Financial: React.FC = () => {
                           <span className="text-xs font-semibold text-blue-600">Vence em: {b.dataVencimento.toLocaleDateString()}</span>
                           <div className="flex gap-2">
                             {b.link_boleto && <a href={b.link_boleto} target="_blank" rel="noreferrer" className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Visualizar</a>}
+                            <button onClick={() => handlePayBoleto(b)} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded shadow-sm transition-colors">Dar Baixa</button>
                             <button onClick={() => handleCancelBoleto(b)} className="px-3 py-1 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-bold rounded">Cancelar</button>
                           </div>
                         </div>
@@ -2460,7 +2549,7 @@ export const Financial: React.FC = () => {
           onSuccess={() => fetchBalance()}
           maxAmount={asaasBalance || 0}
           empresaId={empresaId}
-          isStripe={!!companySettings?.stripe_account_id}
+          isStripe={!!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id))}
         />
 
       </div>

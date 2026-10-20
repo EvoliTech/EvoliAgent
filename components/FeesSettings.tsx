@@ -222,7 +222,7 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                     <div>
                         <h2 className="text-lg font-bold text-slate-800">Taxa Fixa de Boleto</h2>
                         <p className="text-sm text-slate-500">
-                            {company?.stripe_account_id 
+                            {(company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id)) 
                                 ? 'A taxa do gateway Stripe (R$ 3,45) é fixa por boleto compensado.'
                                 : 'Esta taxa só será deduzida quando o pagamento do boleto for confirmado.'}
                         </p>
@@ -232,18 +232,18 @@ export const FeesSettings: React.FC<FeesSettingsProps> = ({ onNavigate }) => {
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">R$</span>
                             <input
                                 type="text"
-                                disabled={!!company?.stripe_account_id}
-                                className={`pl-9 pr-4 py-2 border border-slate-200 rounded-lg w-32 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800 ${company?.stripe_account_id ? 'bg-slate-100 cursor-not-allowed' : ''}`}
-                                value={company?.stripe_account_id ? '3,45' : boletoFeeStr}
+                                disabled={!!(company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id))}
+                                className={`pl-9 pr-4 py-2 border border-slate-200 rounded-lg w-32 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-slate-800 ${(company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id)) ? 'bg-slate-100 cursor-not-allowed' : ''}`}
+                                value={(company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id)) ? '3,45' : boletoFeeStr}
                                 onChange={(e) => {
-                                    if (company?.stripe_account_id) return;
+                                    if ((company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id))) return;
                                     const digits = e.target.value.replace(/\D/g, '');
                                     const num = parseInt(digits || '0', 10) / 100;
                                     setBoletoFeeStr(num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
                                 }}
                             />
                         </div>
-                        {!company?.stripe_account_id && (
+                        {!(company?.stripe_gateway_active && (company?.stripe_subaccount_id || company?.stripe_account_id)) && (
                             <button
                                 onClick={handleSaveBoletoFee}
                                 disabled={isSavingBoleto}

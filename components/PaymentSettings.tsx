@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, CreditCard, CheckCircle, AlertCircle, Building, User, MapPin } from 'lucide-react';
+import { Loader2, CreditCard, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 
 interface PaymentSettingsProps {
     empresaId: string;
@@ -9,28 +9,11 @@ interface PaymentSettingsProps {
 export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [isActivating, setIsActivating] = useState(false);
-    const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
-
-    // Form states
-    const [cnpj, setCnpj] = useState('');
-    const [razaoSocial, setRazaoSocial] = useState('');
-    const [email, setEmail] = useState('');
-    const [telefone, setTelefone] = useState('');
-
-    const [cep, setCep] = useState('');
-    const [rua, setRua] = useState('');
-    const [numero, setNumero] = useState('');
-    const [bairro, setBairro] = useState('');
-    const [cidade, setCidade] = useState('');
-    const [estado, setEstado] = useState('');
-
-    const [nomeRepresentante, setNomeRepresentante] = useState('');
-    const [cpfRepresentante, setCpfRepresentante] = useState('');
-    const [dataNascimento, setDataNascimento] = useState('');
-
-    const [banco, setBanco] = useState('');
-    const [agencia, setAgencia] = useState('');
-    const [conta, setConta] = useState('');
+    
+    const [stripeSubaccountId, setStripeSubaccountId] = useState<string | null>(null);
+    const [isGatewayActive, setIsGatewayActive] = useState(false);
+    const [isRestricted, setIsRestricted] = useState(false);
+    const [checkingStatus, setCheckingStatus] = useState(false);
 
     useEffect(() => {
         loadSettings();
@@ -41,16 +24,18 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
             setIsLoading(true);
             const { data, error } = await supabase
                 .from('Empresa')
-                .select('stripe_account_id, nome, email, telefoneWhatsapp')
+                .select('stripe_subaccount_id, stripe_gateway_active')
                 .eq('id', empresaId)
                 .single();
 
             if (error) throw error;
             if (data) {
-                setStripeAccountId(data.stripe_account_id);
-                if (data.nome) setRazaoSocial(data.nome);
-                if (data.email) setEmail(data.email);
-                if (data.telefoneWhatsapp) setTelefone(data.telefoneWhatsapp);
+                setStripeSubaccountId(data.stripe_subaccount_id);
+                setIsGatewayActive(data.stripe_gateway_active || false);
+                
+                if (data.stripe_subaccount_id && data.stripe_gateway_active) {
+                    checkAccountStatus(data.stripe_subaccount_id);
+                }
             }
         } catch (error) {
             console.error("Erro ao carregar dados da empresa", error);
@@ -59,21 +44,29 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         }
     };
 
-    const handleActivate = async () => {
-        if (!stripeAccountId && (!cnpj || !razaoSocial || !email || !nomeRepresentante || !cpfRepresentante)) {
-            alert("Por favor, preencha os dados obrigatórios para ativar o gateway.");
-            return;
+    const checkAccountStatus = async (subaccountId: string) => {
+        try {
+            setCheckingStatus(true);
+            const { data, error } = await supabase.functions.invoke('stripe-account-status', {
+                body: { stripe_subaccount_id: subaccountId }
+            });
+            if (error) throw error;
+            if (data && data.success) {
+                setIsRestricted(data.isRestricted);
+            }
+        } catch (error) {
+            console.error("Erro ao verificar status da conta", error);
+        } finally {
+            setCheckingStatus(false);
         }
+    };
 
+    const handleActivate = async () => {
         try {
             setIsActivating(true);
             const { data, error } = await supabase.functions.invoke('stripe-create-account', {
                 body: {
-                    empresa_id: empresaId,
-                    email: email,
-                    name: razaoSocial,
-                    cnpj: cnpj,
-                    // Poderíamos enviar mais dados do formulário aqui para a Stripe
+                    empresa_id: empresaId
                 }
             });
 
@@ -81,11 +74,13 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
             if (data && data.error) throw new Error(data.error);
 
             if (data && data.success) {
-                setStripeAccountId(data.stripe_account_id);
+                setStripeSubaccountId(data.stripe_subaccount_id);
+                setIsGatewayActive(true);
                 if (data.account_link_url) {
                     window.location.href = data.account_link_url;
                 } else {
                     alert("Gateway de Pagamentos ativado com sucesso!");
+                    checkAccountStatus(data.stripe_subaccount_id);
                 }
             }
         } catch (error: any) {
@@ -97,17 +92,17 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
     };
 
     const handleDeactivate = async () => {
-        if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? Você não poderá emitir novos boletos até ativar novamente.")) return;
+        if (!window.confirm("Tem certeza que deseja desativar o gateway de pagamentos? O sistema passará a operar no modo de controle interno manual para boletos.")) return;
         try {
             setIsActivating(true);
             const { error } = await supabase
                 .from('Empresa')
-                .update({ stripe_account_id: null })
+                .update({ stripe_gateway_active: false })
                 .eq('id', empresaId);
             
             if (error) throw error;
-            setStripeAccountId(null);
-            alert("Gateway desativado com sucesso.");
+            setIsGatewayActive(false);
+            alert("Gateway desativado. Modo de controle interno ativado.");
         } catch (error: any) {
             console.error("Erro ao desativar gateway", error);
             alert("Ocorreu um erro ao desativar: " + error.message);
@@ -116,7 +111,7 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         }
     };
 
-    if (isLoading) {
+    if (isLoading || checkingStatus) {
         return (
             <div className="flex justify-center p-12">
                 <Loader2 className="animate-spin text-blue-500" size={32} />
@@ -124,28 +119,46 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         );
     }
 
-    if (stripeAccountId) {
+    if (isGatewayActive && stripeSubaccountId) {
         return (
-            <div className="p-6 bg-green-50 border border-green-200 rounded-2xl flex flex-col items-center justify-center text-center">
-                <CheckCircle size={48} className="text-green-500 mb-4" />
-                <h3 className="text-xl font-bold text-green-800">Gateway de Pagamentos Ativo</h3>
-                <p className="text-green-700 mt-2 max-w-md">
-                    Sua conta na Stripe (ID: <span className="font-mono text-sm bg-green-100 px-2 py-1 rounded">{stripeAccountId}</span>) está configurada.
-                    Todos os boletos gerados agora serão processados pela Stripe e os valores serão creditados no saldo da sua conta.
-                </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-3">
-                    <button 
-                        onClick={handleActivate} 
-                        disabled={isActivating}
-                        className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                    >
-                        {isActivating ? <Loader2 size={18} className="animate-spin" /> : null}
-                        Completar Cadastro na Stripe
-                    </button>
+            <div className={`p-8 border rounded-2xl flex flex-col items-center justify-center text-center animate-in fade-in duration-300 ${isRestricted ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                {isRestricted ? (
+                    <AlertCircle size={56} className="text-amber-500 mb-4" />
+                ) : (
+                    <CheckCircle size={56} className="text-green-500 mb-4" />
+                )}
+                
+                <h3 className={`text-2xl font-bold ${isRestricted ? 'text-amber-800' : 'text-green-800'}`}>
+                    {isRestricted ? 'Sua conta Stripe está restrita' : 'Você ativou o gateway de pagamentos Stripe!'}
+                </h3>
+                
+                {isRestricted ? (
+                    <p className="text-amber-700 mt-4 max-w-2xl text-base leading-relaxed">
+                        Para começar a emitir boletos e receber pagamentos, você precisa completar o cadastro e enviar os documentos necessários no painel da Stripe.
+                    </p>
+                ) : (
+                    <p className="text-green-700 mt-4 max-w-2xl text-base leading-relaxed">
+                        As transações, pagamentos e processamentos serão feitos exclusivamente pela Stripe.
+                        Pagamentos serão todo dia útil de forma automática, compensação do boleto de até 3 dias,
+                        e liberação do pagamento de 3 a 14 dias úteis direto para a conta bancária.
+                    </p>
+                )}
+                
+                <div className="mt-8 flex flex-wrap justify-center gap-4">
+                    {isRestricted && (
+                        <button 
+                            onClick={handleActivate} 
+                            disabled={isActivating}
+                            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                            {isActivating ? <Loader2 size={18} className="animate-spin" /> : <ExternalLink size={18} />}
+                            Completar Cadastro na Stripe
+                        </button>
+                    )}
                     <button 
                         onClick={handleDeactivate} 
                         disabled={isActivating}
-                        className="px-4 py-2 bg-red-100 text-red-700 font-medium rounded-lg hover:bg-red-200 transition-colors flex items-center gap-2"
+                        className="px-6 py-3 bg-white border border-red-200 text-red-600 font-medium rounded-xl hover:bg-red-50 transition-colors flex items-center gap-2 shadow-sm"
                     >
                         {isActivating ? <Loader2 size={18} className="animate-spin" /> : null}
                         Desativar Gateway
@@ -159,127 +172,31 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         <div className="space-y-8 animate-in fade-in duration-300">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Gateway de Pagamentos (Stripe)</h2>
-                <p className="text-gray-500 mt-1">
-                    Preencha os dados abaixo para criar sua subconta e começar a emitir boletos.
+                <p className="text-gray-500 mt-2 text-lg">
+                    Crie sua subconta de pagamentos para começar a emitir boletos e receber pagamentos online.
                 </p>
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl flex gap-3 text-blue-800 border border-blue-100">
-                <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
-                <div className="text-sm">
-                    <strong>Atenção:</strong> Os dados abaixo devem ser reais e corresponder aos documentos do representante legal para aprovação pelo Banco Central e recebimento de repasses.
+            <div className="bg-blue-50 p-6 rounded-2xl flex gap-4 text-blue-800 border border-blue-100 shadow-sm">
+                <AlertCircle className="flex-shrink-0 mt-1 text-blue-600" size={24} />
+                <div className="text-base leading-relaxed">
+                    <strong>Processo Simplificado:</strong> Você não precisa preencher dados complexos aqui. 
+                    Ao clicar no botão abaixo, você será direcionado para a página segura da Stripe, 
+                    onde fará o cadastro da sua conta e dos seus dados bancários diretamente com eles.
                 </div>
             </div>
 
-            {/* Dados da Empresa */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2 border-b pb-2">
-                    <Building size={20} className="text-gray-400" /> Dados da Empresa
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">CNPJ</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Razão Social</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={razaoSocial} onChange={e => setRazaoSocial(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Email Profissional</label>
-                        <input type="email" className="w-full p-3 border rounded-xl" value={email} onChange={e => setEmail(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Telefone</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={telefone} onChange={e => setTelefone(e.target.value)} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Endereço */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2 border-b pb-2">
-                    <MapPin size={20} className="text-gray-400" /> Endereço Comercial
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">CEP</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={cep} onChange={e => setCep(e.target.value)} />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Rua</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={rua} onChange={e => setRua(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Número</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={numero} onChange={e => setNumero(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Bairro</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={bairro} onChange={e => setBairro(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Cidade / Estado</label>
-                        <div className="flex gap-2">
-                            <input type="text" className="w-full p-3 border rounded-xl" placeholder="Cidade" value={cidade} onChange={e => setCidade(e.target.value)} />
-                            <input type="text" className="w-20 p-3 border rounded-xl" placeholder="UF" value={estado} onChange={e => setEstado(e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Representante Legal */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2 border-b pb-2">
-                    <User size={20} className="text-gray-400" /> Representante Legal
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-1">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">CPF</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={cpfRepresentante} onChange={e => setCpfRepresentante(e.target.value)} />
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Nome Completo</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={nomeRepresentante} onChange={e => setNomeRepresentante(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Data de Nascimento</label>
-                        <input type="date" className="w-full p-3 border rounded-xl" value={dataNascimento} onChange={e => setDataNascimento(e.target.value)} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Dados Bancários */}
-            <div className="space-y-4">
-                <h3 className="text-lg font-bold flex items-center gap-2 border-b pb-2">
-                    <CreditCard size={20} className="text-gray-400" /> Dados Bancários (Vinculados ao CNPJ)
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Código do Banco</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" placeholder="Ex: 341 (Itaú)" value={banco} onChange={e => setBanco(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Agência</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={agencia} onChange={e => setAgencia(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Conta (com dígito)</label>
-                        <input type="text" className="w-full p-3 border rounded-xl" value={conta} onChange={e => setConta(e.target.value)} />
-                    </div>
-                </div>
-            </div>
-
-            <div className="pt-6 border-t flex justify-end">
+            <div className="pt-6 border-t flex justify-start">
                 <button
                     onClick={handleActivate}
                     disabled={isActivating}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg flex items-center gap-2 disabled:opacity-50"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center gap-3 disabled:opacity-50 transition-transform active:scale-95"
                 >
-                    {isActivating ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle size={20} />}
-                    Ativar Gateway de Pagamentos
+                    {isActivating ? <Loader2 className="animate-spin" size={24} /> : <CheckCircle size={24} />}
+                    {stripeSubaccountId ? 'Ativar Gateway Novamente' : 'Criar e Ativar Conta na Stripe'}
                 </button>
             </div>
         </div>
     );
 };
+
