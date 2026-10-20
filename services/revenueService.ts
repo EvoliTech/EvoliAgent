@@ -321,8 +321,8 @@ export const revenueService = {
         installments = p.installments || 1;
         isPaga = p.status === 'Pago' || p.isPaid === true;
         if (isPaga) {
-             const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id, stripe_account_id').eq('id', empresaId).single();
-             const isStripe = !!(comp?.stripe_gateway_active && (comp?.stripe_subaccount_id || comp?.stripe_account_id));
+             const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id').eq('id', empresaId).single();
+             const isStripe = !!(comp?.stripe_gateway_active && comp?.stripe_subaccount_id?.startsWith('acct_'));
              const fee = isStripe ? 3.45 : (Number(comp?.configuracoes?.taxaBoleto) || 0);
              netReceived -= fee;
         }
@@ -371,8 +371,8 @@ export const revenueService = {
 
     // 2. Fetch the company's boleto fee depending on gateway state
     let deduction = 0;
-    const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id, stripe_account_id').eq('id', empresaId).single();
-    const isStripe = !!(comp?.stripe_gateway_active && (comp?.stripe_subaccount_id || comp?.stripe_account_id));
+    const { data: comp } = await supabase.from('Empresa').select('configuracoes, stripe_gateway_active, stripe_subaccount_id').eq('id', empresaId).single();
+    const isStripe = !!(comp?.stripe_gateway_active && comp?.stripe_subaccount_id?.startsWith('acct_'));
     if (isStripe) {
         deduction = 3.45;
     } else if (comp && comp.configuracoes && comp.configuracoes.taxaBoleto) {

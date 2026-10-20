@@ -37,17 +37,17 @@ serve(async (req) => {
       })
     }
 
-    // Busca a conta Stripe da empresa (subconta conectada ou legado)
+    // Busca a conta Stripe da empresa (subconta conectada)
     const { data: empresa, error: empErr } = await supabase
       .from('Empresa')
-      .select('stripe_subaccount_id, stripe_account_id, stripe_gateway_active')
+      .select('stripe_subaccount_id, stripe_gateway_active')
       .eq('id', empresa_id)
       .single()
 
-    const stripeAccountId = empresa?.stripe_subaccount_id || empresa?.stripe_account_id;
+    const stripeAccountId = empresa?.stripe_subaccount_id;
 
-    if (empErr || !stripeAccountId) {
-      throw new Error('Conta Stripe não encontrada para esta empresa.')
+    if (empErr || !stripeAccountId || !stripeAccountId.startsWith('acct_')) {
+      throw new Error('Conta Stripe Connect não encontrada para esta empresa.')
     }
 
     // Faz o payout

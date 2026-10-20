@@ -51,7 +51,20 @@ serve(async (req) => {
         .update({ stripe_gateway_active: true })
         .eq('id', empresa_id)
 
-      // Se a conta já existe, podemos gerar um link de update para ele terminar o cadastro caso falte algo
+      const { force_onboarding } = body;
+      // Se não foi explicitamente solicitado abrir a Stripe (force_onboarding), reativa 100% interno sem redirecionar
+      if (!force_onboarding) {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          stripe_subaccount_id: empresaAtual.stripe_subaccount_id, 
+          reactivated: true 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      // Se force_onboarding = true (ex: usuário clicou expressamente em 'Completar Cadastro na Stripe')
       const origin = req.headers.get('origin') || 'http://localhost:3000'
       const accountLink = await stripe.accountLinks.create({
         account: empresaAtual.stripe_subaccount_id,

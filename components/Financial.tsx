@@ -81,8 +81,8 @@ export const Financial: React.FC = () => {
     try {
       setIsFetchingBalance(true);
       
-      // Se Stripe estiver ativo, busca da Stripe
-      if (companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id)) {
+      // Se Stripe estiver ativo e possuir subconta Connect válida
+      if (companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_')) {
         const { data, error } = await supabase.functions.invoke('stripe-get-balance', {
           body: { empresa_id: empresaId }
         });
@@ -420,7 +420,7 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto') {
-                const isStripe = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
+                const isStripe = !!(companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_'));
                 const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
@@ -632,7 +632,7 @@ export const Financial: React.FC = () => {
                   netReceived -= netReceived * (fee / 100);
                 }
               } else if (p.method === 'Boleto' && (p.isPaid === true || p.status === 'Pago')) {
-                const isStripe = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
+                const isStripe = !!(companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_'));
                 const boletoFee = isStripe ? 3.45 : (Number(companySettings?.configuracoes?.taxaBoleto) || 0);
                 netReceived -= boletoFee;
               }
@@ -916,7 +916,7 @@ export const Financial: React.FC = () => {
 
   const handlePayBoleto = async (boleto: any) => {
     if (!empresaId) return;
-    const isGatewayActive = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
+    const isGatewayActive = !!(companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_'));
     
     const confirmMsg = isGatewayActive 
       ? `Confirma a baixa manual deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`
@@ -983,7 +983,7 @@ export const Financial: React.FC = () => {
     if (!empresaId) return;
     if (window.confirm(`Confirma o cancelamento deste boleto de R$ ${boleto.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`)) {
       try {
-        const isGatewayActive = !!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id));
+        const isGatewayActive = !!(companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_'));
         const cancelUrl = import.meta.env.VITE_N8N_CANCEL_BOLETO_URL;
 
         if (isGatewayActive && boleto.paymentRaw.stripe_payment_intent_id) {
@@ -2337,7 +2337,7 @@ export const Financial: React.FC = () => {
                 <h2 className="text-[1.1rem] font-medium text-gray-800">Gestão de Boletos</h2>
                 <p className="text-sm text-gray-500">Acompanhe boletos pendentes, vencidos e pagos.</p>
                 
-                {(companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && companySettings?.stripe_gateway_active ? (
+                {companySettings?.stripe_subaccount_id?.startsWith('acct_') && companySettings?.stripe_gateway_active ? (
                   <div className="mt-3 flex items-center gap-3">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-100 text-green-700 border border-green-200">
                       <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
@@ -2362,7 +2362,7 @@ export const Financial: React.FC = () => {
                       <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
                       Gateway Desativado (Modo Controle Interno)
                     </span>
-                    {(companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && (
+                    {companySettings?.stripe_subaccount_id?.startsWith('acct_') && (
                       <button 
                         onClick={handleActivateGateway}
                         className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
@@ -2374,7 +2374,7 @@ export const Financial: React.FC = () => {
                 )}
               </div>
 
-              {Boolean((companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id) && companySettings?.stripe_gateway_active) && (
+              {Boolean(companySettings?.stripe_subaccount_id?.startsWith('acct_') && companySettings?.stripe_gateway_active) && (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-6 min-w-[300px]">
                   <div>
                     <div className="flex items-center justify-between w-full mb-1">
@@ -2549,7 +2549,7 @@ export const Financial: React.FC = () => {
           onSuccess={() => fetchBalance()}
           maxAmount={asaasBalance || 0}
           empresaId={empresaId}
-          isStripe={!!(companySettings?.stripe_gateway_active && (companySettings?.stripe_subaccount_id || companySettings?.stripe_account_id))}
+          isStripe={!!(companySettings?.stripe_gateway_active && companySettings?.stripe_subaccount_id?.startsWith('acct_'))}
         />
 
       </div>

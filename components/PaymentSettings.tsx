@@ -61,7 +61,31 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         }
     };
 
-    const handleActivate = async () => {
+    // Reativação 100% interna quando a conta já está conectada
+    const handleReactivate = async () => {
+        try {
+            setIsActivating(true);
+            const { error } = await supabase
+                .from('Empresa')
+                .update({ stripe_gateway_active: true })
+                .eq('id', empresaId);
+
+            if (error) throw error;
+
+            setIsGatewayActive(true);
+            if (stripeSubaccountId) {
+                checkAccountStatus(stripeSubaccountId);
+            }
+        } catch (error: any) {
+            console.error("Erro ao ativar gateway", error);
+            alert("Ocorreu um erro ao tentar ativar o gateway: " + error.message);
+        } finally {
+            setIsActivating(false);
+        }
+    };
+
+    // Primeira ativação (criação da subconta no Stripe)
+    const handleFirstTimeActivate = async () => {
         try {
             setIsActivating(true);
             const { data, error } = await supabase.functions.invoke('stripe-create-account', {
@@ -79,13 +103,37 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
                 if (data.account_link_url) {
                     window.location.href = data.account_link_url;
                 } else {
-                    alert("Gateway de Pagamentos ativado com sucesso!");
                     checkAccountStatus(data.stripe_subaccount_id);
                 }
             }
         } catch (error: any) {
-            console.error("Erro ao ativar gateway", error);
-            alert("Ocorreu um erro ao tentar ativar o gateway: " + error.message);
+            console.error("Erro ao criar conta na Stripe", error);
+            alert("Ocorreu um erro ao tentar criar a conta na Stripe: " + error.message);
+        } finally {
+            setIsActivating(false);
+        }
+    };
+
+    // Apenas para quando o usuário explicitamente clica para completar dados na Stripe
+    const handleCompleteOnboarding = async () => {
+        try {
+            setIsActivating(true);
+            const { data, error } = await supabase.functions.invoke('stripe-create-account', {
+                body: {
+                    empresa_id: empresaId,
+                    force_onboarding: true
+                }
+            });
+
+            if (error) throw error;
+            if (data && data.error) throw new Error(data.error);
+
+            if (data?.account_link_url) {
+                window.location.href = data.account_link_url;
+            }
+        } catch (error: any) {
+            console.error("Erro ao gerar link de cadastro", error);
+            alert("Ocorreu um erro ao tentar acessar a Stripe: " + error.message);
         } finally {
             setIsActivating(false);
         }
@@ -147,7 +195,7 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
                 <div className="mt-8 flex flex-wrap justify-center gap-4">
                     {isRestricted && (
                         <button 
-                            onClick={handleActivate} 
+                            onClick={handleCompleteOnboarding} 
                             disabled={isActivating}
                             className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
                         >
@@ -173,22 +221,34 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Gateway de Pagamentos (Stripe)</h2>
                 <p className="text-gray-500 mt-2 text-lg">
-                    Crie sua subconta de pagamentos para começar a emitir boletos e receber pagamentos online.
+                    {stripeSubaccountId 
+                        ? 'Sua conta Stripe está conectada. Ative o gateway para emitir boletos e receber pagamentos online.'
+                        : 'Crie sua subconta de pagamentos para começar a emitir boletos e receber pagamentos online.'}
                 </p>
             </div>
 
-            <div className="bg-blue-50 p-6 rounded-2xl flex gap-4 text-blue-800 border border-blue-100 shadow-sm">
-                <AlertCircle className="flex-shrink-0 mt-1 text-blue-600" size={24} />
-                <div className="text-base leading-relaxed">
-                    <strong>Processo Simplificado:</strong> Você não precisa preencher dados complexos aqui. 
-                    Ao clicar no botão abaixo, você será direcionado para a página segura da Stripe, 
-                    onde fará o cadastro da sua conta e dos seus dados bancários diretamente com eles.
+            {stripeSubaccountId ? (
+                <div className="bg-emerald-50 p-6 rounded-2xl flex gap-4 text-emerald-800 border border-emerald-100 shadow-sm">
+                    <CheckCircle className="flex-shrink-0 mt-1 text-emerald-600" size={24} />
+                    <div className="text-base leading-relaxed">
+                        <strong>Conta Vinculada:</strong> Sua subconta Stripe Connect já está configurada ({stripeSubaccountId}).
+                        Ao clicar no botão abaixo, o gateway será ativado imediatamente sem precisar passar pela Stripe novamente.
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="bg-blue-50 p-6 rounded-2xl flex gap-4 text-blue-800 border border-blue-100 shadow-sm">
+                    <AlertCircle className="flex-shrink-0 mt-1 text-blue-600" size={24} />
+                    <div className="text-base leading-relaxed">
+                        <strong>Processo Simplificado:</strong> Você não precisa preencher dados complexos aqui. 
+                        Ao clicar no botão abaixo, você será direcionado para a página segura da Stripe, 
+                        onde fará o cadastro da sua conta e dos seus dados bancários diretamente com eles.
+                    </div>
+                </div>
+            )}
 
             <div className="pt-6 border-t flex justify-start">
                 <button
-                    onClick={handleActivate}
+                    onClick={stripeSubaccountId ? handleReactivate : handleFirstTimeActivate}
                     disabled={isActivating}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg flex items-center gap-3 disabled:opacity-50 transition-transform active:scale-95"
                 >
@@ -199,4 +259,3 @@ export const PaymentSettings: React.FC<PaymentSettingsProps> = ({ empresaId }) =
         </div>
     );
 };
-

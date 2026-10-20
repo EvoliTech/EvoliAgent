@@ -20,7 +20,6 @@ serve(async (req) => {
 
     const signature = req.headers.get('stripe-signature')
     if (!signature || !endpointSecret) {
-       // Permite teste simples sem assinatura
        console.log("No signature or webhook secret found, attempting to parse raw body");
     }
 
@@ -34,13 +33,16 @@ serve(async (req) => {
         event = JSON.parse(bodyText);
       }
     } catch (err: any) {
-      console.error(`Webhook signature verification failed.`, err.message);
+      console.error(`Webhook signature verification failed:`, err.message);
       return new Response(JSON.stringify({ error: err.message }), { status: 400 });
     }
 
-    console.log(`Received event type: ${event.type}`);
+    console.log(`Received Stripe event type: ${event.type}`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+    // =========================================================================
+    // 1. EVENTOS DE BOLETOS DE PACIENTES (PaymentIntent na subconta conectada)
+    // =========================================================================
     if (event.type === 'payment_intent.succeeded' || event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled') {
       const paymentIntent = event.data.object;
       const paymentIntentId: string = paymentIntent.id;
@@ -64,7 +66,7 @@ serve(async (req) => {
         statusAsaas = 'DELETED';
       }
 
-      // 1. Localiza a receita de origem (por metadata, com fallback pelo payment intent)
+      // 1.1 Localiza a receita de origem
       let triggerReceita: any = null;
       if (receitaId) {
         const { data, error } = await supabase.from('receitas').select('*').eq('id', receitaId).maybeSingle();
@@ -80,9 +82,8 @@ serve(async (req) => {
         console.error(`Nenhuma receita encontrada para PI ${paymentIntentId}`);
         return new Response(JSON.stringify({ error: 'Receita not found' }), { status: 404 });
       }
-      console.log(`Receita origem: ${triggerReceita.id} | payment_id=${triggerReceita.payment_id} | orcamento=${triggerReceita.orcamento_id}`);
 
-      // 2. Atualiza TODAS as receitas ligadas a este boleto (mesmo payment_id ou mesmo PI)
+      // 1.2 Atualiza TODAS as receitas ligadas a este boleto
       const receitaUpdate = {
         stripe_status: statusStr,
         status_asaas: statusAsaas,
@@ -103,9 +104,8 @@ serve(async (req) => {
         console.error(`Erro atualizando receitas: ${updateErr.message}`);
         return new Response(JSON.stringify({ error: updateErr.message }), { status: 500 });
       }
-      console.log(`Receitas atualizadas: ${receitasUpdated?.length ?? 0}`);
 
-      // 3. Atualiza o JSON de pagamentos em todos os orçamentos envolvidos
+      // 1.3 Atualiza o JSON de tratamentos/pagamentos em todos os orçamentos envolvidos
       const allReceitas = receitasUpdated?.length ? receitasUpdated : [triggerReceita];
       const paymentIds = new Set(allReceitas.map((r: any) => r.payment_id).filter(Boolean));
       const orcamentoIds = Array.from(new Set(allReceitas.map((r: any) => r.orcamento_id).filter(Boolean)));
@@ -117,10 +117,7 @@ serve(async (req) => {
           .eq('id', orcId)
           .maybeSingle();
 
-        if (orcErr || !orcamento) {
-          console.error(`Orçamento ${orcId} não encontrado: ${orcErr?.message}`);
-          continue;
-        }
+        if (orcErr || !orcamento) continue;
 
         const treatments = Array.isArray(orcamento.tratamentos) ? orcamento.tratamentos : [];
         let modified = 0;
@@ -140,51 +137,207 @@ serve(async (req) => {
           }
         }
 
-        console.log(`Orçamento ${orcId}: ${modified} pagamento(s) marcados`);
         if (modified > 0) {
-          // IMPORTANTE: a tabela orcamentos só possui a coluna "tratamentos"
-          const { error: orcUpdErr } = await supabase
+          await supabase
             .from('orcamentos')
             .update({ tratamentos: treatments })
             .eq('id', orcamento.id);
-          if (orcUpdErr) {
-            console.error(`Erro atualizando orçamento ${orcId}: ${orcUpdErr.message}`);
-            return new Response(JSON.stringify({ error: orcUpdErr.message }), { status: 500 });
-          }
         }
       }
     }
 
+    // =========================================================================
+    // 2. EVENTO DE CHECKOUT DE ASSINATURA CONCLUÍDO (SaaS Subscription)
+    // =========================================================================
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
       const empresaIdStr = session.metadata?.empresa_id;
+      const customerId = session.customer ? String(session.customer) : null;
+      const subscriptionId = session.subscription ? String(session.subscription) : null;
+
+      console.log(`checkout.session.completed: empresa_id=${empresaIdStr}, customer=${customerId}, subscription=${subscriptionId}`);
+
+      const updateData: Record<string, any> = {
+        status_assinatura: 'active'
+      };
+      if (customerId) updateData.stripe_customer_id = customerId;
+      if (subscriptionId) updateData.stripe_subscription_id = subscriptionId;
+
+      let empresaIdentified = false;
+
+      // 2.1 Identificação prioritária por metadata.empresa_id
       if (empresaIdStr) {
-        await supabase
-          .from('empresas')
-          .update({ 
-            status_assinatura: 'active',
-            stripe_subscription_id: session.subscription
-          })
-          .eq('id', parseInt(empresaIdStr));
-        console.log(`Empresa ${empresaIdStr} signature updated to active`);
+        const empresaIdNum = parseInt(empresaIdStr, 10);
+        if (!isNaN(empresaIdNum)) {
+          const { error: updErr } = await supabase
+            .from('Empresa')
+            .update(updateData)
+            .eq('id', empresaIdNum);
+
+          if (updErr) {
+            console.error(`Erro ao atualizar Empresa ${empresaIdNum}:`, updErr.message);
+          } else {
+            console.log(`Empresa ${empresaIdNum} atualizada com sucesso para ativa com subscription ${subscriptionId}`);
+            empresaIdentified = true;
+          }
+        }
+      }
+
+      // 2.2 Fallback: busca por stripe_customer_id se não identificou pelo metadata
+      if (!empresaIdentified && customerId) {
+        const { data: updatedByCus, error: updCusErr } = await supabase
+          .from('Empresa')
+          .update(updateData)
+          .eq('stripe_customer_id', customerId)
+          .select('id');
+
+        if (updCusErr) {
+          console.error(`Erro ao atualizar Empresa por stripe_customer_id ${customerId}:`, updCusErr.message);
+        } else if (updatedByCus && updatedByCus.length > 0) {
+          console.log(`Empresa ${updatedByCus[0].id} atualizada por stripe_customer_id`);
+          empresaIdentified = true;
+        }
+      }
+
+      // 2.3 Fallback 2: busca por e-mail do cliente na sessão
+      if (!empresaIdentified && session.customer_details?.email) {
+        const clientEmail = session.customer_details.email;
+        const { data: updatedByEmail, error: updEmailErr } = await supabase
+          .from('Empresa')
+          .update(updateData)
+          .eq('email', clientEmail)
+          .select('id');
+
+        if (updEmailErr) {
+          console.error(`Erro ao atualizar Empresa por email ${clientEmail}:`, updEmailErr.message);
+        } else if (updatedByEmail && updatedByEmail.length > 0) {
+          console.log(`Empresa ${updatedByEmail[0].id} atualizada por email ${clientEmail}`);
+          empresaIdentified = true;
+        }
       }
     }
 
-    if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+    // =========================================================================
+    // 3. EVENTOS DE CICLO DE VIDA DA ASSINATURA (Created, Updated, Deleted)
+    // =========================================================================
+    if (
+      event.type === 'customer.subscription.created' ||
+      event.type === 'customer.subscription.updated' ||
+      event.type === 'customer.subscription.deleted'
+    ) {
       const subscription = event.data.object;
-      const status = subscription.status; // 'active', 'past_due', 'canceled', etc
-      const customerId = subscription.customer;
+      const status = subscription.status; // 'active', 'trialing', 'past_due', 'canceled', etc.
+      const customerId = subscription.customer ? String(subscription.customer) : null;
+      const subscriptionId = subscription.id ? String(subscription.id) : null;
+      const empresaIdStr = subscription.metadata?.empresa_id;
 
       const newStatus = (status === 'active' || status === 'trialing') ? 'active' : 'inactive';
 
-      const { data, error } = await supabase
-        .from('empresas')
-        .update({ status_assinatura: newStatus })
-        .eq('stripe_customer_id', customerId)
-        .select('id');
-      
-      if (error) console.error(`Erro atualizando status da empresa: ${error.message}`);
-      if (data) console.log(`Empresa status updated for customer ${customerId} to ${newStatus}`);
+      console.log(`customer.subscription event (${event.type}): customer=${customerId}, sub=${subscriptionId}, status=${status} -> ${newStatus}`);
+
+      const updateData: Record<string, any> = {
+        status_assinatura: newStatus,
+      };
+      if (subscriptionId) updateData.stripe_subscription_id = subscriptionId;
+      if (customerId) updateData.stripe_customer_id = customerId;
+
+      let updated = false;
+
+      // 3.1 Se houver metadata.empresa_id
+      if (empresaIdStr) {
+        const empresaIdNum = parseInt(empresaIdStr, 10);
+        if (!isNaN(empresaIdNum)) {
+          const { error } = await supabase
+            .from('Empresa')
+            .update(updateData)
+            .eq('id', empresaIdNum);
+          if (!error) updated = true;
+        }
+      }
+
+      // 3.2 Por stripe_customer_id
+      if (!updated && customerId) {
+        const { data, error } = await supabase
+          .from('Empresa')
+          .update(updateData)
+          .eq('stripe_customer_id', customerId)
+          .select('id');
+        if (!error && data && data.length > 0) updated = true;
+      }
+
+      // 3.3 Por stripe_subscription_id
+      if (!updated && subscriptionId) {
+        const { data, error } = await supabase
+          .from('Empresa')
+          .update(updateData)
+          .eq('stripe_subscription_id', subscriptionId)
+          .select('id');
+        if (!error && data && data.length > 0) updated = true;
+      }
+
+      if (!updated) {
+        console.warn(`Aviso: Nenhuma empresa encontrada para atualizar assinatura sub=${subscriptionId}, cus=${customerId}`);
+      }
+    }
+
+    // =========================================================================
+    // 4. EVENTOS DE FATURAS DA ASSINATURA (Invoice payment succeeded / failed)
+    // =========================================================================
+    if (event.type === 'invoice.payment_succeeded') {
+      const invoice = event.data.object;
+      const customerId = invoice.customer ? String(invoice.customer) : null;
+      const subscriptionId = invoice.subscription ? String(invoice.subscription) : null;
+
+      if (customerId) {
+        await supabase
+          .from('Empresa')
+          .update({
+            status_assinatura: 'active',
+            ...(subscriptionId ? { stripe_subscription_id: subscriptionId } : {})
+          })
+          .eq('stripe_customer_id', customerId);
+      }
+    }
+
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object;
+      const customerId = invoice.customer ? String(invoice.customer) : null;
+
+      if (customerId) {
+        await supabase
+          .from('Empresa')
+          .update({
+            status_assinatura: 'inactive'
+          })
+          .eq('stripe_customer_id', customerId);
+      }
+    }
+
+    // =========================================================================
+    // 5. EVENTO DE CONTA CONECTADA STRIPE CONNECT (account.updated)
+    // =========================================================================
+    if (event.type === 'account.updated') {
+      const account = event.data.object;
+      const accountId = account.id;
+      const empresaIdStr = account.metadata?.empresa_id;
+
+      console.log(`Stripe Connect account.updated: ${accountId}, charges_enabled=${account.charges_enabled}, details_submitted=${account.details_submitted}`);
+
+      if (empresaIdStr && accountId && accountId.startsWith('acct_')) {
+        const empresaIdNum = parseInt(empresaIdStr, 10);
+        if (!isNaN(empresaIdNum)) {
+          const updateObj: Record<string, any> = {
+            stripe_subaccount_id: accountId
+          };
+          if (account.charges_enabled && account.details_submitted) {
+            updateObj.stripe_gateway_active = true;
+          }
+          await supabase
+            .from('Empresa')
+            .update(updateObj)
+            .eq('id', empresaIdNum);
+        }
+      }
     }
 
     return new Response(JSON.stringify({ received: true }), { status: 200, headers: { "Content-Type": "application/json" } });

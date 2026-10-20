@@ -39,14 +39,14 @@ serve(async (req) => {
 
     const { data: empresa, error: empErr } = await supabase
       .from('Empresa')
-      .select('stripe_subaccount_id, stripe_account_id')
+      .select('stripe_subaccount_id')
       .eq('id', empresa_id)
       .single()
 
-    const stripeAccountId = empresa?.stripe_subaccount_id || empresa?.stripe_account_id;
+    const stripeAccountId = empresa?.stripe_subaccount_id;
 
-    if (empErr || !stripeAccountId) {
-      throw new Error('Conta Stripe não encontrada.')
+    if (empErr || !stripeAccountId || !stripeAccountId.startsWith('acct_')) {
+      throw new Error('Conta Stripe Connect não encontrada.')
     }
 
     const intent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id, { stripeAccount: stripeAccountId });
